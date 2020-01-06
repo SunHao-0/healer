@@ -1,113 +1,15 @@
-use crate::types;
-use std::error::Error;
-use pest::Parser;
-use pest::iterators::{Pair, Pairs};
-use crate::types::{Fots, TypeInfo, TypeId, Field};
-
-/// Parse grammar
-#[derive(Parser)]
-#[grammar = "fots.pest"]
-pub struct Grammar;
-
-/// Parse declaration
-/// ```
-/// use fots::parse::Content;
-/// let text = "struct foo { arg1:i8, arg2:*[i8] }";
-/// let re = Content::parse(text);
+/// Grammar Parser
+///
+/// Grammar Parser can be used to parse text by single rule.
+///```
+/// use fots::grammar::{GrammarParser,Rule};
+/// let text = "*[*i8;(0xFF,0xFFFF)]";
+/// let re = GrammarParser::parse(Rule::TypeExp,text);
 /// assert!(re.is_ok());
 /// ```
-pub struct Content;
-
-impl Content {
-    fn new() -> Self {
-        Content
-    }
-
-    /// Parse plain text based on grammar, return all declarations in text
-    pub fn parse<E: Error>(text: &str) -> Result<types::Fots, E> {
-        let mut parse_tree = match Grammar::parse(Rule::Root, text) {
-            Ok(tree) => tree,
-            Err(e) => { return Err(Content::report(e)); }
-        };
-        let mut parser = Content::new();
-
-        for p in parse_tree {
-            match p.as_rule() {
-                Rule::TypeDef => parser.parse_type(p),
-                Rule::FuncDef => parser.parse_func(p),
-                Rule::GroupDef => parser.parse_group(p),
-                Rule::RuleDef => parser.parse_rule(p),
-                _ => unreachable!()
-            }
-        }
-        parser.finish()
-    }
-
-    fn finish<E: Error>(&self) -> Result<types::Fots, E> {
-        todo!()
-    }
-
-    fn parse_func(&mut self, mut p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn parse_group(&mut self, mut p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn parse_rule(&mut self, mut p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn parse_type(&mut self, mut p: Pair<Rule>) {
-        let mut p: Pair<Rule> = p.into_inner().next().unwrap();
-
-        match p.as_rule() {
-            Rule::StructDef => self.parse_struct(p),
-            Rule::UnionDef => self.parse_union(p),
-            Rule::FlagDef => self.parse_flag(p),
-            Rule::AliasDef => self.parse_alias(p),
-            _ => unreachable!()
-        }
-    }
-
-    fn parse_struct(&mut self, p: Pair<Rule>) {
-        let mut p: Pairs<Rule> = p.into_inner();
-        let ident_p: Pair<Rule> = p.next().unwrap();
-        let mut info = TypeInfo::struct_info(ident_p.as_str());
-        let fields_p: Pair<Rule> = p.next().unwrap();
-        assert_eq!(fields_p.as_rule(), Rule::Fields);
-
-        // parse each field
-        for field_p in fields_p.into_inner() {
-            let mut ps = field_p.into_inner();
-            let mut ident_p: Pair<Rule> = ps.next().unwrap();
-            let mut type_exp_p = ps.next().unwrap();
-            info.add_field(Field::new(ident_p.as_str(), self.parse_type_exp(type_exp_p)));
-        }
-        todo!()
-    }
-
-    fn parse_type_exp(&mut self, p: Pair<Rule>) -> TypeId {
-        todo!()
-    }
-
-    fn parse_union(&mut self, p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn parse_flag(&mut self, p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn parse_alias(&mut self, p: Pair<Rule>) {
-        todo!()
-    }
-
-    fn report<E: Error>(e: pest::error::Error<Rule>) -> E {
-        todo!()
-    }
-}
+#[derive(Parser)]
+#[grammar = "fots.pest"]
+pub struct GrammarParser; // Useless type
 
 #[cfg(test)]
 mod tests {
