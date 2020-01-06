@@ -1,0 +1,15 @@
+[package]
+name = "fots"
+version = "0.1.0"
+authors = ["sam <sunhaoyl@outlook.com>"]
+edition = "2018"
+description = "Interface desciption language"
+license = "Apache"
+
+[dependencies]
+pest = "2.1.2"
+pest_derive = "2.1.0"
+
+[dev-dependencies]
+runtime-fmt = "0.4.1"
+

@@ -1,0 +1,125 @@
+// fots
+// Author: sam
+
+// Everything in a fots file will be one of this: A type def of a func def of a group def or a rule def
+Root = _{ SOI ~ (TypeDef | FuncDef | GroupDef | RuleDef)+ ~EOI  }
+
+// Grammar of Typedef
+TypeDef = { StructDef | UnionDef | FlagDef | AliasDef }
+StructDef = { Struct ~ Ident ~ OBrace ~Fields~ CBrace}
+UnionDef = { Union ~ Ident ~ OBrace ~ Fields ~ CBrace}
+Field = {Ident~Colon~TypeExp}
+Fields = {Field~(Comma ~Field)*~(Comma)?}
+
+FlagDef = { Flag ~ Ident ~ OBrace ~ FlagFields ~ CBrace}
+FlagFields = { FlagField~(Comma~FlagField)*~(Comma)?}
+FlagField = { Ident ~ Assign ~ NumLiteral}
+
+AliasDef = { Alias ~ Ident ~ Assign ~ TypeExp}
+
+// Type expression
+TypeExp = { SliceCtr | PtrCtr | ResCtr | LenCtr | NamedType}
+SliceCtr =  { OBrack ~ TypeExp ~ (Semicolon ~ (NumLiteral | Range))? ~ CBrack}
+PtrCtr = { Star ~ (In|Out|InOut)? ~ TypeExp}
+NamedType = { NumType | StrType | Ident }
+StrType = {(Str|Cstr) ~ (OBrace ~ StrVals ~ CBrace)?}
+StrVals = { StringLiteral ~ (Comma ~StringLiteral)*}
+ResCtr = { Res ~ "<" ~ TypeExp ~">"}
+LenCtr = { Len ~ "<" ~ NumType ~ Comma ~ LenPath ~">"}
+LenPath = { Ident~(Dot~Ident)*}
+NumType = { (I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize) ~ (OBrace ~ (Range | NumVals) ~ CBrace)?}
+NumVals = { NumLiteral ~(Comma ~ NumLiteral)*}
+Range = { OParen~NumLiteral ~ Comma ~ NumLiteral~CParen}
+
+
+// String literal
+StringLiteral = ${ "\"" ~ StringInner ~ "\"" }
+StringInner = @{ InnerChar* }
+InnerChar = {
+    !("\"" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+
+// Integer literal
+NumLiteral = @{ (Sign)? ~ HexLiteral|BinLiteral|DecLiteral }
+HexLiteral = @{("0x"|"0X")~HexDigit+}
+BinLiteral = @{("0b"|"0B")~BinDigit+}
+DecLiteral = @{Digit+}
+Digit = _{'0'..'9'}
+BinDigit = _{'0'..'1'}
+HexDigit = _{'0'..'9' | "A"|"B"|"C"|"D"|"F" | "a"| "b"|"c"|"d"|"e"|"f"}
+
+// Function def
+FuncDef = { Fn ~ FuncIdent ~ OParen ~ (ParamsDec)? ~ CParen ~ (TypeExp)? }
+FuncIdent = @{ Ident ~ ("$" ~ Ident)?}
+ParamsDec = { ParamDec~(Comma~ParamDec)*}
+ParamDec = {Ident ~ Colon ~ TypeExp}
+
+RuleDef = {Rule ~ Ident ~ OBrace ~ CallExp ~ CBrace}
+CallExp = { RTplCall *  ~ ItemExp}
+ItemExp = { CallItm+}
+CallItm = { Factor~(Choice~Factor)* }
+Factor = { (OParen~ItemExp ~ CParen ~Star?) | TplCall}
+RTplCall = { Ident ~ Assign ~ TplCall}
+TplCall = { FuncIdent ~ OParen ~ (ParamInsts~(Comma~ParamInsts)*)? ~ CParen}
+ParamInsts = { PlaceHolder | Ident | StringLiteral | NumLiteral }
+
+GroupDef = { Group ~ Ident ~ OBrace ~ (FuncDef)+ ~ CBrace}
+
+// Identifier
+Alpha = _{'a'..'z' | 'A'..'Z'}
+Ident = ${ NotKeyword ~ (Alpha|UnderLine) ~ (Alpha | Digit | UnderLine)*}
+NotKeyword = _{ !(Keyword~WHITESPACE)}
+
+// Key word
+RuleOp = {Choice}
+Choice = _{"|"}
+Keyword = {  Res | Len | Def|PlaceHolder | Fn|Struct | Union | Flag | Alias | Rule | Group | I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize | Str | Cstr | In | Out | InOut}
+Def = _{"def"}
+Res = _{"res"}
+Len = _{"len"}
+PlaceHolder = {"@"}
+Fn = _{"fn"}
+Struct = _{"struct"}
+Union = _{"union"}
+Flag = _{"flag"}
+Alias = _{"type"}
+Rule = _{"rule"}
+Group = _{"group"}
+I8 = {"i8"}
+I16 = {"i16"}
+I32= {"i32"}
+I64 = {"i64"}
+U8 = {"u8"}
+U16 = {"u16"}
+U32 = {"u32"}
+U64 = {"u64"}
+Usize = {"Usize"}
+Isize = {"Isize"}
+Str = {"str"}
+Cstr = {"cstr"}
+In = {"in"}
+Out = {"out"}
+InOut = {"inout"}
+
+// Basic
+OBrace = _{"{"}
+UnderLine = _{"_"}
+CBrace = _{"}"}
+Assign = _{ "=" }
+OParen = _{"("}
+CParen = _{")"}
+OBrack = _{"["}
+CBrack = _{"]"}
+Sign = _{"-" | "+"}
+Comma = _{ "," }
+Colon = _{":"}
+Semicolon = _{";"}
+Quota = _{"\""}
+Star = _{"*"}
+Dot = _{"."}
+
+// Inner rule
+WHITESPACE = _{  " " | "\t" | "\r" | "\n" }
+COMMENT = _{ ("/*" ~ (!"*/" ~ ANY)* ~ "*/")}
