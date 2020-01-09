@@ -534,6 +534,7 @@ impl TypeTable {
         }
         let tid = self.next_tid();
         self.unresolved.insert(String::from(symbol), tid);
+        self.symbols.insert(String::from(symbol), tid);
         tid
     }
 
