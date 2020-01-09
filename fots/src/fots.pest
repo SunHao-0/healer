@@ -8,8 +8,8 @@ Root = _{ SOI ~ (TypeDef | FuncDef | GroupDef | RuleDef)+ ~EOI  }
 TypeDef = { StructDef | UnionDef | FlagDef | AliasDef }
 StructDef = { Struct ~ Ident ~ OBrace ~Fields~ CBrace}
 UnionDef = { Union ~ Ident ~ OBrace ~ Fields ~ CBrace}
-Field = {Ident~Colon~TypeExp}
-Fields = {Field~(Comma ~Field)*~(Comma)?}
+Field = {Ident~Colon?~TypeExp}
+Fields = {Field~(Comma? ~Field)*~(Comma)?}
 
 FlagDef = { Flag ~ Ident ~ OBrace ~ FlagFields ~ CBrace}
 FlagFields = { FlagField~(Comma~FlagField)*~(Comma)?}
@@ -42,10 +42,10 @@ InnerChar = {
 }
 
 // Integer literal
-NumLiteral = @{ (Sign)? ~ HexLiteral|BinLiteral|DecLiteral }
+NumLiteral = ${HexLiteral|BinLiteral|DecLiteral }
 HexLiteral = @{("0x"|"0X")~HexDigit+}
 BinLiteral = @{("0b"|"0B")~BinDigit+}
-DecLiteral = @{Digit+}
+DecLiteral = @{NSign?~Digit+}
 Digit = _{'0'..'9'}
 BinDigit = _{'0'..'1'}
 HexDigit = _{'0'..'9' | "A"|"B"|"C"|"D"|"F" | "a"| "b"|"c"|"d"|"e"|"f"}
@@ -54,7 +54,7 @@ HexDigit = _{'0'..'9' | "A"|"B"|"C"|"D"|"F" | "a"| "b"|"c"|"d"|"e"|"f"}
 FuncDef = { Fn ~ FuncIdent ~ OParen ~ (ParamsDec)? ~ CParen ~ (TypeExp)? }
 FuncIdent = @{ Ident ~ ("$" ~ Ident)?}
 ParamsDec = { ParamDec~(Comma~ParamDec)*}
-ParamDec = {Ident ~ Colon ~ TypeExp}
+ParamDec = {Ident ~ Colon? ~ TypeExp}
 
 RuleDef = {Rule ~ Ident ~ OBrace ~ CallExp ~ CBrace}
 CallExp = { RTplCall *  ~ ItemExp}
@@ -75,8 +75,10 @@ NotKeyword = _{ !(Keyword~WHITESPACE)}
 // Key word
 RuleOp = {Choice}
 Choice = _{"|"}
-Keyword = {  Res | Len | Def|PlaceHolder | Fn|Struct | Union | Flag | Alias | Rule | Group | I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize | Str | Cstr | In | Out | InOut}
+Keyword = { NSign|PSign| Res | Len | Def|PlaceHolder | Fn|Struct | Union | Flag | Alias | Rule | Group | I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize | Str | Cstr | In | Out | InOut}
 Def = _{"def"}
+NSign = _{"-"}
+PSign = _{"+"}
 Res = _{"res"}
 Len = _{"len"}
 PlaceHolder = {"@"}
@@ -95,13 +97,13 @@ U8 = {"u8"}
 U16 = {"u16"}
 U32 = {"u32"}
 U64 = {"u64"}
-Usize = {"Usize"}
-Isize = {"Isize"}
+Usize = {"usize"}
+Isize = {"isize"}
 Str = {"str"}
 Cstr = {"cstr"}
-In = {"in"}
-Out = {"out"}
-InOut = {"inout"}
+In = {"In"}
+Out = {"Out"}
+InOut = {"IO"}
 
 // Basic
 OBrace = _{"{"}

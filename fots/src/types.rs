@@ -14,6 +14,7 @@ pub struct Items {
 }
 
 impl Display for Items {
+    #[allow(unused_must_use)]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "\n=====================Type=====================\n");
         let mut type_table = Table::new();
@@ -23,9 +24,21 @@ impl Display for Items {
         }
         write!(f, "{}", type_table);
         write!(f, "\n=====================GROUP=====================\n");
+        let mut group_table = Table::new();
+        group_table.add_row(row!["id","name"]);
         for g in self.groups.iter() {
-            write!(f, "{}", g);
+            group_table.add_row(row![g.id,g.ident]);
         }
+        write!(f, "{}", group_table);
+        write!(f, "\n===================== Fn =====================\n");
+        let mut fn_table = Table::new();
+        fn_table.add_row(row!["id","group","prototype"]);
+        for g in self.groups.iter() {
+            for f in g.fns.iter() {
+                fn_table.add_row(row![f.id,g.ident,f]);
+            }
+        }
+        write!(f, "{}", fn_table);
         Ok(())
     }
 }
@@ -215,6 +228,7 @@ pub struct FnInfo {
 }
 
 impl Display for FnInfo {
+    #[allow(unused_must_use)]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{} (", self.dec_name);
         if let Some(ref params) = self.params {

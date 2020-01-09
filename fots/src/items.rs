@@ -328,10 +328,6 @@ impl Parser {
         p.into_inner().map(|p| self.parse_num(p)).collect()
     }
 
-    //    fn parse_num<E: Debug, T: FromStr<Err=E>>(&mut self, p: Pair<Rule>) -> T {
-    //        p.as_str().parse::<T>().expect(&format!("{:?}", p.as_span()))
-    //    }
-
     fn parse_str_type(&mut self, p: Pair<Rule>) -> TypeId {
         let mut p = p.into_inner();
         let c_style = p.next().unwrap().as_rule() == Rule::Cstr;
