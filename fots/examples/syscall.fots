@@ -1,0 +1,155 @@
+
+type Fd = res<i32>
+type gid = res<i32>
+type uid = res<i32{ 0, -1, 0xee00, 0xee01}>
+type pid = res<i32{ 0, -1, 0xee00, 0xee01}>
+
+struct Pipe {
+    rfd  Fd
+    wfd  Fd
+}
+
+struct IoVec {
+    addr  *In [i8]
+    l  len<i32,IoVec.addr>
+}
+
+flag PollEvents {
+    POLLIN  = 0x0001,
+    POLLPRI = 0x0010,
+    POLLOUT = 0x0100,
+    POLLERR = 0x1000
+}
+
+struct PollFd{
+    fd          Fd
+    events      PollEvents
+    r_events    i16{0,1,2,4,6,8,12}
+}
+
+type time_sec = res<isize>
+type time_nsec = res<isize>
+type time_usec = res<isize>
+
+struct timespec{
+    sec     time_sec,
+    nsec    time_nsec
+}
+
+struct timeval{
+    sec     time_sec,
+    usec    time_usec
+}
+
+struct sigset{
+    mask    i64
+}
+
+struct sigset_size{
+    ss      *IO sigset,
+    l       len<isize,sigset_size.l>
+}
+
+struct epoll_event{
+    ev      epoll_ev,
+    data    i64{0}
+}
+
+flag epoll_ev{
+    foo = 0x000a,
+    bar = 0x000F,
+}
+
+type FdEpoll = res<Fd>
+
+group Io_Multiplexing{
+    fn poll(fds *In [PollFd], nfds len<i32,fds>, timeout i32)
+    fn ppoll(fds *In [PollFd], nfds len<i32,fds>, tsp *In timespec, sigmask *In sigset, size len<i32,sigmask>)
+    fn select(n len<i32,inp>, inp *IO fd_set, outp *IO fd_set, exp *IO fd_set, tvp *IO timeval)
+
+    fn epoll_create(size i32) FdEpoll
+    fn epoll_create1(flags epoll_flags) FdEpoll
+    fn epoll_ctl$EPOLL_CTL_ADD(epfd FdEpoll, op i32{0b0001}, fd Fd, ev *In epoll_event)
+    fn epoll_ctl$EPOLL_CTL_MOD(epfd FdEpoll, op i32{0b0010}, fd Fd, ev *In epoll_event)
+    fn epoll_ctl$EPOLL_CTL_DEL(epfd FdEpoll, op i32{0x0100}, fd Fd)
+    fn epoll_wait(epfd FdEpoll, events*Out [epoll_event], maxevents len<i32,events>, timeout int32)
+    fn epoll_pwait(epfd FdEpoll, events*Out [epoll_event], maxevents len<i32,events>, timeout i32, sigmask *In sigset, size len<i32,sigmask>)
+}
+
+group IdOp{
+    fn getgid() gid
+    fn getegid() gid
+    fn setuid(uid uid)
+    fn setgid(gid gid)
+    fn getuid() uid
+    fn geteuid() uid
+    fn setpgid(pid pid, pgid pid)
+    fn getpgid(pid pid) pid
+    fn getpgrp(pid pid) pid
+    fn getpid() pid
+    fn gettid() pid
+    fn setreuid(ruid uid, euid uid)
+    fn setregid(rgid gid, egid gid)
+    fn setresuid(ruid uid, euid uid, suid uid)
+    fn setresgid(rgid gid, egid gid, sgid gid)
+    fn getresuid(ruid *Out uid, euid *Out uid, suid *Out uid)
+    fn getresgid(rgid *Out gid, egid *Out gid, sgid *Out gid)
+    fn setfsuid(fsuid uid)
+    fn setfsgid(fsgid gid)
+    fn getgroups(size len<i32,list>, list *IO [gid])
+    fn setgroups(size len<i32,list>, list *In [gid])
+}
+
+flag OFlag{
+    O_R = 0x0001,
+    O_W = 0x0002,
+    O_RW = 0x0010,
+}
+
+flag OMode{
+    U_R = 0x0001,
+    U_W = 0x0002
+}
+
+flag seek_whence {
+    SEEK_SET = 0x0001,
+    SEEK_CUR = 0x0010,
+    SEEK_END = 0x0100,
+}
+
+group FileOp{
+    fn open(file *In cstr, flags OFlag, mode OMode) Fd
+    fn openat$dir(fd i32{1}, file *In cstr, flags OFlag, mode OMode) Fd
+    fn creat(file *In cstr, mode OMode) fd
+    fn close(fd Fd)
+    fn read(fd Fd, buf *Out [i8], count len<isize,buf>)
+    fn pread64(fd Fd, buf *Out [i8], count len<isize,buf>, pos isize)
+    fn readv(fd Fd, vec *Out [iovec], vlen len<isize,vec>)
+    fn preadv(fd Fd, vec *Out [iovec], vlen len<isize,vec>, off isize)
+    fn write(fd Fd, buf *In [iovec], count len<isize,buf>)
+    fn lseek(fd Fd, offset isize, whence seek_whence)
+}
+
+flag statx_flags {
+    AT_SYMLINK_NOFOLLOW = 0x0001,
+    AT_SYMLINK_FOLLOW = 0x0010,
+}
+
+flag statx_mask {
+    STATX_TYPE = 0x0001,
+    STATX_MODE = 0x0010,
+}
+
+struct stat {
+    st_dev isize,
+    st_ino isize,
+    st_mode i32
+}
+
+group FileStat{
+    fn stat(file *In cstr, statbuf *Out stat)
+    fn lstat(file *In cstr, statbuf *Out stat)
+    fn fstat(fd Fd, statbuf *Out stat)
+    fn newfstatat(dfd i32{0}, file *In cstr, statbuf *Out stat, f statx_flags)
+    fn statx(fd Fd, file *In cstr, flags statx_flags, mask statx_mask, statxbuf *Out statx)
+}
