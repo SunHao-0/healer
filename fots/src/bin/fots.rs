@@ -9,21 +9,29 @@ use fots::{parse_grammar, parse_items};
 use fots::grammar::Rule;
 
 #[derive(Debug, StructOpt)]
-#[structopt()]
+#[structopt(about = "desciption language for healer", author = "sam")]
 enum Settings {
+    /// Build fots file
     Build {
+        /// Show items after parse
         #[structopt(short, long)]
         v: bool,
+        /// Out put file
         #[structopt(short = "o", long = "out")]
         out: Option<PathBuf>,
+        /// Input files
         #[structopt(short = "f")]
         files: Option<Vec<PathBuf>>,
+        /// Input directort
         #[structopt(short = "d")]
         dir: Option<PathBuf>,
     },
+    /// Format fots files
     Format {
+        /// Input files
         #[structopt(short = "f")]
         files: Option<Vec<PathBuf>>,
+        /// Input directort
         #[structopt(short = "d")]
         dir: Option<PathBuf>,
     },
