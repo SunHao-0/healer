@@ -12,6 +12,12 @@ pest_derive = "2.1.0"
 num-traits = "0.2"
 maplit = "1.0.2"
 prettytable-rs = "^0.8"
+serde ={ version= "1.0.104" ,features = ["derive"]}
+bincode = "1.2.1"
+structopt = "0.3.7"
+thiserror = "1.0.9"
+colored = "1.9.2"
+
 [dev-dependencies]
 runtime-fmt = "0.4.1"
 
