@@ -1,26 +1,26 @@
+//! Parser for items
+
 use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Range;
+use std::process::exit;
 
 use num_traits::Num;
 use pest::iterators::{Pair, Pairs};
 
 use crate::{num, parse_grammar};
+use crate::errors;
 use crate::grammar::Rule;
 use crate::types::{
-    Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir, Type,
-    TypeId, TypeInfo,
+    Attr, DEFAULT_GID, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
+    Type, TypeId, TypeInfo,
 };
 
 /// Parse plain text based on grammar, return all declarations in text
-pub fn parse(text: &str) -> Result<Items, pest::error::Error<Rule>> {
-    let parse_tree = match parse_grammar(text) {
-        Ok(tree) => tree,
-        Err(e) => {
-            return Err(e); //Parser::report(e) }
-        }
-    };
-    Ok(Parser::parse(parse_tree))
+pub fn parse(text: &str) -> Result<Items, errors::Error> {
+    // parse grammar
+    let parse_tree = parse_grammar(text)?;
+    Parser::parse(parse_tree)
 }
 
 struct Parser {
@@ -38,7 +38,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(decls: Pairs<Rule>) -> Items {
+    pub fn parse(decls: Pairs<Rule>) -> Result<Items, errors::Error> {
         let mut parser = Parser::new();
         for p in decls {
             match p.as_rule() {
@@ -55,7 +55,11 @@ impl Parser {
         parser.finish()
     }
 
-    fn finish(self) -> Items {
+    fn finish(self) -> Result<Items, errors::Error> {
+        let idents_err = self.type_table.check();
+        if idents_err.is_some() {
+            return Err(idents_err.unwrap());
+        }
         let mut items = Items {
             types: self.type_table.into_types(),
             groups: self.group_table.into_groups(),
@@ -63,17 +67,26 @@ impl Parser {
         };
         items.types.sort_by_key(|a| a.tid);
         items.groups.sort_by_key(|i| i.id);
-        items
+        Ok(items)
     }
 
     fn parse_default_group(&mut self, p: Pair<Rule>) {
-        let fn_info = self.parse_func(p, 0);
-        self.group_table.add_fn(0, fn_info);
+        let fn_info = self.parse_func(p, DEFAULT_GID);
+        self.group_table.add_fn(DEFAULT_GID, fn_info);
     }
 
     fn parse_func(&mut self, p: Pair<Rule>, gid: GroupId) -> FnInfo {
         let mut p = p.into_inner();
-        let ident = p.next().unwrap().as_str();
+        let mut attrs = None;
+        let attr_or_ident_p = p.next().unwrap();
+        let ident = match attr_or_ident_p.as_rule() {
+            Rule::FuncIdent => attr_or_ident_p.as_str(),
+            Rule::AttrsDef => {
+                attrs = Some(self.parse_attrs(attr_or_ident_p));
+                p.next().unwrap().as_str()
+            }
+            _ => unreachable!(),
+        };
         let mut params = None;
         let mut ret = None;
         for p in p {
@@ -83,7 +96,29 @@ impl Parser {
                 _ => unreachable!(),
             }
         }
-        FnInfo::new(self.next_fid(), gid, ident, params, ret)
+        FnInfo::new(self.next_fid(), gid, ident, params, ret, attrs)
+    }
+
+    fn parse_attrs(&mut self, p: Pair<Rule>) -> Vec<Attr> {
+        p.into_inner().map(|p| self.parse_attr(p)).collect()
+    }
+
+    fn parse_attr(&mut self, p: Pair<Rule>) -> Attr {
+        let mut p = p.into_inner();
+        let attr_name = p.next().unwrap().as_str();
+        let vals = if let Some(p) = p.next() {
+            Some(
+                p.into_inner()
+                    .map(|p| p.as_str().to_string())
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            None
+        };
+        Attr {
+            ident: attr_name.into(),
+            vals,
+        }
     }
 
     fn parse_params(&mut self, p: Pair<Rule>) -> Vec<Param> {
@@ -100,14 +135,24 @@ impl Parser {
 
     fn parse_group(&mut self, p: Pair<Rule>) {
         let mut p = p.into_inner();
-        let ident = p.next().unwrap().as_str();
+        let mut attr = None;
+        let attr_or_ident_p = p.next().unwrap();
+        let ident = match attr_or_ident_p.as_rule() {
+            Rule::Ident => attr_or_ident_p.as_str(),
+            Rule::AttrsDef => {
+                attr = Some(self.parse_attrs(attr_or_ident_p));
+                p.next().unwrap().as_str()
+            }
+            _ => unreachable!(),
+        };
         let gid = self.group_table.id_of(ident);
+        self.group_table.get_mut(gid).unwrap().attrs(attr);
         let fns = p.map(|p| self.parse_func(p, gid)).collect::<Vec<_>>();
         self.group_table.add_fns(gid, fns);
     }
 
     fn parse_rule(&mut self, _p: Pair<Rule>) {
-        todo!()
+        todo!("Parsing of rule")
     }
 
     fn parse_type(&mut self, p: Pair<Rule>) -> TypeId {
@@ -460,9 +505,13 @@ impl GroupTable {
         }
     }
 
+    pub fn get_mut(&mut self, id: GroupId) -> Option<&mut Group> {
+        self.groups.get_mut(&id)
+    }
+
     pub fn add_fn(&mut self, gid: GroupId, fn_info: FnInfo) {
         assert!(self.groups.contains_key(&gid));
-        self.groups.get_mut(&gid).unwrap().add(fn_info);
+        self.groups.get_mut(&gid).unwrap().fn_info(fn_info);
     }
 
     pub fn add_fns(&mut self, gid: GroupId, fns: impl IntoIterator<Item=FnInfo>) {
@@ -495,6 +544,20 @@ impl TypeTable {
         }
     }
 
+    pub fn check(&self) -> Option<errors::Error> {
+        if self.unresolved.is_empty() {
+            None
+        } else {
+            // TODO Remove clone
+            Some(errors::Error::from_idents(
+                self.unresolved
+                    .keys()
+                    .map(|s| s.clone())
+                    .collect::<Vec<_>>(),
+            ))
+        }
+    }
+
     pub fn with_primitives() -> Self {
         let mut table = TypeTable::new();
         let types = TypeInfo::primitive_types();
@@ -515,6 +578,10 @@ impl TypeTable {
             let ident = t_info.ident().unwrap();
             let (ident, tid) = if self.unresolved.contains_key(ident) {
                 self.unresolved.remove_entry(ident).unwrap()
+            } else if self.symbols.contains_key(ident) {
+                use colored::*;
+                eprintln!("{}:{}:{}", "Error".red(), "Conflict Ident", ident);
+                exit(1);
             } else {
                 (String::from(ident), self.next_tid())
             };
