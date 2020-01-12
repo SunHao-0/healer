@@ -1,67 +1,122 @@
+//! Data model of type, func, group and rule.
+
 use std::fmt::{Display, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
 use prettytable::Table;
+use serde::{Deserialize, Serialize};
 
 use crate::grammar::Rule;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+/// Type , group , rule def of fots files
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Items {
     pub types: Vec<Type>,
     pub groups: Vec<Group>,
-    pub rules: Vec<RuleInfo>,
+    pub rules: Vec<RuleInfo>, // not implemented yet
 }
 
 impl Display for Items {
-    #[allow(unused_must_use)]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "\n=====================Type=====================\n");
+        let mut stat_table = Table::new();
+        stat_table.add_row(row!["Type", "Group", "Rule"]);
+        stat_table.add_row(row!(self.types.len(), self.groups.len(), self.rules.len()));
+        let stat_info = format!(
+            "\n\t=====================STAT=====================\n{}",
+            stat_table
+        );
+
         let mut type_table = Table::new();
-        type_table.add_row(row!["id","type"]);
+        type_table.add_row(row!["id", "type"]);
         for t in self.types.iter() {
-            type_table.add_row(row![t.tid,t.info]);
+            type_table.add_row(row![t.tid, t.info]);
         }
-        write!(f, "{}", type_table);
-        write!(f, "\n=====================GROUP=====================\n");
+        let type_info = format!(
+            "\n\t=====================TYPE=====================\n{}",
+            type_table
+        );
+
         let mut group_table = Table::new();
-        group_table.add_row(row!["id","name"]);
+        group_table.add_row(row!["id", "name"]);
         for g in self.groups.iter() {
-            group_table.add_row(row![g.id,g.ident]);
+            group_table.add_row(row![g.id, g.ident]);
         }
-        write!(f, "{}", group_table);
-        write!(f, "\n===================== Fn =====================\n");
+        let group_info = format!(
+            "\n\t=====================GROUP=====================\n{}",
+            group_table
+        );
+
         let mut fn_table = Table::new();
-        fn_table.add_row(row!["id","group","prototype"]);
+        fn_table.add_row(row!["id", "group", "prototype"]);
         for g in self.groups.iter() {
             for f in g.fns.iter() {
-                fn_table.add_row(row![f.id,g.ident,f]);
+                fn_table.add_row(row![f.id, g.ident, f]);
             }
         }
-        write!(f, "{}", fn_table);
-        Ok(())
+        let fn_info = format!(
+            "\n\t=====================FN=====================\n{}",
+            fn_table
+        );
+
+        write!(f, "{}{}{}{}", stat_info, type_info, group_info, fn_info)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RuleInfo {}
+impl Items {
+    pub fn dump(&self) -> bincode::Result<Vec<u8>> {
+        bincode::serialize(self)
+    }
+
+    pub fn load(b: &[u8]) -> bincode::Result<Self> {
+        bincode::deserialize(b)
+    }
+}
+
+/// Not sure if rule def is useful for program generation, so it's
+/// not implemented yet.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub struct RuleInfo;
 
 impl Display for RuleInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "rule:{:?}", self)
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), Error> {
+        todo!()
     }
 }
 
+/// Id of type
 pub type TypeId = u64;
 
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Infomation of a type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Type {
     pub tid: TypeId,
     pub info: TypeInfo,
+    // pub attrs: Option<Vec<Attr>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}:{}", self.tid, self.info)
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        self.tid.eq(&other.tid)
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.tid.hash(state)
+    }
+}
+
+/// Information of a type expression.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TypeInfo {
     Num(NumInfo),
     // Ptr type. utp stands for  under type
@@ -108,7 +163,56 @@ pub enum TypeInfo {
 
 impl Display for TypeInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{:?}", self)
+        match self {
+            TypeInfo::Num(lim) => write!(f, "{:?}", lim),
+            TypeInfo::Ptr { dir, tid, depth } => write!(
+                f,
+                "{}{} id({})",
+                std::iter::repeat("*").take(*depth).collect::<String>(),
+                *dir,
+                *tid
+            ),
+            TypeInfo::Slice { tid, l, h } => match (*l, *h) {
+                (-1, -1) => write!(f, "[id({})]", tid),
+                (l, -1) => write!(f, "[id({});{}]", tid, l),
+                (l, h) => write!(f, "[id({});({}:{})]", tid, l, h),
+            },
+            TypeInfo::Str { vals, c_style } => {
+                let s = if *c_style { "cstr" } else { "str" };
+                if let Some(ref vals) = vals {
+                    write!(f, "{}{{{}}}", s, vals.join(","))
+                } else {
+                    write!(f, "{}", s)
+                }
+            }
+            TypeInfo::Struct { ident, fields } => {
+                let fields_str = fields
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "struct {}{{{}}}", ident, fields_str)
+            }
+            TypeInfo::Union { ident, fields } => {
+                let fields_str = fields
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "union {}{{{}}}", ident, fields_str)
+            }
+            TypeInfo::Flag { ident, flags } => {
+                let flags_str = flags
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "flag {}{{{}}}", ident, flags_str)
+            }
+            TypeInfo::Alias { ident, tid } => write!(f, "Alias {}=>id({})", ident, tid),
+            TypeInfo::Res { tid } => write!(f, "res<id({})>", tid),
+            TypeInfo::Len { tid, path, .. } => write!(f, "len<id({}),{}>", tid, path),
+        }
     }
 }
 
@@ -211,9 +315,11 @@ impl TypeInfo {
     }
 }
 
+/// Id type of function declaration
 pub type FnId = usize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Information of function declaration
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FnInfo {
     pub id: FnId,
     pub gid: GroupId,
@@ -225,22 +331,54 @@ pub struct FnInfo {
     pub params: Option<Vec<Param>>,
     // id of return type
     pub r_tid: Option<TypeId>,
+    // optional attrs for fn
+    pub attrs: Option<Vec<Attr>>,
+}
+
+impl PartialEq for FnInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
+impl Eq for FnInfo {}
+
+impl Hash for FnInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 impl Display for FnInfo {
-    #[allow(unused_must_use)]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{} (", self.dec_name);
+        let mut params_info = String::new();
         if let Some(ref params) = self.params {
             for p in params {
-                write!(f, "{},", p);
+                params_info += &format!("{},", p);
             }
         }
-        write!(f, ")");
+        params_info.pop();
+        let mut ret_info = String::new();
         if let Some(id) = self.r_tid {
-            write!(f, "{}", id);
+            ret_info += &format!(" -> {}", id);
         }
-        Ok(())
+        let attrs_str = match &self.attrs {
+            None => "".into(),
+            Some(attrs) => {
+                let attrs = attrs
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("#[{}]", attrs)
+            }
+        };
+
+        write!(
+            f,
+            "{}{}({}){}",
+            attrs_str, self.dec_name, params_info, ret_info
+        )
     }
 }
 
@@ -251,6 +389,7 @@ impl FnInfo {
         name: &str,
         params: Option<Vec<Param>>,
         ret: Option<TypeId>,
+        attrs: Option<Vec<Attr>>,
     ) -> Self {
         let dec_name: String = name.into();
         let call_name = dec_name.split('$').next().unwrap().into();
@@ -261,6 +400,7 @@ impl FnInfo {
             call_name,
             params,
             r_tid: ret,
+            attrs,
         }
     }
 
@@ -268,9 +408,23 @@ impl FnInfo {
         self.gid = gid;
         self
     }
+
+    pub fn attr(&mut self, attr: Attr) -> &mut Self {
+        match self.attrs {
+            None => self.attrs = Some(vec![attr]),
+            Some(ref mut attrs) => attrs.push(attr),
+        };
+        self
+    }
+
+    pub fn attrs(&mut self, attrs: Option<Vec<Attr>>) -> &mut Self {
+        self.attrs = attrs;
+        self
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Parameter of function
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Param {
     pub ident: String,
     pub tid: TypeId,
@@ -291,25 +445,44 @@ impl Param {
     }
 }
 
+/// Id of group
 pub type GroupId = usize;
 
-#[derive(Debug, Clone)]
+pub const DEFAULT_GID: GroupId = 0;
+pub const DEFAULT_GROUP: &'static str = "@DEFAULT";
+
+/// Information of group def
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Group {
     pub id: GroupId,
     pub ident: String,
+    pub attrs: Option<Vec<Attr>>,
     pub fns: Vec<FnInfo>,
 }
 
 impl Display for Group {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut table = Table::new();
-        table.add_row(row!["Group id","Group name"]);
-        table.add_row(row![self.id,self.ident]);
-        table.add_row(row!["Fn id ","fn prototype"]);
+        table.add_row(row!["id", "prototype"]);
         for f in self.fns.iter() {
-            table.add_row(row![f.id,f]);
+            table.add_row(row![f.id, f]);
         }
-        write!(f, "{}", table)
+        let attrs_str = match self.attrs {
+            None => "".into(),
+            Some(ref attrs) => {
+                let attrs = attrs
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("#[{}]\n", attrs)
+            }
+        };
+        write!(
+            f,
+            "{}Id:{} Name:{}\n\r{}",
+            attrs_str, self.id, self.ident, table
+        )
     }
 }
 
@@ -331,9 +504,10 @@ impl Hash for Group {
 impl Default for Group {
     fn default() -> Self {
         Self {
-            id: 0,
-            ident: "Default".into(),
+            id: DEFAULT_GID,
+            ident: DEFAULT_GROUP.into(),
             fns: Vec::new(),
+            attrs: None,
         }
     }
 }
@@ -344,11 +518,26 @@ impl Group {
             fns: vec![],
             ident: ident.into(),
             id,
+            attrs: None,
         }
     }
 
-    pub fn add(&mut self, f_info: FnInfo) {
-        self.fns.push(f_info)
+    pub fn attrs(&mut self, attrs: Option<Vec<Attr>>) -> &mut Self {
+        self.attrs = attrs;
+        self
+    }
+
+    pub fn fn_info(&mut self, f_info: FnInfo) -> &mut Self {
+        self.fns.push(f_info);
+        self
+    }
+
+    pub fn attr(&mut self, attr: Attr) -> &mut Self {
+        match self.attrs {
+            None => self.attrs = Some(vec![attr]),
+            Some(ref mut attrs) => attrs.push(attr),
+        }
+        self
     }
 
     pub fn add_fns(&mut self, f_info: impl IntoIterator<Item=FnInfo>) {
@@ -356,7 +545,8 @@ impl Group {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Information of different size numbe type
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NumInfo {
     I8(NumLimit<i8>),
     I16(NumLimit<i16>),
@@ -370,11 +560,45 @@ pub enum NumInfo {
     Isize(NumLimit<isize>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl Display for NumInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match self {
+            NumInfo::I8(l) => write!(f, "i8{}", l),
+            NumInfo::I16(l) => write!(f, "i16{}", l),
+            NumInfo::I32(l) => write!(f, "i32{}", l),
+            NumInfo::I64(l) => write!(f, "i64{}", l),
+            NumInfo::U8(l) => write!(f, "u8{}", l),
+            NumInfo::U16(l) => write!(f, "u16{}", l),
+            NumInfo::U32(l) => write!(f, "u32{}", l),
+            NumInfo::U64(l) => write!(f, "u64{}", l),
+            NumInfo::Usize(l) => write!(f, "usize{}", l),
+            NumInfo::Isize(l) => write!(f, "isize{}", l),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NumLimit<T> {
     Vals(Vec<T>),
     Range(Range<T>),
     None,
+}
+
+impl<T: Display> Display for NumLimit<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match self {
+            NumLimit::Vals(ref vals) => {
+                let vals_str = vals
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "{{{}}}", vals_str)
+            }
+            NumLimit::Range(ref rag) => write!(f, "({}:{})", rag.start, rag.end),
+            NumLimit::None => write!(f, ""),
+        }
+    }
 }
 
 impl NumInfo {
@@ -476,11 +700,18 @@ impl NumInfo {
     //    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Direction of pointer
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PtrDir {
     In,
     Out,
     InOut,
+}
+
+impl Display for PtrDir {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl PtrDir {
@@ -494,10 +725,17 @@ impl PtrDir {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Field of struct or union
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Field {
     pub ident: String,
     pub tid: TypeId,
+}
+
+impl Display for Field {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}:id({})", self.ident, self.tid)
+    }
 }
 
 impl Field {
@@ -509,10 +747,17 @@ impl Field {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Signle flag in flag deleration
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Flag {
     pub ident: String,
     pub val: i32,
+}
+
+impl Display for Flag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}={}", self.ident, self.val)
+    }
 }
 
 impl Flag {
@@ -520,6 +765,32 @@ impl Flag {
         Self {
             ident: ident.into(),
             val,
+        }
+    }
+}
+
+/// Attribute of group or function
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Attr {
+    pub ident: String,
+    pub vals: Option<Vec<String>>,
+}
+
+impl Display for Attr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        let vals_str = match self.vals {
+            Some(ref vals) => vals.join(","),
+            None => "".into(),
+        };
+        write!(f, "{}({})", self.ident, vals_str)
+    }
+}
+
+impl Attr {
+    pub fn new(ident: &str) -> Self {
+        Attr {
+            ident: ident.into(),
+            vals: None,
         }
     }
 }
