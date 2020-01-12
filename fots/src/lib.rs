@@ -4,7 +4,7 @@
 //! It has part of rust's type and type constructor with golang likely syntex.
 //! A fots file consists four kind of items: type def, func def, group def and rule def.
 //! Every func belongs to a group. A sample example as follow:
-//! ```
+//! ``` fots
 //! type fd = res<i32>
 //! struct stat{...}
 //! flag statx_flags { xx = 0x0 }
