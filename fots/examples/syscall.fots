@@ -30,7 +30,7 @@ struct PollFd{
 type time_sec = res<isize>
 type time_nsec = res<isize>
 type time_usec = res<isize>
-
+/*  */
 struct timespec{
     sec     time_sec,
     nsec    time_nsec
@@ -62,17 +62,23 @@ flag epoll_ev{
 
 type FdEpoll = res<Fd>
 
+#[thread]
 group Io_Multiplexing{
+    #[thread]
     fn poll(fds *In [PollFd], nfds len<i32,fds>, timeout i32)
+
     fn ppoll(fds *In [PollFd], nfds len<i32,fds>, tsp *In timespec, sigmask *In sigset, size len<i32,sigmask>)
     fn select(n len<i32,inp>, inp *IO fd_set, outp *IO fd_set, exp *IO fd_set, tvp *IO timeval)
 
+    #[drop(drop_epoll_fd), threaded]
     fn epoll_create(size i32) FdEpoll
+
+    /*#[drop(drop_xxxx)]*/
     fn epoll_create1(flags epoll_flags) FdEpoll
     fn epoll_ctl$EPOLL_CTL_ADD(epfd FdEpoll, op i32{0b0001}, fd Fd, ev *In epoll_event)
     fn epoll_ctl$EPOLL_CTL_MOD(epfd FdEpoll, op i32{0b0010}, fd Fd, ev *In epoll_event)
     fn epoll_ctl$EPOLL_CTL_DEL(epfd FdEpoll, op i32{0x0100}, fd Fd)
-    fn epoll_wait(epfd FdEpoll, events*Out [epoll_event], maxevents len<i32,events>, timeout int32)
+    fn epoll_wait(epfd FdEpoll, events*Out [epoll_event], maxevents len<i32,events>, timeout i32)
     fn epoll_pwait(epfd FdEpoll, events*Out [epoll_event], maxevents len<i32,events>, timeout i32, sigmask *In sigset, size len<i32,sigmask>)
 }
 
@@ -100,8 +106,9 @@ group IdOp{
     fn setgroups(size len<i32,list>, list *In [gid])
 }
 
+
 flag OFlag{
-    O_R = 0x0001,
+    O_R = -0x0F001,
     O_W = 0x0002,
     O_RW = 0x0010,
 }
@@ -117,10 +124,14 @@ flag seek_whence {
     SEEK_END = 0x0100,
 }
 
+struct iovec{
+    vec *[i32]
+}
+
 group FileOp{
     fn open(file *In cstr, flags OFlag, mode OMode) Fd
     fn openat$dir(fd i32{1}, file *In cstr, flags OFlag, mode OMode) Fd
-    fn creat(file *In cstr, mode OMode) fd
+    fn creat(file *In cstr, mode OMode) Fd
     fn close(fd Fd)
     fn read(fd Fd, buf *Out [i8], count len<isize,buf>)
     fn pread64(fd Fd, buf *Out [i8], count len<isize,buf>, pos isize)
@@ -144,6 +155,19 @@ struct stat {
     st_dev isize,
     st_ino isize,
     st_mode i32
+}
+
+struct statx{
+    st_ino isize
+    st_mode i32
+}
+
+flag epoll_flags{
+    foo = 0x001,
+}
+
+struct fd_set{
+    fds *[Fd;(128,256)]
 }
 
 group FileStat{
