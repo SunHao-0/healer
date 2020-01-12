@@ -1,6 +1,6 @@
 # Healer
 Healer is a kernel fuzzer inspired by [Syzkaller](https://github.com/google/syzkaller) <br/>
-It will contains several parts: fots, generator, mutator, fuzzer...
+It will contain several parts: fots, generator, mutator, fuzzer...<br/>
 
 ## Fots
 Fots is a fuzzing oriented type system.<br/>
