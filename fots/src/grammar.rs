@@ -1,3 +1,5 @@
+//! Parser for grammar
+
 /// Grammar Parser
 ///
 /// Grammar Parser can be used to parse text by single rule.
