@@ -1,7 +1,6 @@
 // fots
 // Author: sam
 
-// Everything in a fots file will be one of this: A type def of a func def of a group def or a rule def
 Root = _{ SOI ~ (TypeDef | FuncDef | GroupDef | RuleDef)+ ~EOI  }
 
 // Grammar of Typedef
@@ -11,7 +10,8 @@ UnionDef = { Union ~ Ident ~ OBrace ~ Fields ~ CBrace}
 Field = {Ident~Colon?~TypeExp}
 Fields = {Field~(Comma? ~Field)*~(Comma)?}
 
-FlagDef = { Flag ~ Ident ~ OBrace ~ FlagFields ~ CBrace}
+FlagDef = { Flag ~ Ident ~UnderType?~ OBrace ~ FlagFields ~ CBrace}
+UnderType = {"<" ~ NumType ~ ">"}
 FlagFields = { FlagField~(Comma~FlagField)*~(Comma)?}
 FlagField = { Ident ~ Assign ~ NumLiteral}
 
@@ -42,20 +42,21 @@ InnerChar = {
 }
 
 // Integer literal
-NumLiteral = ${HexLiteral|BinLiteral|DecLiteral }
+NumLiteral = ${NSign?~(HexLiteral|BinLiteral|DecLiteral) }
 HexLiteral = @{("0x"|"0X")~HexDigit+}
 BinLiteral = @{("0b"|"0B")~BinDigit+}
-DecLiteral = @{NSign?~Digit+}
+DecLiteral = @{Digit+}
 Digit = _{'0'..'9'}
 BinDigit = _{'0'..'1'}
 HexDigit = _{'0'..'9' | "A"|"B"|"C"|"D"|"F" | "a"| "b"|"c"|"d"|"e"|"f"}
 
 // Function def
-FuncDef = { Fn ~ FuncIdent ~ OParen ~ (ParamsDec)? ~ CParen ~ (TypeExp)? }
+FuncDef = {AttrsDef?~ Fn ~ FuncIdent ~ OParen ~ (ParamsDec)? ~ CParen ~ (TypeExp)? }
 FuncIdent = @{ Ident ~ ("$" ~ Ident)?}
 ParamsDec = { ParamDec~(Comma~ParamDec)*}
 ParamDec = {Ident ~ Colon? ~ TypeExp}
 
+// Not used yet
 RuleDef = {Rule ~ Ident ~ OBrace ~ CallExp ~ CBrace}
 CallExp = { RTplCall *  ~ ItemExp}
 ItemExp = { CallItm+}
@@ -65,7 +66,13 @@ RTplCall = { Ident ~ Assign ~ TplCall}
 TplCall = { FuncIdent ~ OParen ~ (ParamInsts~(Comma~ParamInsts)*)? ~ CParen}
 ParamInsts = { PlaceHolder | Ident | StringLiteral | NumLiteral }
 
-GroupDef = { Group ~ Ident ~ OBrace ~ (FuncDef)+ ~ CBrace}
+GroupDef = { AttrsDef?~Group ~ Ident ~ OBrace ~ (FuncDef)+ ~ CBrace}
+
+AttrsDef = {"#" ~ OBrack ~ Attr~(Comma~Attr)*~CBrack}
+Attr = {AttrName ~ (OParen ~ AttrArgs ~ CParen)?}
+AttrName = {Ident}
+AttrArgs = {AttrArg ~ (Comma~AttrArg)*}
+AttrArg = {Ident}
 
 // Identifier
 Alpha = _{'a'..'z' | 'A'..'Z'}
@@ -75,7 +82,7 @@ NotKeyword = _{ !(Keyword~WHITESPACE)}
 // Key word
 RuleOp = {Choice}
 Choice = _{"|"}
-Keyword = { NSign|PSign| Res | Len | Def|PlaceHolder | Fn|Struct | Union | Flag | Alias | Rule | Group | I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize | Str | Cstr | In | Out | InOut}
+Keyword = {  NSign|PSign| Res | Len | Def|PlaceHolder | Fn|Struct | Union | Flag | Alias | Rule | Group | I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize | Str | Cstr | In | Out | InOut}
 Def = _{"def"}
 NSign = _{"-"}
 PSign = _{"+"}
