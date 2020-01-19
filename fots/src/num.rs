@@ -6,11 +6,12 @@ pub fn parse<T: Num>(input: &str) -> Result<T, T::FromStrRadixErr> {
     assert!(!input.is_empty());
     assert_ne!(&input[0..1], "+");
 
-    let mut sign = '+';
-    if input.starts_with('-') {
+    let sign = if input.starts_with('-') {
         input = &input[1..];
-        sign = '-';
-    }
+        '-'
+    } else {
+        '+'
+    };
     if input.starts_with("0x") | input.starts_with("0X") {
         return T::from_str_radix(&format!("{}{}", sign, &input[2..]), 16);
     }

@@ -42,7 +42,7 @@ use grammar::{GrammarParser, Rule};
 pub mod errors;
 pub mod grammar;
 pub mod items;
-mod num;
+pub mod num;
 pub mod types;
 
 /// Parse plain text, return grammar structure of text.

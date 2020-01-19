@@ -57,8 +57,8 @@ impl Parser {
 
     fn finish(self) -> Result<Items, errors::Error> {
         let idents_err = self.type_table.check();
-        if idents_err.is_some() {
-            return Err(idents_err.unwrap());
+        if let Some(e) = idents_err {
+            return Err(e);
         }
         let mut items = Items {
             types: self.type_table.into_types(),
@@ -447,7 +447,7 @@ impl Parser {
         let mut p = p.into_inner();
         let ident = p.next().unwrap().as_str();
         // let val: i32 = self.parse_num(p.next().unwrap());
-        let val = self.parse_num::<i32>(p.next().unwrap());
+        let val = self.parse_num::<i64>(p.next().unwrap());
         Flag::new(ident, val)
     }
 
@@ -550,10 +550,7 @@ impl TypeTable {
         } else {
             // TODO Remove clone
             Some(errors::Error::from_idents(
-                self.unresolved
-                    .keys()
-                    .map(|s| s.clone())
-                    .collect::<Vec<_>>(),
+                self.unresolved.keys().cloned().collect::<Vec<_>>(),
             ))
         }
     }

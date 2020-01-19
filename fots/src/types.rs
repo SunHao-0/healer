@@ -449,7 +449,7 @@ impl Param {
 pub type GroupId = usize;
 
 pub const DEFAULT_GID: GroupId = 0;
-pub const DEFAULT_GROUP: &'static str = "@DEFAULT";
+pub const DEFAULT_GROUP: &str = "@DEFAULT";
 
 /// Information of group def
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -751,7 +751,7 @@ impl Field {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Flag {
     pub ident: String,
-    pub val: i32,
+    pub val: i64,
 }
 
 impl Display for Flag {
@@ -761,7 +761,7 @@ impl Display for Flag {
 }
 
 impl Flag {
-    pub fn new(ident: &str, val: i32) -> Self {
+    pub fn new(ident: &str, val: i64) -> Self {
         Self {
             ident: ident.into(),
             val,
