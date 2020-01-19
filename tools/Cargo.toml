@@ -1,0 +1,16 @@
+[package]
+name = "tools"
+version = "0.1.0"
+authors = ["sam <sunhaoyl@outlook.com>"]
+edition = "2018"
+description = "Tools for healer"
+license = "Apache"
+
+[dependencies]
+fots={path="../fots"}
+pest = "2.1.2"
+pest_derive = "2.1.0"
+thiserror = "1.0.9"
+colored = "1.9.2"
+num-traits = "0.2"
+structopt = {version="0.3.7",default-features=true}

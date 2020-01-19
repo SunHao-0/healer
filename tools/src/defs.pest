@@ -1,0 +1,14 @@
+Root = _{ SOI ~ (Include|Flags)+ ~ EOI}
+
+
+Include = { "#" ~ "include" ~ "<" ~ Header ~">"}
+Flags = {Ident ~ "=" ~Ident ~ ("," ~ Ident)*}
+
+Header = @{Ident~("/"~Ident)*}
+
+Alpha = _{'a'..'z' | 'A'..'Z'}
+Digit = _{'0'..'9'}
+Ident = @{ (Alpha|"_") ~ (Alpha | Digit | "_" | ".")*}
+
+WHITESPACE = _{  " " | "\t" | "\r" | "\n" }
+COMMENT = _{ ("/*" ~ (!"*/" ~ ANY)* ~ "*/")}
