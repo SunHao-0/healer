@@ -132,7 +132,7 @@ pub enum TypeInfo {
         h: isize,
     },
     Str {
-        c_style: bool,
+        str_type: StrType,
         vals: Option<Vec<String>>,
     },
     Struct {
@@ -161,6 +161,23 @@ pub enum TypeInfo {
     },
 }
 
+#[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StrType {
+    Str,
+    CStr,
+    FileName,
+}
+
+impl Display for StrType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match self {
+            StrType::Str => write!(f, "str"),
+            StrType::CStr => write!(f, "cstr"),
+            StrType::FileName => write!(f, "filename"),
+        }
+    }
+}
+
 impl Display for TypeInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
@@ -177,8 +194,8 @@ impl Display for TypeInfo {
                 (l, -1) => write!(f, "[id({});{}]", tid, l),
                 (l, h) => write!(f, "[id({});({}:{})]", tid, l, h),
             },
-            TypeInfo::Str { vals, c_style } => {
-                let s = if *c_style { "cstr" } else { "str" };
+            TypeInfo::Str { vals, str_type } => {
+                let s: String = str_type.to_string();
                 if let Some(ref vals) = vals {
                     write!(f, "{}{{{}}}", s, vals.join(","))
                 } else {
@@ -220,7 +237,7 @@ impl TypeInfo {
     pub fn primitive_types() -> Vec<TypeInfo> {
         vec![
             TypeInfo::Num(NumInfo::I8(NumLimit::None)),
-            TypeInfo::Num(NumInfo::I8(NumLimit::None)),
+            TypeInfo::Num(NumInfo::I16(NumLimit::None)),
             TypeInfo::Num(NumInfo::I32(NumLimit::None)),
             TypeInfo::Num(NumInfo::I64(NumLimit::None)),
             TypeInfo::Num(NumInfo::U8(NumLimit::None)),
@@ -230,11 +247,15 @@ impl TypeInfo {
             TypeInfo::Num(NumInfo::Usize(NumLimit::None)),
             TypeInfo::Num(NumInfo::Isize(NumLimit::None)),
             TypeInfo::Str {
-                c_style: false,
+                str_type: StrType::CStr,
                 vals: None,
             },
             TypeInfo::Str {
-                c_style: true,
+                str_type: StrType::Str,
+                vals: None,
+            },
+            TypeInfo::Str {
+                str_type: StrType::FileName,
                 vals: None,
             },
         ]
@@ -266,8 +287,8 @@ impl TypeInfo {
         TypeInfo::Slice { tid, l, h }
     }
 
-    pub fn str_info(c_style: bool, vals: Option<Vec<String>>) -> Self {
-        TypeInfo::Str { c_style, vals }
+    pub fn str_info(str_type: StrType, vals: Option<Vec<String>>) -> Self {
+        TypeInfo::Str { str_type, vals }
     }
     pub fn ptr_info(tid: TypeId, dir: PtrDir, depth: usize) -> Self {
         TypeInfo::Ptr { tid, dir, depth }
@@ -421,6 +442,19 @@ impl FnInfo {
         self.attrs = attrs;
         self
     }
+
+    pub fn has_params(&self) -> bool {
+        self.params.is_some()
+    }
+
+    pub fn has_ret(&self) -> bool {
+        self.r_tid.is_some()
+    }
+
+    pub fn iter_param(&self) -> impl Iterator<Item=&Param> + '_ {
+        assert!(self.has_params());
+        self.params.as_ref().unwrap().iter()
+    }
 }
 
 /// Parameter of function
@@ -542,6 +576,14 @@ impl Group {
 
     pub fn add_fns(&mut self, f_info: impl IntoIterator<Item=FnInfo>) {
         self.fns.extend(f_info)
+    }
+
+    pub fn fn_num(&self) -> usize {
+        self.fns.len()
+    }
+
+    pub fn iter_fn(&self) -> impl Iterator<Item=&FnInfo> + '_ {
+        self.fns.iter()
     }
 }
 
