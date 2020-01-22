@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 use std::ops::{Deref, DerefMut};
 
-use ndarray::Array2;
+use ndarray::{Array2, Axis};
 
 use fots::types::{FnInfo, Group, GroupId, PtrDir, TypeId, TypeInfo};
 
@@ -10,7 +10,7 @@ use crate::prog::Prog;
 use crate::target::Target;
 
 /// Relation between interface
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Ord)]
 pub enum Relation {
     None,
     Some,
@@ -46,6 +46,10 @@ impl RTable {
             rt[(i, i)] = Relation::None;
         }
         rt
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len_of(Axis(0))
     }
 }
 
@@ -127,7 +131,7 @@ fn res_use(index: usize, f: &FnInfo, t: &Target, uses: &mut HashMap<TypeId, Use>
     for p in f.iter_param() {
         let mut id = p.tid;
         let mut in_ = true;
-        if let TypeInfo::Ptr { tid, dir, depth } = t.type_info_of(id) {
+        if let TypeInfo::Ptr { tid, dir, depth } = t.type_of(id) {
             assert!(*depth == 1, "Multi-level pointer not supported");
             id = *tid;
             in_ = *dir == PtrDir::In;
@@ -176,6 +180,3 @@ pub fn prog_analyze(g: &Group, r: &mut RTable, p: &Prog) {
         }
     }
 }
-
-
-
