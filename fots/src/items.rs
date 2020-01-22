@@ -55,10 +55,13 @@ impl Parser {
         parser.finish()
     }
 
-    fn finish(self) -> Result<Items, errors::Error> {
+    fn finish(mut self) -> Result<Items, errors::Error> {
         if let Some(e) = self.type_table.check() {
             return Err(e);
         }
+
+        self.group_table.groups.retain(|_, g| g.fn_num() != 0);
+
         let mut items = Items {
             types: self.type_table.into_types(),
             groups: self.group_table.into_groups(),
@@ -66,9 +69,11 @@ impl Parser {
         };
         items.types.sort_by_key(|a| a.tid);
         items.groups.sort_by_key(|i| i.id);
+
         items.types.shrink_to_fit();
         items.groups.shrink_to_fit();
         items.rules.shrink_to_fit();
+
         Ok(items)
     }
 
@@ -369,8 +374,8 @@ impl Parser {
     //    }
 
     fn parse_nums<T: Num>(&mut self, p: Pair<Rule>) -> Vec<T>
-        where
-            <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
+    where
+        <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
     {
         p.into_inner().map(|p| self.parse_num(p)).collect()
     }
@@ -421,8 +426,8 @@ impl Parser {
     }
 
     fn parse_range<T: Num>(&self, p: Pair<Rule>) -> Range<T>
-        where
-            <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
+    where
+        <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
     {
         let mut p = p.into_inner();
         let l = self.parse_num::<T>(p.next().unwrap());
@@ -468,8 +473,8 @@ impl Parser {
     }
 
     fn parse_num<T: Num>(&self, p: Pair<Rule>) -> T
-        where
-            <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
+    where
+        <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
     {
         num::parse(p.as_str()).unwrap()
     }
@@ -521,7 +526,7 @@ impl GroupTable {
         self.groups.get_mut(&gid).unwrap().fn_info(fn_info);
     }
 
-    pub fn add_fns(&mut self, gid: GroupId, fns: impl IntoIterator<Item=FnInfo>) {
+    pub fn add_fns(&mut self, gid: GroupId, fns: impl IntoIterator<Item = FnInfo>) {
         assert!(self.groups.contains_key(&gid));
         self.groups.get_mut(&gid).unwrap().add_fns(fns);
     }

@@ -451,7 +451,7 @@ impl FnInfo {
         self.r_tid.is_some()
     }
 
-    pub fn iter_param(&self) -> impl Iterator<Item=&Param> + '_ {
+    pub fn iter_param(&self) -> impl Iterator<Item = &Param> + '_ {
         assert!(self.has_params());
         self.params.as_ref().unwrap().iter()
     }
@@ -580,7 +580,7 @@ impl Group {
         self
     }
 
-    pub fn add_fns(&mut self, f_info: impl IntoIterator<Item=FnInfo>) {
+    pub fn add_fns(&mut self, f_info: impl IntoIterator<Item = FnInfo>) {
         self.fns.extend(f_info)
     }
 
@@ -588,7 +588,7 @@ impl Group {
         self.fns.len()
     }
 
-    pub fn iter_fn(&self) -> impl Iterator<Item=&FnInfo> + '_ {
+    pub fn iter_fn(&self) -> impl Iterator<Item = &FnInfo> + '_ {
         self.fns.iter()
     }
 
@@ -854,7 +854,7 @@ impl Attr {
         self.vals.is_some() && !self.vals.as_ref().unwrap().is_empty()
     }
 
-    pub fn iter_val(&self) -> impl Iterator<Item=&str> + '_ {
+    pub fn iter_val(&self) -> impl Iterator<Item = &str> + '_ {
         assert!(self.has_vals());
         self.vals.as_ref().unwrap().iter().map(|v| v as &str)
     }
