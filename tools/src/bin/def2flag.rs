@@ -4,6 +4,7 @@ use std::process::exit;
 
 use structopt::StructOpt;
 
+use fots::types::TypeInfo;
 use tools::def2flag::parse;
 
 #[derive(StructOpt)]

@@ -7,37 +7,47 @@ use pest::Parser;
 
 use fots::types::TypeInfo;
 
-/// Parse name of constant to fots's flag type
 pub fn parse(defs: &str) -> Result<Vec<TypeInfo>, Error> {
     let items = ItemsParser::parse(defs)?;
-    let flag_vals = run_cprog(&items.to_cprogs())?;
-    parse_flag(items, flag_vals)
+    let flags_vals = parse_symbol_val(&items)?;
+    Ok(combine(items.flags, flags_vals))
 }
 
-fn parse_flag(items: Items, mut vals: Vec<u8>) -> Result<Vec<TypeInfo>, Error> {
-    assert!(!vals.is_empty());
+fn combine(flags: Vec<Flag>, flags_vals: Vec<Vec<i64>>) -> Vec<TypeInfo> {
+    assert_eq!(flags.len(), flags_vals.len());
     let mut result = Vec::new();
-    vals.pop();
-    let vals = String::from_utf8(vals).unwrap();
-
-    for (flag, mut vals) in items.flags.into_iter().zip(vals.lines()) {
+    for (flag, flag_vals) in flags.into_iter().zip(flags_vals.into_iter()) {
         let mut flags = Vec::new();
-        vals = vals.trim();
-        for (ident, val) in flag.members.into_iter().zip(vals.split_whitespace()) {
-            flags.push(fots::types::Flag {
-                ident,
-                val: fots::num::parse::<i64>(val)?,
-            });
+        for (ident, val) in flag.members.into_iter().zip(flag_vals.into_iter()) {
+            flags.push(fots::types::Flag { ident, val });
         }
         result.push(TypeInfo::Flag {
             ident: flag.ident,
             flags,
         });
     }
+    result
+}
+
+fn parse_symbol_val(items: &Items) -> Result<Vec<Vec<i64>>, Error> {
+    let mut out = run_cprog(&items.to_cprogs())?;
+    assert!(!out.is_empty());
+    let mut result = Vec::new();
+    out.pop();
+    let vals = String::from_utf8(out).unwrap();
+
+    for mut flag_vals in vals.lines() {
+        flag_vals = flag_vals.trim();
+        result.push(
+            flag_vals
+                .split_whitespace()
+                .map(|val| fots::num::parse::<i64>(val).unwrap())
+                .collect::<Vec<_>>(),
+        );
+    }
     Ok(result)
 }
 
-// linux only
 fn run_cprog(prog: &str) -> Result<Vec<u8>, Error> {
     let out_dir = std::env::temp_dir();
 
