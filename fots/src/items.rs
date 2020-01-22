@@ -12,8 +12,8 @@ use crate::{num, parse_grammar};
 use crate::errors;
 use crate::grammar::Rule;
 use crate::types::{
-    Attr, DEFAULT_GID, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
-    Type, TypeId, TypeInfo,
+    Attr, DEFAULT_GID, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param,
+    PtrDir, StrType, Type, TypeId, TypeInfo,
 };
 
 /// Parse plain text based on grammar, return all declarations in text
@@ -56,8 +56,7 @@ impl Parser {
     }
 
     fn finish(self) -> Result<Items, errors::Error> {
-        let idents_err = self.type_table.check();
-        if let Some(e) = idents_err {
+        if let Some(e) = self.type_table.check() {
             return Err(e);
         }
         let mut items = Items {
@@ -67,6 +66,9 @@ impl Parser {
         };
         items.types.sort_by_key(|a| a.tid);
         items.groups.sort_by_key(|i| i.id);
+        items.types.shrink_to_fit();
+        items.groups.shrink_to_fit();
+        items.rules.shrink_to_fit();
         Ok(items)
     }
 
@@ -375,12 +377,17 @@ impl Parser {
 
     fn parse_str_type(&mut self, p: Pair<Rule>) -> TypeId {
         let mut p = p.into_inner();
-        let c_style = p.next().unwrap().as_rule() == Rule::Cstr;
+        let str_type = match p.next().unwrap().as_rule() {
+            Rule::Cstr => StrType::CStr,
+            Rule::Str => StrType::Str,
+            Rule::FileName => StrType::FileName,
+            _ => unreachable!(),
+        };
         let limit = match p.next() {
             Some(p) => Some(self.parse_strs(p)),
             None => None,
         };
-        self.type_table.add(TypeInfo::str_info(c_style, limit))
+        self.type_table.add(TypeInfo::str_info(str_type, limit))
     }
 
     fn parse_strs(&mut self, p: Pair<Rule>) -> Vec<String> {
@@ -529,6 +536,7 @@ impl GroupTable {
 }
 
 /// Type record table
+#[derive(Debug)]
 struct TypeTable {
     types: HashMap<TypeInfo, TypeId>,
     symbols: HashMap<String, TypeId>,
@@ -561,6 +569,7 @@ impl TypeTable {
         for (tid, t_info) in types.into_iter().enumerate() {
             table.types.insert(t_info, tid as TypeId);
         }
+
         table
     }
 
