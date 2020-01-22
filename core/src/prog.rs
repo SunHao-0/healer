@@ -1,25 +1,29 @@
-use fots::types::{FnId, TypeId};
+use fots::types::{FnId, GroupId, TypeId};
 
 use crate::value::Value;
 
 pub type CId = u64;
 
+#[derive(Debug, Clone)]
 pub struct Prog {
+    pub gid: GroupId,
     pub calls: Vec<Call>,
 }
 
 impl Prog {
-    pub fn new() -> Self {
+    pub fn new(gid: GroupId) -> Self {
         Self {
-            calls: Vec::new()
+            gid,
+            calls: Vec::new(),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.len()
+        self.calls.len()
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Call {
     /// prototype
     pub fid: FnId,
@@ -27,7 +31,18 @@ pub struct Call {
     pub ret: Option<Arg>,
 }
 
+impl Call {
+    pub fn new(fid: FnId) -> Self {
+        Self {
+            args: Vec::new(),
+            ret: None,
+            fid,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Arg {
-    tid: TypeId,
-    val: Value,
+    pub tid: TypeId,
+    pub val: Value,
 }
