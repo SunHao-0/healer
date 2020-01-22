@@ -455,6 +455,12 @@ impl FnInfo {
         assert!(self.has_params());
         self.params.as_ref().unwrap().iter()
     }
+
+    pub fn get_attr(&self, name: &str) -> Option<&Attr> {
+        self.attrs
+            .as_ref()
+            .and_then(|attrs| attrs.iter().find(|&attr| attr.ident == name))
+    }
 }
 
 /// Parameter of function
@@ -584,6 +590,14 @@ impl Group {
 
     pub fn iter_fn(&self) -> impl Iterator<Item=&FnInfo> + '_ {
         self.fns.iter()
+    }
+
+    pub fn index_by_name(&self, name: &str) -> Option<usize> {
+        self.iter_fn().position(|f| &f.dec_name == name)
+    }
+
+    pub fn index_by_id(&self, fid: FnId) -> Option<usize> {
+        self.iter_fn().position(|f| f.id == fid)
     }
 }
 
@@ -834,5 +848,14 @@ impl Attr {
             ident: ident.into(),
             vals: None,
         }
+    }
+
+    pub fn has_vals(&self) -> bool {
+        self.vals.is_some() && !self.vals.as_ref().unwrap().is_empty()
+    }
+
+    pub fn iter_val(&self) -> impl Iterator<Item=&str> + '_ {
+        assert!(self.has_vals());
+        self.vals.as_ref().unwrap().iter().map(|v| v as &str)
     }
 }
