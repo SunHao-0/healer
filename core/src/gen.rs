@@ -3,37 +3,57 @@ use std::path::PathBuf;
 
 use bitset_fixed::BitSet;
 use ndarray::Axis;
-use rand::{random, Rng, thread_rng};
 use rand::distributions::{Alphanumeric, Standard};
 use rand::prelude::*;
-use rand::prelude::IteratorRandom;
+use rand::{random, thread_rng, Rng};
 
 use fots::types::{
     Field, Flag, FnInfo, GroupId, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo,
 };
 
-use crate::analyze::{Relation, RTable};
-use crate::prog::{Arg, ArgIndex, Call, Prog};
+use crate::analyze::{RTable, Relation};
+use crate::prog::{Arg, ArgIndex, ArgPos, Call, Prog};
 use crate::target::Target;
 use crate::value::{NumValue, Value};
 
 pub struct Config {
     pub prog_max_len: usize,
+    pub prog_min_len: usize,
     pub str_min_len: usize,
     pub str_max_len: usize,
     pub path_max_depth: usize,
 }
 
-pub fn gen(t: &Target, rs: &HashMap<GroupId, RTable>, conf: &Config) -> Prog {
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            prog_max_len: 15,
+            prog_min_len: 3,
+            str_min_len: 4,
+            str_max_len: 128,
+            path_max_depth: 4,
+        }
+    }
+}
+
+pub fn gen<S: std::hash::BuildHasher>(
+    t: &Target,
+    rs: &HashMap<GroupId, RTable, S>,
+    conf: &Config,
+) -> Prog {
     assert!(!rs.is_empty());
-
+    assert_eq!(t.groups.len(), rs.len());
     let mut rng = thread_rng();
-    let gid = rs.keys().choose(&mut rng).unwrap();
 
-    let r = &rs[gid];
+    // choose group
+    let gid = rs.keys().choose(&mut rng).unwrap();
     let g = &t.groups[gid];
+
+    // choose sequence
+    let r = &rs[gid];
     let seq = choose_seq(r, conf);
 
+    // gen value
     let mut s = State::new(Prog::new(*gid), conf);
     for &i in seq.iter() {
         gen_call(t, &g.fns[i], &mut s);
@@ -46,7 +66,6 @@ struct State<'a> {
     strs: HashMap<StrType, Vec<String>>,
     prog: Prog,
     conf: &'a Config,
-    argi: usize,
 }
 
 impl<'a> State<'a> {
@@ -54,50 +73,93 @@ impl<'a> State<'a> {
         Self {
             res: HashMap::new(),
             strs: hashmap! {StrType::FileName => Vec::new()},
-            argi: 0,
             prog,
             conf,
         }
     }
 
-    pub fn record_res(&mut self, tid: TypeId) {
+    pub fn record_res(&mut self, tid: TypeId, is_ret: bool) {
         let cid = self.prog.len() - 1;
-        let idx = self.res.entry(tid).or_insert(Vec::new());
-        idx.push((cid, self.argi))
+        let arg_pos = self.prog.calls[cid].args.len() - 1;
+
+        let idx = self.res.entry(tid).or_insert_with(Default::default);
+        if is_ret {
+            idx.push((cid, ArgPos::Ret))
+        } else {
+            idx.push((cid, ArgPos::Arg(arg_pos)))
+        }
     }
 
     pub fn record_str(&mut self, t: StrType, val: &str) {
-        let vals = self.strs.entry(t).or_insert(Vec::new());
+        let vals = self.strs.entry(t).or_insert_with(Default::default);
         vals.push(val.into())
     }
 
+    pub fn try_reuse_res(&self, tid: TypeId) -> Option<Value> {
+        let mut rng = thread_rng();
+        if let Some(res) = self.res.get(&tid) {
+            if !res.is_empty() {
+                let r = res.choose(&mut rng).unwrap();
+                return Some(Value::Ref(r.clone()));
+            }
+        }
+        None
+    }
+
+    pub fn try_reuse_str(&self, str_type: StrType) -> Option<Value> {
+        let mut rng = thread_rng();
+        if let Some(strs) = self.strs.get(&str_type) {
+            if !strs.is_empty() && rng.gen() {
+                let s = strs.choose(&mut rng).unwrap();
+                return Some(Value::Str(s.clone()));
+            }
+        }
+        None
+    }
+
+    // add call
+    #[inline]
     pub fn add_call(&mut self, call: Call) -> &mut Call {
-        self.prog.calls.push(call);
-        let len = self.prog.len();
-        &mut self.prog.calls[len - 1]
+        self.prog.add_call(call)
+    }
+
+    // Add arg for last call
+    #[inline]
+    pub fn add_arg(&mut self, arg: Arg) -> &mut Arg {
+        let i = self.prog.len() - 1;
+        self.prog.calls[i].add_arg(arg)
+    }
+
+    #[inline]
+    pub fn add_ret(&mut self, arg: Arg) -> &mut Arg {
+        let i = self.prog.len() - 1;
+        self.prog.calls[i].ret = Some(arg);
+        self.prog.calls[i].ret.as_mut().unwrap()
+    }
+
+    #[inline]
+    pub fn update_val(&mut self, val: Value) {
+        let c = self.prog.calls.last_mut().unwrap();
+        let arg_index = c.args.len() - 1;
+        c.args[arg_index].val = val;
     }
 }
 
 fn gen_call(t: &Target, f: &FnInfo, s: &mut State) {
-    s.argi = 0;
     s.add_call(Call::new(f.id));
-    let call_index = s.prog.calls.len() - 1;
+
     if f.has_params() {
-        for (i, p) in f.iter_param().enumerate() {
-            s.argi = i;
+        for p in f.iter_param() {
+            s.add_arg(Arg::new(p.tid));
             let val = gen_value(p.tid, t, s);
-            s.prog.calls[call_index].args.push(Arg { val, tid: p.tid })
+            s.update_val(val);
         }
     }
 
     if let Some(tid) = f.r_tid {
-        s.argi = s.prog.calls[call_index].args.len();
         if t.is_res(tid) {
-            s.record_res(tid);
-            s.prog.calls[call_index].ret = Some(Arg {
-                tid,
-                val: Value::None,
-            });
+            s.add_ret(Arg::new(tid));
+            s.record_res(tid, true);
         }
     }
 }
@@ -125,24 +187,16 @@ fn gen_value(tid: TypeId, t: &Target, s: &mut State) -> Value {
 }
 
 fn gen_alias(tid: TypeId, under_id: TypeId, t: &Target, s: &mut State) -> Value {
-    let mut rng = thread_rng();
     if t.is_res(tid) {
-        if let Some(res) = s.res.get(&tid) {
-            Value::Ref(res.choose(&mut rng).unwrap().clone())
-        } else {
-            gen_value(under_id, t, s)
-        }
+        gen_res(tid, under_id, t, s)
     } else {
         gen_value(under_id, t, s)
     }
 }
 
 fn gen_res(res_tid: TypeId, tid: TypeId, t: &Target, s: &mut State) -> Value {
-    let mut rng = thread_rng();
-    if let Some(res) = s.res.get(&res_tid) {
-        assert!(!res.is_empty());
-        let index = res.choose(&mut rng).unwrap();
-        Value::Ref(index.clone())
+    if let Some(res) = s.try_reuse_res(res_tid) {
+        res
     } else {
         gen_value(tid, t, s)
     }
@@ -151,11 +205,16 @@ fn gen_res(res_tid: TypeId, tid: TypeId, t: &Target, s: &mut State) -> Value {
 fn gen_ptr(dir: PtrDir, tid: TypeId, t: &Target, s: &mut State) -> Value {
     if dir != PtrDir::In {
         if t.is_res(tid) {
-            s.record_res(tid);
+            s.record_res(tid, false);
         }
         return Value::default_val(tid, t);
     }
-    gen_value(tid, t, s)
+
+    if thread_rng().gen::<f64>() >= 0.1 {
+        gen_value(tid, t, s)
+    } else {
+        Value::None
+    }
 }
 
 fn gen_flag(flags: &[Flag]) -> Value {
@@ -204,25 +263,35 @@ fn gen_struct(fields: &[Field], t: &Target, s: &mut State) -> Value {
 fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Value {
     let mut rng = thread_rng();
     if let Some(vals) = vals {
-        return Value::Str(vals.choose(&mut rng).unwrap().clone());
+        if !vals.is_empty() {
+            return Value::Str(vals.choose(&mut rng).unwrap().clone());
+        }
     }
 
     let len = rng.gen_range(s.conf.str_min_len, s.conf.str_max_len);
     match str_type {
         StrType::Str => {
+            if let Some(s) = s.try_reuse_str(StrType::Str) {
+                return s;
+            }
             let val = rng
                 .sample_iter::<char, Standard>(Standard)
                 .take(len)
                 .collect::<String>();
+            s.record_str(StrType::Str, &val);
             Value::Str(val)
         }
         StrType::CStr => {
+            if let Some(s) = s.try_reuse_str(StrType::Str) {
+                return s;
+            }
             let val = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
+            s.record_str(StrType::CStr, &val);
             Value::Str(val)
         }
         StrType::FileName => {
-            if s.strs[&StrType::FileName].len() != 0 && rng.gen() {
-                return Value::Str(s.strs[&StrType::FileName].choose(&mut rng).unwrap().clone());
+            if let Some(v) = s.try_reuse_str(StrType::FileName) {
+                return v;
             }
             let mut path = PathBuf::from(".");
             let mut depth = 0;
@@ -232,13 +301,12 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
                 depth += 1;
                 if depth < s.conf.path_max_depth && rng.gen::<f64>() > 0.4 {
                     continue;
+                } else if let Ok(p) = path.into_os_string().into_string() {
+                    s.record_str(StrType::FileName, &p);
+                    return Value::Str(p);
                 } else {
-                    if let Ok(p) = path.into_os_string().into_string() {
-                        return Value::Str(p);
-                    } else {
-                        path = PathBuf::from("/");
-                        depth = 0;
-                    }
+                    path = PathBuf::from(".");
+                    depth = 0;
                 }
             }
         }
@@ -361,7 +429,7 @@ fn gen_num(type_info: &NumInfo) -> Value {
 }
 
 fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
-    assert!(rs.len() != 0);
+    assert!(!rs.is_empty());
 
     let mut rng = thread_rng();
     let mut set = BitSet::new(rs.len());
