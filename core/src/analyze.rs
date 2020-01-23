@@ -43,7 +43,7 @@ impl RTable {
     pub fn new(n: usize) -> Self {
         let mut rt = RTable(Array2::default((n, n)));
         for i in 0..n {
-            rt[(i, i)] = Relation::None;
+            rt[(i, i)] = Relation::None; // ignore self impact
         }
         rt
     }

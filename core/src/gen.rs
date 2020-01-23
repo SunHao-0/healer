@@ -13,7 +13,7 @@ use fots::types::{
 };
 
 use crate::analyze::{Relation, RTable};
-use crate::prog::{Arg, Call, Prog};
+use crate::prog::{Arg, ArgIndex, Call, Prog};
 use crate::target::Target;
 use crate::value::{NumValue, Value};
 
@@ -42,10 +42,11 @@ pub fn gen(t: &Target, rs: &HashMap<GroupId, RTable>, conf: &Config) -> Prog {
 }
 
 struct State<'a> {
-    res: HashMap<TypeId, Vec<usize>>,
+    res: HashMap<TypeId, Vec<ArgIndex>>,
     strs: HashMap<StrType, Vec<String>>,
     prog: Prog,
     conf: &'a Config,
+    argi: usize,
 }
 
 impl<'a> State<'a> {
@@ -53,49 +54,67 @@ impl<'a> State<'a> {
         Self {
             res: HashMap::new(),
             strs: hashmap! {StrType::FileName => Vec::new()},
+            argi: 0,
             prog,
             conf,
         }
     }
+
+    pub fn record_res(&mut self, tid: TypeId) {
+        let cid = self.prog.len() - 1;
+        let idx = self.res.entry(tid).or_insert(Vec::new());
+        idx.push((cid, self.argi))
+    }
+
+    pub fn record_str(&mut self, t: StrType, val: &str) {
+        let vals = self.strs.entry(t).or_insert(Vec::new());
+        vals.push(val.into())
+    }
+
+    pub fn add_call(&mut self, call: Call) -> &mut Call {
+        self.prog.calls.push(call);
+        let len = self.prog.len();
+        &mut self.prog.calls[len - 1]
+    }
 }
 
 fn gen_call(t: &Target, f: &FnInfo, s: &mut State) {
-    let mut call = Call::new(f.id);
-    let call_id = s.prog.len();
-
-    for p in f.iter_param() {
-        let val = gen_value(p.tid, t, s);
-        call.args.push(Arg { val, tid: p.tid })
+    s.argi = 0;
+    s.add_call(Call::new(f.id));
+    let call_index = s.prog.calls.len() - 1;
+    if f.has_params() {
+        for (i, p) in f.iter_param().enumerate() {
+            s.argi = i;
+            let val = gen_value(p.tid, t, s);
+            s.prog.calls[call_index].args.push(Arg { val, tid: p.tid })
+        }
     }
 
     if let Some(tid) = f.r_tid {
+        s.argi = s.prog.calls[call_index].args.len();
         if t.is_res(tid) {
-            let ret = Value::Res {
-                ref_id: 0,
-                refed_ids: Vec::new(),
-            };
-            let ids = s.res.entry(tid).or_insert(Vec::new());
-            ids.push(call_id);
-            call.ret = Some(Arg { tid: tid, val: ret });
+            s.record_res(tid);
+            s.prog.calls[call_index].ret = Some(Arg {
+                tid,
+                val: Value::None,
+            });
         }
     }
-    s.prog.calls.push(call);
 }
 
 fn gen_value(tid: TypeId, t: &Target, s: &mut State) -> Value {
     match t.type_of(tid) {
         TypeInfo::Num(num_info) => gen_num(num_info),
-        TypeInfo::Ptr {
-            dir,
-            tid,
-            depth: _depth,
-        } => gen_ptr(*dir, *tid, t, s),
+        TypeInfo::Ptr { dir, tid, depth } => {
+            assert!(*depth == 1, "Multi-level pointer not supported");
+            gen_ptr(*dir, *tid, t, s)
+        }
         TypeInfo::Slice { tid, l, h } => gen_slice(*tid, *l, *h, t, s),
         TypeInfo::Str { str_type, vals } => gen_str(str_type, vals, s),
         TypeInfo::Struct { fields, .. } => gen_struct(&fields[..], t, s),
         TypeInfo::Union { fields, .. } => gen_union(&fields[..], t, s),
         TypeInfo::Flag { flags, .. } => gen_flag(&flags[..]),
-        TypeInfo::Alias { tid, .. } => gen_value(*tid, t, s),
+        TypeInfo::Alias { tid: under_id, .. } => gen_alias(tid, *under_id, t, s),
         TypeInfo::Res { tid: under_tid } => gen_res(tid, *under_tid, t, s),
         TypeInfo::Len {
             tid: _tid,
@@ -105,27 +124,25 @@ fn gen_value(tid: TypeId, t: &Target, s: &mut State) -> Value {
     }
 }
 
+fn gen_alias(tid: TypeId, under_id: TypeId, t: &Target, s: &mut State) -> Value {
+    let mut rng = thread_rng();
+    if t.is_res(tid) {
+        if let Some(res) = s.res.get(&tid) {
+            Value::Ref(res.choose(&mut rng).unwrap().clone())
+        } else {
+            gen_value(under_id, t, s)
+        }
+    } else {
+        gen_value(under_id, t, s)
+    }
+}
+
 fn gen_res(res_tid: TypeId, tid: TypeId, t: &Target, s: &mut State) -> Value {
     let mut rng = thread_rng();
     if let Some(res) = s.res.get(&res_tid) {
         assert!(!res.is_empty());
-        let dep_call_index = res.choose(&mut rng).unwrap();
-        let crt_id = s.prog.len();
-        let dep_call = &mut s.prog.calls[*dep_call_index];
-        assert!(dep_call.ret.is_some());
-        match &mut dep_call.ret.as_mut().unwrap().val {
-            Value::Res {
-                ref_id: _,
-                refed_ids,
-            } => {
-                refed_ids.push(crt_id as u64);
-            }
-            _ => unreachable!(),
-        }
-        Value::Res {
-            ref_id: *dep_call_index as u64,
-            refed_ids: Vec::new(),
-        }
+        let index = res.choose(&mut rng).unwrap();
+        Value::Ref(index.clone())
     } else {
         gen_value(tid, t, s)
     }
@@ -133,6 +150,9 @@ fn gen_res(res_tid: TypeId, tid: TypeId, t: &Target, s: &mut State) -> Value {
 
 fn gen_ptr(dir: PtrDir, tid: TypeId, t: &Target, s: &mut State) -> Value {
     if dir != PtrDir::In {
+        if t.is_res(tid) {
+            s.record_res(tid);
+        }
         return Value::default_val(tid, t);
     }
     gen_value(tid, t, s)
@@ -164,9 +184,13 @@ fn gen_flag(flags: &[Flag]) -> Value {
 fn gen_union(fields: &[Field], t: &Target, s: &mut State) -> Value {
     assert!(!fields.is_empty());
 
-    let field = fields.choose(&mut thread_rng()).unwrap();
+    let i = thread_rng().gen_range(0, fields.len());
+    let field = &fields[i];
 
-    Value::Opt(Box::new(gen_value(field.tid, t, s)))
+    Value::Opt {
+        choice: i,
+        val: Box::new(gen_value(field.tid, t, s)),
+    }
 }
 
 fn gen_struct(fields: &[Field], t: &Target, s: &mut State) -> Value {
@@ -200,7 +224,7 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
             if s.strs[&StrType::FileName].len() != 0 && rng.gen() {
                 return Value::Str(s.strs[&StrType::FileName].choose(&mut rng).unwrap().clone());
             }
-            let mut path = PathBuf::from("/");
+            let mut path = PathBuf::from(".");
             let mut depth = 0;
             loop {
                 let sub_path = rng.sample_iter(Alphanumeric).take(len).collect::<String>();

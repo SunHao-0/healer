@@ -1,28 +1,28 @@
+use rand::{Rng, thread_rng};
 use rand::prelude::SliceRandom;
-use rand::thread_rng;
 
 use fots::types::{TypeId, TypeInfo};
 
 use crate::gen::gen_slice_len;
-use crate::prog::CId;
+use crate::prog::ArgIndex;
 use crate::target::Target;
 use crate::value::NumValue::Unsigned;
 
 /// Value of type
 #[derive(Debug, Clone)]
 pub enum Value {
-    /// Value for number,flag,len
+    /// Value that stores num, both signed and unsigned but not bigger then 8 bytes
     Num(NumValue),
-    /// Value for str,cstr,filename
+    /// Value that stores utf-8 encoded value
     Str(String),
-    /// Value for slice, struct
+    /// Combined value
     Group(Vec<Value>),
     /// Value for union
-    Opt(Box<Value>),
-    /// Value for ptr
-    Ptr(Option<Box<Value>>),
-    /// Value for res type
-    Res { ref_id: CId, refed_ids: Vec<CId> },
+    Opt { choice: usize, val: Box<Value> },
+    /// Value that ref other argument
+    Ref(ArgIndex),
+    /// Nothing
+    None,
 }
 
 #[derive(Debug, Clone)]
@@ -33,9 +33,10 @@ pub enum NumValue {
 
 impl Value {
     pub fn default_val(tid: TypeId, t: &Target) -> Value {
+        let mut rng = thread_rng();
         match t.type_of(tid) {
             TypeInfo::Num(..) => Value::Num(Unsigned(0)),
-            TypeInfo::Ptr { .. } => Value::Ptr(None),
+            TypeInfo::Ptr { .. } => Value::None,
             TypeInfo::Slice { tid, l, h } => {
                 let len: usize = gen_slice_len(*l, *h);
                 let mut vals = Vec::new();
@@ -53,8 +54,12 @@ impl Value {
                 Value::Group(vals)
             }
             TypeInfo::Union { fields, .. } => {
-                let field = fields.choose(&mut thread_rng()).unwrap();
-                Value::Opt(Box::new(Value::default_val(field.tid, t)))
+                let field_i = rng.gen_range(0, fields.len());
+                let field = &fields[field_i];
+                Value::Opt {
+                    choice: field_i,
+                    val: Box::new(Value::default_val(field.tid, t)),
+                }
             }
             TypeInfo::Flag { flags, .. } => {
                 let flag_val = flags.choose(&mut thread_rng()).unwrap();
