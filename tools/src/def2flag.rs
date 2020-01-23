@@ -97,6 +97,7 @@ pub struct Defs;
 pub struct ItemsParser {
     include: HashSet<String>,
     flags: HashSet<Flag>,
+    defines: HashSet<String>,
 }
 
 impl Default for ItemsParser {
@@ -104,6 +105,7 @@ impl Default for ItemsParser {
         Self {
             include: HashSet::new(),
             flags: HashSet::new(),
+            defines: HashSet::new(),
         }
     }
 }
@@ -117,6 +119,7 @@ impl ItemsParser {
             match p.as_rule() {
                 Rule::Include => parser.parse_include(p),
                 Rule::Flags => parser.parse_flags(p),
+                Rule::Define => parser.parse_define(p),
                 Rule::EOI => break,
                 _ => unreachable!(),
             }
@@ -128,7 +131,14 @@ impl ItemsParser {
         Items {
             includes: self.include.into_iter().collect(),
             flags: self.flags.into_iter().collect(),
+            defines: self.defines.into_iter().collect(),
         }
+    }
+
+    fn parse_define(&mut self, p: Pair<Rule>) {
+        let mut ps = p.into_inner();
+        let define = ps.next().unwrap().as_str();
+        self.defines.insert(define.into());
     }
 
     fn parse_include(&mut self, p: Pair<Rule>) {
@@ -165,6 +175,7 @@ impl ItemsParser {
 struct Items {
     includes: Vec<String>,
     flags: Vec<Flag>,
+    defines: Vec<String>,
 }
 
 impl Items {
@@ -172,6 +183,11 @@ impl Items {
         use std::fmt::Write;
         assert!(!self.flags.is_empty());
         let mut prog = String::new();
+
+        for define in &self.defines {
+            writeln!(prog, "#define {}", define).unwrap()
+        }
+
         for include in &self.includes {
             writeln!(prog, "#include<{}>", include).unwrap()
         }

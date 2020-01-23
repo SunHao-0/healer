@@ -1,5 +1,6 @@
-Root = _{ SOI ~ (Include|Flags)+ ~ EOI}
+Root = _{ SOI ~ (Include|Flags|Define)+ ~ EOI}
 
+Define = {"#"~"define"~Ident}
 
 Include = { "#" ~ "include" ~ "<" ~ Header ~">"}
 Flags = {Ident ~ "=" ~Ident ~ ("," ~ Ident)*}
