@@ -452,7 +452,6 @@ impl FnInfo {
     }
 
     pub fn iter_param(&self) -> impl Iterator<Item = &Param> + '_ {
-        assert!(self.has_params());
         self.params.as_ref().unwrap().iter()
     }
 
@@ -593,7 +592,7 @@ impl Group {
     }
 
     pub fn index_by_name(&self, name: &str) -> Option<usize> {
-        self.iter_fn().position(|f| &f.dec_name == name)
+        self.iter_fn().position(|f| f.dec_name == name)
     }
 
     pub fn index_by_id(&self, fid: FnId) -> Option<usize> {

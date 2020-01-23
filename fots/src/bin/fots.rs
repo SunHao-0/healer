@@ -5,8 +5,8 @@ use std::process::exit;
 use pest::iterators::Pairs;
 use structopt::StructOpt;
 
-use fots::{parse_grammar, parse_items};
 use fots::grammar::Rule;
+use fots::{parse_grammar, parse_items};
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "desciption language for healer", author = "sam")]

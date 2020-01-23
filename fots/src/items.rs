@@ -8,13 +8,13 @@ use std::process::exit;
 use num_traits::Num;
 use pest::iterators::{Pair, Pairs};
 
-use crate::{num, parse_grammar};
 use crate::errors;
 use crate::grammar::Rule;
 use crate::types::{
-    Attr, DEFAULT_GID, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param,
-    PtrDir, StrType, Type, TypeId, TypeInfo,
+    Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
+    StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
 };
+use crate::{num, parse_grammar};
 
 /// Parse plain text based on grammar, return all declarations in text
 pub fn parse(text: &str) -> Result<Items, errors::Error> {
