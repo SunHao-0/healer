@@ -48,6 +48,10 @@ impl RTable {
         rt
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.0.len_of(Axis(0))
     }
@@ -149,7 +153,7 @@ fn res_use(index: usize, f: &FnInfo, t: &Target, uses: &mut HashMap<TypeId, Use>
 }
 
 fn record_use(uses: &mut HashMap<TypeId, Use>, res: TypeId, fn_index: usize, in_: bool) {
-    let u = uses.entry(res).or_insert(Default::default());
+    let u = uses.entry(res).or_insert_with(Default::default);
     if in_ {
         u.consumer.push(fn_index)
     } else {
@@ -163,7 +167,7 @@ fn record_use(uses: &mut HashMap<TypeId, Use>, res: TypeId, fn_index: usize, in_
 /// If A is before B in a prog, then B has impact on A.
 /// Thr prog must be minimized befor being used.
 pub fn prog_analyze(g: &Group, r: &mut RTable, p: &Prog) {
-    assert!(p.len() != 0);
+    assert!(!p.is_empty());
     let mut id_index = Vec::new();
 
     for c in &p.calls {

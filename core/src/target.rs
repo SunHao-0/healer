@@ -25,12 +25,11 @@ impl Target {
         groups.shrink_to_fit();
         gids.shrink_to_fit();
 
-        let target = Target {
+        Target {
             groups,
             types,
             gids,
-        };
-        target
+        }
     }
 
     pub fn type_of(&self, tid: TypeId) -> &TypeInfo {
