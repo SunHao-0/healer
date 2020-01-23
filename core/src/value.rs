@@ -1,12 +1,11 @@
-use rand::{Rng, thread_rng};
 use rand::prelude::SliceRandom;
+use rand::{thread_rng, Rng};
 
 use fots::types::{TypeId, TypeInfo};
 
 use crate::gen::gen_slice_len;
 use crate::prog::ArgIndex;
 use crate::target::Target;
-use crate::value::NumValue::Unsigned;
 
 /// Value of type
 #[derive(Debug, Clone)]
@@ -33,6 +32,8 @@ pub enum NumValue {
 
 impl Value {
     pub fn default_val(tid: TypeId, t: &Target) -> Value {
+        use NumValue::*;
+
         let mut rng = thread_rng();
         match t.type_of(tid) {
             TypeInfo::Num(..) => Value::Num(Unsigned(0)),

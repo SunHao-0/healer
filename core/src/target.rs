@@ -49,8 +49,3 @@ impl Target {
         }
     }
 }
-
-pub enum ResDir {
-    In,
-    Out,
-}
