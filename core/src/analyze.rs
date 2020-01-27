@@ -1,3 +1,8 @@
+//! Analyze
+//!
+//! Analyze relation between interface. The relation between
+//! interface can only be 1/0. However we may not know all relation
+//! information at start, thus the relation could also be unknown.
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 use std::ops::{Deref, DerefMut};

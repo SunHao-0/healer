@@ -1,3 +1,16 @@
+//! Generation
+//!
+//! Program generation is based on relation table.
+//! Consider interface A, if A's execution only depends on its
+//! input which means it doesn't has read dep of external/global
+//! state in its condition node inside of its code, then we can
+//! traverse every execution path of A by numbers of random input.
+//! However if A has read dep on its condition node, then its ex-
+//! ecution flow may also depends on extern/global state too, wh-
+//! ich means it maynot be possible to traverse its execution flow
+//! samply by number of random input. In this case, we need add
+//! some other interfaces that modify that external/global state
+//! which means generating sequence of calls not single call.
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -296,7 +309,8 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
             let mut path = PathBuf::from(".");
             let mut depth = 0;
             loop {
-                let sub_path = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
+                let sub_path =
+                    rng.sample_iter(Alphanumeric).take(len).collect::<String>();
                 path.push(sub_path);
                 depth += 1;
                 if depth < s.conf.path_max_depth && rng.gen::<f64>() > 0.4 {
@@ -451,7 +465,13 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
     seq
 }
 
-fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf: &Config) {
+fn push_deps(
+    rs: &RTable,
+    set: &mut BitSet,
+    seq: &mut Vec<usize>,
+    i: usize,
+    conf: &Config,
+) {
     if i >= seq.len() || seq.len() >= conf.prog_max_len {
         return;
     }

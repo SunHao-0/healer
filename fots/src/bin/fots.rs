@@ -49,8 +49,10 @@ fn main() {
                         println!("{}", items);
                     }
                     if let Some(out) = out {
-                        let items = items.dump().unwrap_or_else(|e| err(&format!("{}", e)));
-                        write(&out, items).unwrap_or_else(|e| err(&format!("{:?}:{}", out, e)))
+                        let items =
+                            items.dump().unwrap_or_else(|e| err(&format!("{}", e)));
+                        write(&out, items)
+                            .unwrap_or_else(|e| err(&format!("{:?}:{}", out, e)))
                     }
                 }
                 Err(e) => err(&format!("{}", e)),
@@ -59,11 +61,13 @@ fn main() {
         Settings::Format { files, dir } => {
             let inputs = input_of(files, dir);
             for f in &inputs {
-                let contents = read_to_string(f).unwrap_or_else(|e| err(&format!("{:?}:{}", f, e)));
+                let contents =
+                    read_to_string(f).unwrap_or_else(|e| err(&format!("{:?}:{}", f, e)));
                 match parse_grammar(&contents) {
                     Ok(ps) => {
                         let result = format(ps);
-                        write(f, result).unwrap_or_else(|e| err(&format!("{:?}:{}", f, e)))
+                        write(f, result)
+                            .unwrap_or_else(|e| err(&format!("{:?}:{}", f, e)))
                     }
                     Err(e) => err(&format!("{}", e)),
                 }

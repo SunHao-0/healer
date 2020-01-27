@@ -11,8 +11,8 @@ use pest::iterators::{Pair, Pairs};
 use crate::errors;
 use crate::grammar::Rule;
 use crate::types::{
-    Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
-    StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
+    Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param,
+    PtrDir, StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
 };
 use crate::{num, parse_grammar};
 
@@ -294,8 +294,8 @@ impl Parser {
         let mut p = p.into_inner();
         let t_p = p.next().unwrap();
         let mut num_info = NumInfo::from_rule(t_p.as_rule());
-        match p.next() {
-            Some(l_p) => match l_p.as_rule() {
+        if let Some(l_p) = p.next() {
+            match l_p.as_rule() {
                 Rule::Range => match &mut num_info {
                     NumInfo::I8(l) => {
                         *l = NumLimit::Range(self.parse_range(l_p));
@@ -361,8 +361,7 @@ impl Parser {
                     }
                 },
                 _ => unreachable!(),
-            },
-            None => {}
+            }
         }
 
         self.type_table.add(TypeInfo::Num(num_info))
@@ -447,7 +446,8 @@ impl Parser {
     fn parse_flag(&mut self, p: Pair<Rule>) -> TypeId {
         let mut p = p.into_inner();
         let ident = p.next().unwrap().as_str();
-        let t_info = TypeInfo::flag_info(ident, self.parse_flag_members(p.next().unwrap()));
+        let t_info =
+            TypeInfo::flag_info(ident, self.parse_flag_members(p.next().unwrap()));
         self.type_table.add(t_info)
     }
 
@@ -582,6 +582,7 @@ impl TypeTable {
         (self.unresolved.len() + self.types.len()) as TypeId
     }
 
+    #[allow(clippy::map_entry)]
     pub fn add(&mut self, t_info: TypeInfo) -> TypeId {
         if self.types.contains_key(&t_info) {
             *self.types.get(&t_info).unwrap()
