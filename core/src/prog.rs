@@ -10,7 +10,7 @@ pub type CId = usize;
 pub type ArgIndex = (CId, ArgPos);
 
 /// Position of arg in a call
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArgPos {
     Arg(usize),
     Ret,

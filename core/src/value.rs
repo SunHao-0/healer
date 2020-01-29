@@ -8,7 +8,7 @@ use crate::prog::ArgIndex;
 use crate::target::Target;
 
 /// Value of type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Value that stores num, both signed and unsigned but not bigger then 8 bytes
     Num(NumValue),
@@ -24,12 +24,22 @@ pub enum Value {
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NumValue {
     Signed(i64),
     Unsigned(u64),
 }
 
+impl NumValue {
+    pub fn literal(&self) -> String {
+        match self {
+            NumValue::Signed(v) => format!("{}", v),
+            NumValue::Unsigned(v) => format!("{}", v),
+        }
+    }
+}
+
+#[allow(clippy::len_without_is_empty)]
 impl Value {
     pub fn default_val(tid: TypeId, t: &Target) -> Value {
         use NumValue::*;
@@ -69,6 +79,38 @@ impl Value {
             TypeInfo::Alias { tid, .. } => Value::default_val(*tid, t),
             TypeInfo::Res { tid } => Value::default_val(*tid, t),
             TypeInfo::Len { .. } => Value::Num(NumValue::Unsigned(0)),
+        }
+    }
+
+    pub fn len(&self) -> Option<usize> {
+        match self {
+            Value::Str(s) => Some(s.len()),
+            Value::Group(g) => Some(g.len()),
+            _ => None,
+        }
+    }
+
+    pub fn literal(&self) -> String {
+        match self {
+            Value::Num(n) => n.literal(),
+            Value::Str(s) => s.clone(),
+            Value::Group(vals) => {
+                use std::fmt::Write;
+                let mut buf = String::new();
+                buf.push('{');
+                for v in vals.iter() {
+                    write!(buf, "{}", v.literal()).unwrap();
+                    buf.push(',');
+                }
+                if buf.ends_with(',') {
+                    buf.pop();
+                }
+                buf.push('}');
+                buf
+            }
+            Value::Opt { val, .. } => val.literal(),
+            Value::Ref(_) => unreachable!(),
+            Value::None => "NULL".into(),
         }
     }
 }

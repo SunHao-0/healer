@@ -40,10 +40,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            prog_max_len: 15,
-            prog_min_len: 3,
-            str_min_len: 4,
-            str_max_len: 128,
+            prog_max_len: 16,
+            prog_min_len: 1,
+            str_min_len: 0,
+            str_max_len: 32,
             path_max_depth: 4,
         }
     }
@@ -71,7 +71,25 @@ pub fn gen<S: std::hash::BuildHasher>(
     for &i in seq.iter() {
         gen_call(t, &g.fns[i], &mut s);
     }
+    adjust_size_param(&mut s.prog, t);
     s.prog
+}
+
+fn adjust_size_param(p: &mut Prog, t: &Target) {
+    for c in &mut p.calls.iter_mut() {
+        let f = t.fn_of(c.fid);
+        if f.has_params() {
+            for (i, p) in f.iter_param().enumerate() {
+                if let Some(ident) = t.get_len_path(p.tid) {
+                    if let Some(j) = f.iter_param().position(|p| p.ident == ident) {
+                        if let Some(l) = c.args[j].val.len() {
+                            c.args[i].val = Value::Num(NumValue::Unsigned(l as u64));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 struct State<'a> {
@@ -223,7 +241,7 @@ fn gen_ptr(dir: PtrDir, tid: TypeId, t: &Target, s: &mut State) -> Value {
         return Value::default_val(tid, t);
     }
 
-    if thread_rng().gen::<f64>() >= 0.1 {
+    if thread_rng().gen::<f64>() >= 0.001 {
         gen_value(tid, t, s)
     } else {
         Value::None
@@ -280,13 +298,13 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
             return Value::Str(vals.choose(&mut rng).unwrap().clone());
         }
     }
+    if let Some(s) = s.try_reuse_str(str_type.clone()) {
+        return s;
+    }
 
     let len = rng.gen_range(s.conf.str_min_len, s.conf.str_max_len);
     match str_type {
         StrType::Str => {
-            if let Some(s) = s.try_reuse_str(StrType::Str) {
-                return s;
-            }
             let val = rng
                 .sample_iter::<char, Standard>(Standard)
                 .take(len)
@@ -295,22 +313,15 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
             Value::Str(val)
         }
         StrType::CStr => {
-            if let Some(s) = s.try_reuse_str(StrType::Str) {
-                return s;
-            }
             let val = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
             s.record_str(StrType::CStr, &val);
             Value::Str(val)
         }
         StrType::FileName => {
-            if let Some(v) = s.try_reuse_str(StrType::FileName) {
-                return v;
-            }
             let mut path = PathBuf::from(".");
             let mut depth = 0;
             loop {
-                let sub_path =
-                    rng.sample_iter(Alphanumeric).take(len).collect::<String>();
+                let sub_path = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
                 path.push(sub_path);
                 depth += 1;
                 if depth < s.conf.path_max_depth && rng.gen::<f64>() > 0.4 {
@@ -456,42 +467,43 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
         let i = seq.len() - 1;
         push_deps(rs, &mut set, &mut seq, i, conf);
 
-        if seq.len() <= conf.prog_max_len && rng.gen() {
+        if seq.len() < conf.prog_min_len || seq.len() < conf.prog_max_len && rng.gen() {
             continue;
         } else {
             break;
         }
     }
+    seq.reverse();
     seq
 }
 
-fn push_deps(
-    rs: &RTable,
-    set: &mut BitSet,
-    seq: &mut Vec<usize>,
-    i: usize,
-    conf: &Config,
-) {
+fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf: &Config) {
     if i >= seq.len() || seq.len() >= conf.prog_max_len {
         return;
     }
     let index = seq[i];
     let mut deps = Vec::new();
+    let mut dep_r = 0.8;
+    let mut unknown_r = 0.6;
+    let deta = 0.5;
+
     for (j, r) in rs.index_axis(Axis(0), index).iter().enumerate() {
         if r.eq(&Relation::Some) {
-            if !set[j] && random::<f64>() > 0.25 {
+            if !set[j] && random::<f64>() < dep_r {
                 deps.push(j);
                 set.set(j, true);
-            } else if set[j] && random::<f64>() > 0.75 {
+                dep_r *= deta;
+            } else if set[j] && random::<f64>() < dep_r * deta {
                 deps.push(j);
             }
         }
 
         if r.eq(&Relation::Unknown) {
-            if !set[j] && random() {
+            if !set[j] && random::<f64>() < unknown_r {
                 deps.push(j);
                 set.set(j, true);
-            } else if set[j] && random::<f64>() > 0.875 {
+                unknown_r *= deta;
+            } else if set[j] && random::<f64>() < unknown_r * deta {
                 deps.push(j);
             }
         }
