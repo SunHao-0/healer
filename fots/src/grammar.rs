@@ -31,10 +31,8 @@ mod tests {
     const RES_TPL: &str = "res< {} >";
     const LEN_TPL: &str = "len<{},top.under.path>";
 
-    const STRUCT_TPL: &str =
-        " struct  demo_struct {{\n\t arg1:{},\n\t arg2:{},\n\targ3:{} \t}} ";
-    const UNION_TPL: &str =
-        "union demo_union {{\n\t arg1:{}, \n\t arg2:{},\n\targ3:{} \t}}";
+    const STRUCT_TPL: &str = " struct  demo_struct {{\n\t arg1:{},\n\t arg2:{},\n\targ3:{} \t}} ";
+    const UNION_TPL: &str = "union demo_union {{\n\t arg1:{}, \n\t arg2:{},\n\targ3:{} \t}}";
     const FLAG_TPL: &str = "flag demo_union{{ \n\targ1={},\n\t arg2={},\n\targ3={}}}";
     const ALIAS_TPL: &str = "type {} = {}";
     const FN_TPL: &str = "fn demo_fn (arg1:{},arg2:{},arg3:{}){}";

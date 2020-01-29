@@ -11,8 +11,8 @@ use pest::iterators::{Pair, Pairs};
 use crate::errors;
 use crate::grammar::Rule;
 use crate::types::{
-    Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param,
-    PtrDir, StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
+    Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
+    StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
 };
 use crate::{num, parse_grammar};
 
@@ -446,8 +446,7 @@ impl Parser {
     fn parse_flag(&mut self, p: Pair<Rule>) -> TypeId {
         let mut p = p.into_inner();
         let ident = p.next().unwrap().as_str();
-        let t_info =
-            TypeInfo::flag_info(ident, self.parse_flag_members(p.next().unwrap()));
+        let t_info = TypeInfo::flag_info(ident, self.parse_flag_members(p.next().unwrap()));
         self.type_table.add(t_info)
     }
 
