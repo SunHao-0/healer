@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use bitset_fixed::BitSet;
 use ndarray::Axis;
-use rand::distributions::{Alphanumeric, Standard};
+use rand::distributions::Alphanumeric;
 use rand::prelude::*;
 use rand::{random, thread_rng, Rng};
 
@@ -305,10 +305,11 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
     let len = rng.gen_range(s.conf.str_min_len, s.conf.str_max_len);
     match str_type {
         StrType::Str => {
-            let val = rng
-                .sample_iter::<char, Standard>(Standard)
-                .take(len)
-                .collect::<String>();
+//            let val = rng
+//                .sample_iter::<char, Standard>(Standard)
+//                .take(len)
+//                .collect::<String>();
+            let val = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
             s.record_str(StrType::Str, &val);
             Value::Str(val)
         }
