@@ -5,24 +5,14 @@
 use crate::prog::{ArgIndex, ArgPos, Call, Prog};
 use crate::target::Target;
 use crate::value::Value;
-use fots::types::{NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo};
+use fots::types::{NumInfo, PtrDir, StrType, TypeId, TypeInfo};
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 
 use std::fmt::Write;
-use std::iter::repeat;
 
 /// C lang Script
 pub struct Script(Vec<Stmt>);
-
-pub fn fmt_script(stmts: &Script, t: &Target) -> String {
-    let mut result = String::new();
-
-    for stmt in stmts.0.iter() {
-        writeln!(result, "{};", fmt_stmt(stmt, t)).unwrap();
-    }
-    result
-}
 
 impl Display for Script {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -57,18 +47,13 @@ fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
         args,
     });
 
-    let stmt = if let Some(tid) = pt.r_tid {
+    if let Some(tid) = pt.r_tid {
         let var_name = s.var_names.next_r();
         s.res.insert((call_index, ArgPos::Ret), var_name.clone());
-        Stmt::VarDecl {
-            tid,
-            var_name,
-            val: Some(call),
-        }
+        decl(tid, &var_name, Some(call), t, s);
     } else {
-        Stmt::SimpleExp(call)
+        s.stmts.push(Stmt::SimpleExp(call))
     };
-    s.stmts.push(stmt);
 }
 
 fn translate_arg(arg_index: ArgIndex, tid: TypeId, val: &Value, t: &Target, s: &mut State) -> Exp {
@@ -110,21 +95,21 @@ fn translate_arg(arg_index: ArgIndex, tid: TypeId, val: &Value, t: &Target, s: &
 /// declare varible of tid type with val value, record in state and return name of var
 fn decl_var(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     match t.type_of(tid) {
-        TypeInfo::Flag { .. } | TypeInfo::Num(_) => decl_num(tid, val, s),
+        TypeInfo::Flag { .. } | TypeInfo::Num(_) => decl_num(tid, val, t, s),
         TypeInfo::Slice { tid: under_tid, .. } => decl_slice(tid, *under_tid, val, t, s),
-        TypeInfo::Str { str_type, .. } => decl_str(tid, str_type.clone(), val, s),
+        TypeInfo::Str { str_type, .. } => decl_str(tid, str_type.clone(), val, t, s),
         TypeInfo::Struct { .. } => decl_struct(tid, val, t, s),
         TypeInfo::Union { .. } => decl_union(tid, val, t, s),
         TypeInfo::Alias { tid, .. } | TypeInfo::Res { tid } => decl_var(*tid, val, t, s),
-        TypeInfo::Len { tid, .. } => decl_num(*tid, val, s),
+        TypeInfo::Len { tid, .. } => decl_num(*tid, val, t, s),
 
         TypeInfo::Ptr { .. } => panic!("Multi-level ptr not support yet"),
     }
 }
 
-fn decl_num(tid: TypeId, val: &Value, s: &mut State) -> String {
+fn decl_num(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     let name = s.var_names.next_p("n");
-    decl_def(tid, &name, Exp::NumLiteral(val.literal()), s);
+    decl(tid, &name, Some(Exp::NumLiteral(val.literal())), t, s);
     name
 }
 
@@ -139,12 +124,12 @@ fn decl_slice(tid: TypeId, under_tid: TypeId, val: &Value, t: &Target, s: &mut S
         }
         _ => panic!("Value of type error"),
     };
-    decl_def(tid, &name, Exp::ListExp(exps), s);
+    decl(tid, &name, Some(Exp::ListExp(exps)), t, s);
 
     name
 }
 
-fn decl_str(tid: TypeId, str_type: StrType, val: &Value, s: &mut State) -> String {
+fn decl_str(tid: TypeId, str_type: StrType, val: &Value, t: &Target, s: &mut State) -> String {
     let exp = match str_type {
         StrType::Str => {
             let mut exps = Vec::new();
@@ -161,14 +146,14 @@ fn decl_str(tid: TypeId, str_type: StrType, val: &Value, s: &mut State) -> Strin
     };
 
     let name = s.var_names.next_p("s");
-    decl_def(tid, &name, exp, s);
+    decl(tid, &name, Some(exp), t, s);
     name
 }
 
 fn decl_struct(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     let ident = t.type_of(tid).ident().unwrap();
     let var_name = s.var_names.next_p(ident);
-    decl(tid, &var_name, s);
+    decl(tid, &var_name, None, t, s);
 
     let vals = if let Value::Group(v) = val {
         v
@@ -192,7 +177,7 @@ fn decl_struct(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
 fn decl_union(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     let ident = t.type_of(tid).ident().unwrap();
     let var_name = s.var_names.next_p(ident);
-    decl(tid, &var_name, s);
+    decl(tid, &var_name, None, t, s);
 
     let (val, choice) = if let Value::Opt { choice, val } = val {
         (val, choice)
@@ -211,24 +196,82 @@ fn decl_union(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     var_name
 }
 
-fn decl(tid: TypeId, var_name: &str, s: &mut State) {
-    s.stmts.push(Stmt::VarDecl {
-        tid,
-        var_name: var_name.to_string(),
-        val: None,
-    })
+fn decl(tid: TypeId, var_name: &str, init: Option<Exp>, t: &Target, s: &mut State) {
+    let (ts, decl) = declarator_map(tid, var_name, t);
+    let decl = Declaration {
+        ts,
+        init: InitDeclarator { decl, init },
+    };
+    s.stmts.push(Stmt::VarDecl(decl));
 }
 
-fn decl_def(tid: TypeId, var_name: &str, exp: Exp, s: &mut State) {
-    s.stmts.push(Stmt::VarDecl {
-        tid,
-        var_name: var_name.to_string(),
-        val: Some(exp),
-    });
+fn declarator_map(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
+    match t.type_of(tid) {
+        TypeInfo::Num(n) => map_num(n, var_name),
+        TypeInfo::Slice { tid, .. } => map_array(*tid, var_name, t),
+        TypeInfo::Str { str_type, .. } => map_str(str_type, var_name),
+        TypeInfo::Struct { ident, .. } => (
+            TypeSpecifier::Struct(ident.clone()),
+            Declarator::Ident(var_name.to_string()),
+        ),
+        TypeInfo::Union { ident, .. } => (
+            TypeSpecifier::Union(ident.clone()),
+            Declarator::Ident(var_name.to_string()),
+        ),
+        TypeInfo::Flag { .. } => map_flag(var_name),
+        TypeInfo::Alias { tid, .. } => declarator_map(*tid, var_name, t),
+        TypeInfo::Res { tid } => declarator_map(*tid, var_name, t),
+        TypeInfo::Len { tid, .. } => declarator_map(*tid, var_name, t),
+
+        TypeInfo::Ptr { .. } => panic!(),
+    }
+}
+
+fn map_flag(var_name: &str) -> (TypeSpecifier, Declarator) {
+    (
+        TypeSpecifier::Int32,
+        Declarator::Ident(var_name.to_string()),
+    )
+}
+
+fn map_str(str_type: &StrType, var_name: &str) -> (TypeSpecifier, Declarator) {
+    let ts = TypeSpecifier::Char;
+    let ident = var_name.to_string();
+
+    let decl = match str_type {
+        StrType::Str => Declarator::Array(Box::new(Declarator::Ident(ident))),
+        StrType::FileName | StrType::CStr => Declarator::Ptr(ident),
+    };
+    (ts, decl)
+}
+
+fn map_array(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
+    let (ts, decl) = declarator_map(tid, var_name, t);
+    (ts, Declarator::Array(Box::new(decl)))
+}
+
+fn map_num(n: &NumInfo, var_name: &str) -> (TypeSpecifier, Declarator) {
+    let declarator = Declarator::Ident(var_name.to_string());
+    let ts = match n {
+        NumInfo::I8(_) => TypeSpecifier::Int8,
+        NumInfo::I16(_) => TypeSpecifier::Int16,
+        NumInfo::I32(_) => TypeSpecifier::Int32,
+        NumInfo::I64(_) => TypeSpecifier::Int64,
+        NumInfo::U8(_) => TypeSpecifier::Uint8,
+        NumInfo::U16(_) => TypeSpecifier::Uint16,
+        NumInfo::U32(_) => TypeSpecifier::Uint32,
+        NumInfo::U64(_) => TypeSpecifier::Uint64,
+        NumInfo::Usize(_) => TypeSpecifier::UintPtr,
+        NumInfo::Isize(_) => TypeSpecifier::Intptr,
+    };
+    (ts, declarator)
 }
 
 fn asign(var_name: String, exp: Exp, s: &mut State) {
-    let stmt = Stmt::Asign { var_name, val: exp };
+    let stmt = Stmt::Asign(Asignment {
+        ident: var_name,
+        init: exp,
+    });
     s.stmts.push(stmt);
 }
 
@@ -240,104 +283,18 @@ struct State {
 }
 
 pub enum Stmt {
-    VarDecl {
-        tid: TypeId,
-        var_name: String,
-        val: Option<Exp>,
-    },
-    Asign {
-        var_name: String,
-        val: Exp,
-    },
+    VarDecl(Declaration),
+    Asign(Asignment),
     SimpleExp(Exp),
-}
-
-pub fn fmt_stmt(stmt: &Stmt, t: &Target) -> String {
-    match stmt {
-        Stmt::VarDecl { tid, var_name, val } => {
-            let mut var = var_name.clone();
-            add_type(&mut var, *tid, t);
-            if let Some(v) = val {
-                format!("{}={}", var, v)
-            } else {
-                var
-            }
-        }
-        Stmt::Asign { .. } | Stmt::SimpleExp(_) => stmt.to_string(),
-    }
-}
-
-fn add_type(var: &mut String, tid: TypeId, t: &Target) {
-    match t.type_of(tid) {
-        TypeInfo::Num(l) => add_num(l, var),
-        TypeInfo::Ptr { depth, tid, .. } => {
-            add_ptr(var, *depth);
-            add_type(var, *tid, t);
-        }
-        TypeInfo::Slice { tid, .. } => {
-            add_slice(var);
-            add_type(var, *tid, t);
-        }
-        TypeInfo::Str { .. } => add_str(var),
-        TypeInfo::Struct { ident, .. } => add_name_type(var, ident, "struct"),
-        TypeInfo::Union { ident, .. } => add_name_type(var, ident, "union"),
-        TypeInfo::Flag { .. } => add_num(&NumInfo::I64(NumLimit::None), var),
-        TypeInfo::Alias { tid, .. } => add_type(var, *tid, t),
-        TypeInfo::Res { tid } => add_type(var, *tid, t),
-        TypeInfo::Len { tid, .. } => add_type(var, *tid, t),
-    }
-}
-
-fn add_name_type(var: &mut String, t_name: &str, t: &str) {
-    var.insert(0, ' ');
-    var.insert_str(0, t_name);
-
-    var.insert(0, ' ');
-    var.insert_str(0, t);
-}
-
-fn add_str(var: &mut String) {
-    var.insert_str(0, "char *");
-}
-
-fn add_slice(var: &mut String) {
-    var.push_str("[]");
-}
-
-fn add_ptr(var: &mut String, depth: usize) {
-    assert_ne!(depth, 0);
-    let stars: String = repeat('*').take(depth).collect();
-    var.insert_str(0, &stars);
-}
-
-fn add_num(n: &NumInfo, var: &mut String) {
-    match n {
-        NumInfo::I8(_) => var.insert_str(0, "int8_t "),
-        NumInfo::I16(_) => var.insert_str(0, "int16_t "),
-        NumInfo::I32(_) => var.insert_str(0, "int32_t "),
-        NumInfo::I64(_) => var.insert_str(0, "int "),
-        NumInfo::U8(_) => var.insert_str(0, "uint8_t "),
-        NumInfo::U16(_) => var.insert_str(0, "uint16_t "),
-        NumInfo::U32(_) => var.insert_str(0, "uint32_t "),
-        NumInfo::U64(_) => var.insert_str(0, "unsigned int "),
-        NumInfo::Usize(_) => var.insert_str(0, "uintptr_t "),
-        NumInfo::Isize(_) => var.insert_str(0, "intptr_t "),
-    }
 }
 
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            Stmt::VarDecl { tid, var_name, val } => {
-                write!(f, "{} {}", tid, var_name).unwrap();
-                if let Some(v) = val {
-                    write!(f, " = {}", v).unwrap();
-                }
-            }
-            Stmt::Asign { var_name, val } => write!(f, "{} = {}", var_name, val).unwrap(),
-            Stmt::SimpleExp(e) => write!(f, "{}", e).unwrap(),
-        };
-        Ok(())
+            Stmt::VarDecl(d) => write!(f, "{}", d),
+            Stmt::Asign(a) => write!(f, "{}", a),
+            Stmt::SimpleExp(e) => write!(f, "{}", e),
+        }
     }
 }
 
@@ -434,5 +391,101 @@ impl VarName {
         let name = format!("r{}", self.r_count);
         self.r_count += 1;
         name
+    }
+}
+
+pub struct Declaration {
+    ts: TypeSpecifier,
+    init: InitDeclarator,
+}
+
+impl Display for Declaration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{} {}", self.ts, self.init)
+    }
+}
+
+enum TypeSpecifier {
+    Uint8,
+    Uint16,
+    Uint32,
+    Uint64,
+    UintPtr,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Intptr,
+    Char,
+    Struct(String),
+    Union(String),
+}
+
+impl Display for TypeSpecifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        if let TypeSpecifier::Struct(ident) = self {
+            write!(f, "struct {}", ident)
+        } else if let TypeSpecifier::Union(ident) = self {
+            write!(f, "union {}", ident)
+        } else {
+            let v = match self {
+                TypeSpecifier::Uint8 => "uint8_t",
+                TypeSpecifier::Uint16 => "uint16_t",
+                TypeSpecifier::Uint32 => "uint32_t",
+                TypeSpecifier::Uint64 => "uint64_t",
+                TypeSpecifier::UintPtr => "uintptr_t",
+                TypeSpecifier::Int8 => "int8_t",
+                TypeSpecifier::Int16 => "int16_t",
+                TypeSpecifier::Int32 => "int32_t",
+                TypeSpecifier::Int64 => "int64_t",
+                TypeSpecifier::Intptr => "intptr_t",
+                TypeSpecifier::Char => "char",
+                _ => unreachable!(),
+            };
+            write!(f, "{}", v)
+        }
+    }
+}
+
+struct InitDeclarator {
+    decl: Declarator,
+    init: Option<Exp>,
+}
+
+impl Display for InitDeclarator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        if let Some(init) = self.init.as_ref() {
+            write!(f, "{} = {}", self.decl, init)
+        } else {
+            write!(f, "{}", self.decl)
+        }
+    }
+}
+
+enum Declarator {
+    Ident(String),
+    // only for str type
+    Ptr(String),
+    Array(Box<Declarator>),
+}
+
+impl Display for Declarator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match self {
+            Declarator::Ident(ident) => write!(f, "{}", ident),
+            Declarator::Ptr(ident) => write!(f, "*{}", ident),
+            Declarator::Array(d) => write!(f, "{}[]", d),
+        }
+    }
+}
+
+pub struct Asignment {
+    ident: String,
+    init: Exp,
+}
+
+impl Display for Asignment {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{} = {}", self.ident, self.init)
     }
 }
