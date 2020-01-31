@@ -253,8 +253,8 @@ fn gen_flag(flags: &[Flag]) -> Value {
 
     let mut rng = thread_rng();
 
-    if rng.gen::<f64>() >= 0.8 {
-        Value::Num(NumValue::Signed(rng.gen::<i32>() as i64))
+    if rng.gen::<f64>() >= 0.9 {
+        Value::Num(NumValue::Signed(rng.gen::<u8>() as i64))
     } else {
         let flag = flags.iter().choose(&mut rng).unwrap();
         let mut val = flag.val;

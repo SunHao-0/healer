@@ -38,7 +38,8 @@ fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
 
     let mut args = Vec::new();
     for (arg_i, v) in c.args.iter().enumerate() {
-        let arg = translate_arg((call_index, ArgPos::Arg(arg_i)), v.tid, &v.val, t, s);
+        let arg_index = (call_index, ArgPos::Arg(arg_i));
+        let arg = translate_arg(Some(arg_index), v.tid, &v.val, t, s);
         args.push(arg);
     }
 
@@ -56,23 +57,25 @@ fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
     };
 }
 
-fn translate_arg(arg_index: ArgIndex, tid: TypeId, val: &Value, t: &Target, s: &mut State) -> Exp {
+fn translate_arg(arg_index: Option<ArgIndex>, tid: TypeId, val: &Value, t: &Target, s: &mut State) -> Exp {
     match t.type_of(tid) {
         TypeInfo::Num(_) | TypeInfo::Flag { .. } | TypeInfo::Len { .. } => {
             Exp::NumLiteral(val.literal())
         }
         TypeInfo::Ptr { tid, dir, .. } => {
+            if let TypeInfo::Ptr { .. } = t.type_of(*tid) {
+                panic!("Multi-level ptr not support yet")
+            }
+
             if val == &Value::None {
                 Exp::NULL
             } else {
                 let var_name = decl_var(*tid, &val, t, s);
                 if dir != &PtrDir::In && t.is_res(*tid) {
-                    s.res.insert(arg_index, var_name.clone());
+                    s.res.insert(arg_index.unwrap(), var_name.clone());
                 }
-
                 match t.type_of(*tid) {
                     TypeInfo::Str { .. } | TypeInfo::Slice { .. } => Exp::Var(var_name),
-                    TypeInfo::Ptr { .. } => panic!("Multi-level ptr not support yet"),
                     _ => Exp::Ref(var_name),
                 }
             }
@@ -103,7 +106,10 @@ fn decl_var(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
         TypeInfo::Alias { tid, .. } | TypeInfo::Res { tid } => decl_var(*tid, val, t, s),
         TypeInfo::Len { tid, .. } => decl_num(*tid, val, t, s),
 
-        TypeInfo::Ptr { .. } => panic!("Multi-level ptr not support yet"),
+        TypeInfo::Ptr { depth, .. } => {
+            assert_eq!(*depth, 1);
+            panic!()
+        }
     }
 }
 
@@ -119,7 +125,7 @@ fn decl_slice(tid: TypeId, under_tid: TypeId, val: &Value, t: &Target, s: &mut S
     match val {
         Value::Group(vals) => {
             for v in vals.iter() {
-                exps.push(translate_arg((0, ArgPos::Ret), under_tid, v, t, s));
+                exps.push(translate_arg(None, under_tid, v, t, s));
             }
         }
         _ => panic!("Value of type error"),
@@ -164,7 +170,7 @@ fn decl_struct(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     if let TypeInfo::Struct { fields, .. } = t.type_of(tid) {
         for (field, val) in fields.iter().zip(vals.iter()) {
             let selected_field = format!("{}.{}", var_name, field.ident);
-            let exp = translate_arg((0, ArgPos::Ret), field.tid, val, t, s);
+            let exp = translate_arg(None, field.tid, val, t, s);
             asign(selected_field, exp, s)
         }
     } else {
@@ -188,7 +194,7 @@ fn decl_union(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     if let TypeInfo::Union { fields, .. } = t.type_of(tid) {
         let field = &fields[*choice];
         let selected_field = format!("{}.{}", var_name, field.ident);
-        let exp = translate_arg((0, ArgPos::Ret), field.tid, val, t, s);
+        let exp = translate_arg(None, field.tid, val, t, s);
         asign(selected_field, exp, s)
     } else {
         panic!("Type error")
@@ -223,7 +229,10 @@ fn declarator_map(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, De
         TypeInfo::Res { tid } => declarator_map(*tid, var_name, t),
         TypeInfo::Len { tid, .. } => declarator_map(*tid, var_name, t),
 
-        TypeInfo::Ptr { .. } => panic!(),
+        TypeInfo::Ptr { tid, depth, .. } => {
+            assert_eq!(*depth, 1);
+            map_ptr(*tid, var_name, t)
+        }
     }
 }
 
@@ -232,6 +241,11 @@ fn map_flag(var_name: &str) -> (TypeSpecifier, Declarator) {
         TypeSpecifier::Int32,
         Declarator::Ident(var_name.to_string()),
     )
+}
+
+fn map_ptr(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
+    let (ts, _) = declarator_map(tid, var_name, t);
+    (ts, Declarator::Ptr(var_name.to_string()))
 }
 
 fn map_str(str_type: &StrType, var_name: &str) -> (TypeSpecifier, Declarator) {
