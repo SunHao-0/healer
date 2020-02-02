@@ -5,7 +5,7 @@
 use crate::prog::{ArgIndex, ArgPos, Call, Prog};
 use crate::target::Target;
 use crate::value::Value;
-use fots::types::{NumInfo, PtrDir, StrType, TypeId, TypeInfo};
+use fots::types::{Field, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo};
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 
@@ -57,22 +57,28 @@ fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
     };
 }
 
-fn translate_arg(arg_index: Option<ArgIndex>, tid: TypeId, val: &Value, t: &Target, s: &mut State) -> Exp {
+fn translate_arg(
+    arg_index: Option<ArgIndex>,
+    tid: TypeId,
+    val: &Value,
+    t: &Target,
+    s: &mut State,
+) -> Exp {
     match t.type_of(tid) {
         TypeInfo::Num(_) | TypeInfo::Flag { .. } | TypeInfo::Len { .. } => {
             Exp::NumLiteral(val.literal())
         }
-        TypeInfo::Ptr { tid, dir, .. } => {
-            if let TypeInfo::Ptr { .. } = t.type_of(*tid) {
-                panic!("Multi-level ptr not support yet")
-            }
+        TypeInfo::Ptr { tid, dir, depth } => {
+            assert_eq!(*depth, 1, "Multi-level pointer not supported");
 
             if val == &Value::None {
                 Exp::NULL
             } else {
                 let var_name = decl_var(*tid, &val, t, s);
                 if dir != &PtrDir::In && t.is_res(*tid) {
-                    s.res.insert(arg_index.unwrap(), var_name.clone());
+                    if let Some(index) = arg_index {
+                        s.res.insert(index, var_name.clone());
+                    }
                 }
                 match t.type_of(*tid) {
                     TypeInfo::Str { .. } | TypeInfo::Slice { .. } => Exp::Var(var_name),
@@ -95,110 +101,128 @@ fn translate_arg(arg_index: Option<ArgIndex>, tid: TypeId, val: &Value, t: &Targ
     }
 }
 
-/// declare varible of tid type with val value, record in state and return name of var
-fn decl_var(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
-    match t.type_of(tid) {
-        TypeInfo::Flag { .. } | TypeInfo::Num(_) => decl_num(tid, val, t, s),
-        TypeInfo::Slice { tid: under_tid, .. } => decl_slice(tid, *under_tid, val, t, s),
-        TypeInfo::Str { str_type, .. } => decl_str(tid, str_type.clone(), val, t, s),
-        TypeInfo::Struct { .. } => decl_struct(tid, val, t, s),
-        TypeInfo::Union { .. } => decl_union(tid, val, t, s),
-        TypeInfo::Alias { tid, .. } | TypeInfo::Res { tid } => decl_var(*tid, val, t, s),
-        TypeInfo::Len { tid, .. } => decl_num(*tid, val, t, s),
-
-        TypeInfo::Ptr { depth, .. } => {
-            assert_eq!(*depth, 1);
-            panic!()
-        }
-    }
-}
-
-fn decl_num(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
-    let name = s.var_names.next_p("n");
-    decl(tid, &name, Some(Exp::NumLiteral(val.literal())), t, s);
-    name
-}
-
-fn decl_slice(tid: TypeId, under_tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
-    let name = s.var_names.next_p("a");
-    let mut exps = Vec::new();
-    match val {
-        Value::Group(vals) => {
-            for v in vals.iter() {
-                exps.push(translate_arg(None, under_tid, v, t, s));
-            }
-        }
-        _ => panic!("Value of type error"),
+fn translate_slice(under_id: TypeId, val: &Value, t: &Target, s: &mut State) -> Exp {
+    let vals = if let Value::Group(vals) = val {
+        vals
+    } else {
+        panic!("Value type not match")
     };
-    decl(tid, &name, Some(Exp::ListExp(exps)), t, s);
 
-    name
+    let exps = if let TypeInfo::Ptr { tid, .. } = t.type_of(under_id) {
+        if let TypeInfo::Str { str_type, .. } = t.type_of(*tid) {
+            vals.iter()
+                .map(|v| translate_str(str_type, v))
+                .collect::<Vec<_>>()
+        } else {
+            vals.iter()
+                .map(|v| translate_arg(None, under_id, v, t, s))
+                .collect::<Vec<_>>()
+        }
+    } else {
+        vals.iter()
+            .map(|v| translate_arg(None, under_id, v, t, s))
+            .collect::<Vec<_>>()
+    };
+    Exp::ListExp(exps)
 }
 
-fn decl_str(tid: TypeId, str_type: StrType, val: &Value, t: &Target, s: &mut State) -> String {
-    let exp = match str_type {
+fn translate_str(str_type: &StrType, v: &Value) -> Exp {
+    let s = if let Value::Str(s) = v {
+        s
+    } else {
+        panic!("Value type not match")
+    };
+    match str_type {
         StrType::Str => {
             let mut exps = Vec::new();
-            if let Value::Str(s) = val {
-                for c in s.chars() {
-                    exps.push(Exp::CharLiteral(c));
-                }
-            } else {
-                panic!("Value of type error")
+            for ch in s.chars() {
+                exps.push(Exp::CharLiteral(ch));
             }
             Exp::ListExp(exps)
         }
-        StrType::CStr | StrType::FileName => Exp::StrLiteral(val.literal()),
-    };
+        StrType::FileName | StrType::CStr => Exp::StrLiteral(s.clone()),
+    }
+}
 
-    let name = s.var_names.next_p("s");
-    decl(tid, &name, Some(exp), t, s);
+/// declare varible of tid type with val value, record in state and return name of var
+fn decl_var(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
+    match t.type_of(tid) {
+        TypeInfo::Num(info) => decl_num(info, val, s),
+        TypeInfo::Flag { .. } => decl_num(&NumInfo::U32(NumLimit::None), val, s),
+        TypeInfo::Len { tid, .. } => decl_var(*tid, val, t, s),
+        TypeInfo::Str { str_type, .. } => decl_str(str_type, val, s),
+        TypeInfo::Struct { ident, fields } => decl_struct(ident, fields, val, t, s),
+        TypeInfo::Union { ident, fields } => decl_union(ident, fields, val, t, s),
+        TypeInfo::Alias { tid, .. } => decl_var(*tid, val, t, s),
+        TypeInfo::Res { tid } => decl_var(*tid, &Value::default_val(*tid, t), t, s),
+        TypeInfo::Slice { tid: under_tid, .. } => {
+            if let TypeInfo::Ptr { tid, .. } = t.type_of(*under_tid) {
+                assert!(!t.is_slice(*tid), "Multi level slice not supported yet");
+                // Multi level slice is useless
+            }
+            decl_slice(*under_tid, val, t, s)
+        }
+        TypeInfo::Ptr { .. } => unreachable!(),
+    }
+}
+
+fn decl_num(num_info: &NumInfo, val: &Value, s: &mut State) -> String {
+    let name = s.var_names.next_p("n");
+    let (ts, decl) = map_num(num_info, &name);
+    s.add_decl(ts, decl, Some(Exp::NumLiteral(val.literal())));
     name
 }
 
-fn decl_struct(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
-    let ident = t.type_of(tid).ident().unwrap();
+fn decl_str(str_type: &StrType, val: &Value, s: &mut State) -> String {
+    let name = s.var_names.next_p("s");
+    let (ts, decl) = map_str(str_type, &name);
+    let exp = translate_str(str_type, val);
+    s.add_decl(ts, decl, Some(exp));
+    name
+}
+
+fn decl_slice(under_tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
+    let name = s.var_names.next_p("a");
+    let (ts, decl) = map_array(under_tid, &name, t);
+    let exp = translate_slice(under_tid, val, t, s);
+    s.add_decl(ts, decl, Some(exp));
+    name
+}
+
+fn decl_struct(ident: &str, fields: &[Field], val: &Value, t: &Target, s: &mut State) -> String {
     let var_name = s.var_names.next_p(ident);
-    decl(tid, &var_name, None, t, s);
+    let (ts, decl) = map_struct(ident, &var_name);
+    s.add_decl(ts, decl, None);
 
     let vals = if let Value::Group(v) = val {
         v
     } else {
-        panic!("Value of type error")
+        panic!("Value type not match")
     };
 
-    if let TypeInfo::Struct { fields, .. } = t.type_of(tid) {
-        for (field, val) in fields.iter().zip(vals.iter()) {
-            let selected_field = format!("{}.{}", var_name, field.ident);
-            let exp = translate_arg(None, field.tid, val, t, s);
-            asign(selected_field, exp, s)
-        }
-    } else {
-        panic!("Type error")
+    for (field, val) in fields.iter().zip(vals.iter()) {
+        let selected_field = format!("{}.{}", var_name, field.ident);
+        let exp = translate_arg(None, field.tid, val, t, s);
+        asign(selected_field, exp, s)
     }
-
     var_name
 }
 
-fn decl_union(tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
-    let ident = t.type_of(tid).ident().unwrap();
+fn decl_union(ident: &str, fields: &[Field], val: &Value, t: &Target, s: &mut State) -> String {
     let var_name = s.var_names.next_p(ident);
-    decl(tid, &var_name, None, t, s);
+    let (ts, decl) = map_union(ident, &var_name);
+    s.add_decl(ts, decl, None);
 
+    // decl(tid, &var_name, None, t, s);
     let (val, choice) = if let Value::Opt { choice, val } = val {
         (val, choice)
     } else {
         panic!("Value of type error")
     };
-
-    if let TypeInfo::Union { fields, .. } = t.type_of(tid) {
-        let field = &fields[*choice];
-        let selected_field = format!("{}.{}", var_name, field.ident);
-        let exp = translate_arg(None, field.tid, val, t, s);
-        asign(selected_field, exp, s)
-    } else {
-        panic!("Type error")
-    }
+    let field = &fields[*choice];
+    let selected_field = format!("{}.{}", var_name, field.ident);
+    let exp = translate_arg(None, field.tid, val, t, s);
+    asign(selected_field, exp, s);
     var_name
 }
 
@@ -236,6 +260,20 @@ fn declarator_map(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, De
     }
 }
 
+fn map_struct(ident: &str, var_name: &str) -> (TypeSpecifier, Declarator) {
+    (
+        TypeSpecifier::Struct(ident.to_string()),
+        Declarator::Ident(var_name.to_string()),
+    )
+}
+
+fn map_union(ident: &str, var_name: &str) -> (TypeSpecifier, Declarator) {
+    (
+        TypeSpecifier::Union(ident.to_string()),
+        Declarator::Ident(var_name.to_string()),
+    )
+}
+
 fn map_flag(var_name: &str) -> (TypeSpecifier, Declarator) {
     (
         TypeSpecifier::Int32,
@@ -244,16 +282,21 @@ fn map_flag(var_name: &str) -> (TypeSpecifier, Declarator) {
 }
 
 fn map_ptr(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
-    let (ts, _) = declarator_map(tid, var_name, t);
-    (ts, Declarator::Ptr(var_name.to_string()))
+    let (ts, decl) = declarator_map(tid, var_name, t);
+    let decl = if t.is_str(tid) || t.is_slice(tid) {
+        decl
+    } else {
+        Declarator::Ptr(Box::new(decl))
+    };
+    (ts, decl)
 }
 
 fn map_str(str_type: &StrType, var_name: &str) -> (TypeSpecifier, Declarator) {
     let ts = TypeSpecifier::Char;
-    let ident = var_name.to_string();
+    let ident = Box::new(Declarator::Ident(var_name.to_string()));
 
     let decl = match str_type {
-        StrType::Str => Declarator::Array(Box::new(Declarator::Ident(ident))),
+        StrType::Str => Declarator::Array(ident),
         StrType::FileName | StrType::CStr => Declarator::Ptr(ident),
     };
     (ts, decl)
@@ -294,6 +337,15 @@ struct State {
     stmts: Vec<Stmt>,
     var_names: VarName,
     res: HashMap<ArgIndex, String>,
+}
+
+impl State {
+    pub fn add_decl(&mut self, ts: TypeSpecifier, decl: Declarator, val: Option<Exp>) {
+        self.stmts.push(Stmt::VarDecl(Declaration {
+            ts,
+            init: InitDeclarator { decl, init: val },
+        }));
+    }
 }
 
 pub enum Stmt {
@@ -479,17 +531,53 @@ impl Display for InitDeclarator {
 enum Declarator {
     Ident(String),
     // only for str type
-    Ptr(String),
+    Ptr(Box<Declarator>),
+    // TODO ADD len of array declarator
     Array(Box<Declarator>),
+}
+
+impl Declarator {
+    fn under_declarator(&self) -> Option<&Declarator> {
+        match self {
+            Declarator::Ident(_) => None,
+            Declarator::Array(d) | Declarator::Ptr(d) => Some(d),
+        }
+    }
 }
 
 impl Display for Declarator {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        match self {
-            Declarator::Ident(ident) => write!(f, "{}", ident),
-            Declarator::Ptr(ident) => write!(f, "*{}", ident),
-            Declarator::Array(d) => write!(f, "{}[]", d),
+        let mut decl = self;
+        let mut result = "$".to_string();
+
+        loop {
+            match decl {
+                Declarator::Ident(ident) => {
+                    result = result.replace('$', ident);
+                    break;
+                }
+                Declarator::Ptr(_) => result = format!("*{}", result),
+                Declarator::Array(d) => {
+                    result = if let Declarator::Ptr(_) = **d {
+                        format!("({}[])", result)
+                    } else {
+                        format!("{}[]", result)
+                    };
+                }
+            }
+            decl = decl.under_declarator().unwrap();
         }
+        //        match self {
+        //            Declarator::Ident(ident) => write!(f, "{}", ident),
+        //            Declarator::Ptr(decl) => match decl {
+        //                Declarator::Ident(_) => todo!(),
+        //                Declarator::Ptr(_) => todo!(),
+        //                Declarator::Array(_) => todo!(),
+        //                _ => todo!()
+        //            },
+        //            Declarator::Array(d) => write!(f, "{}[]", d),
+        //        }
+        write!(f, "{}", result)
     }
 }
 
