@@ -52,6 +52,22 @@ impl Target {
         }
     }
 
+    pub fn is_str(&self, tid: TypeId) -> bool {
+        match self.type_of(tid) {
+            TypeInfo::Alias { tid, .. } => self.is_res(*tid),
+            TypeInfo::Str { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_slice(&self, tid: TypeId) -> bool {
+        match self.type_of(tid) {
+            TypeInfo::Alias { tid, .. } => self.is_res(*tid),
+            TypeInfo::Slice { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn get_len_path(&self, tid: TypeId) -> Option<&str> {
         match self.type_of(tid) {
             TypeInfo::Alias { tid, .. } => self.get_len_path(*tid),

@@ -21,7 +21,7 @@ use rand::prelude::*;
 use rand::{random, thread_rng, Rng};
 
 use fots::types::{
-    Field, Flag, FnInfo, GroupId, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo,
+    Field, Flag, FnInfo, Group, GroupId, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo,
 };
 
 use crate::analyze::{RTable, Relation};
@@ -56,18 +56,25 @@ pub fn gen<S: std::hash::BuildHasher>(
 ) -> Prog {
     assert!(!rs.is_empty());
     assert_eq!(t.groups.len(), rs.len());
-    let mut rng = thread_rng();
 
+    let mut rng = thread_rng();
     // choose group
     let gid = rs.keys().choose(&mut rng).unwrap();
     let g = &t.groups[gid];
 
+    gen_prog(g, &rs[gid], t, conf)
+}
+
+pub fn gen_prog(g: &Group, r: &RTable, t: &Target, conf: &Config) -> Prog {
+    assert!(!g.fns.is_empty());
+    assert_eq!(g.fns.len(), r.len());
+
     // choose sequence
-    let r = &rs[gid];
     let seq = choose_seq(r, conf);
+    assert!(!seq.is_empty());
 
     // gen value
-    let mut s = State::new(Prog::new(*gid), conf);
+    let mut s = State::new(Prog::new(g.id), conf);
     for &i in seq.iter() {
         gen_call(t, &g.fns[i], &mut s);
     }
@@ -111,12 +118,12 @@ impl<'a> State<'a> {
 
     pub fn record_res(&mut self, tid: TypeId, is_ret: bool) {
         let cid = self.prog.len() - 1;
-        let arg_pos = self.prog.calls[cid].args.len() - 1;
 
         let idx = self.res.entry(tid).or_insert_with(Default::default);
         if is_ret {
             idx.push((cid, ArgPos::Ret))
         } else {
+            let arg_pos = self.prog.calls[cid].args.len() - 1;
             idx.push((cid, ArgPos::Arg(arg_pos)))
         }
     }
@@ -149,26 +156,22 @@ impl<'a> State<'a> {
     }
 
     // add call
-    #[inline]
     pub fn add_call(&mut self, call: Call) -> &mut Call {
         self.prog.add_call(call)
     }
 
     // Add arg for last call
-    #[inline]
     pub fn add_arg(&mut self, arg: Arg) -> &mut Arg {
         let i = self.prog.len() - 1;
         self.prog.calls[i].add_arg(arg)
     }
 
-    #[inline]
     pub fn add_ret(&mut self, arg: Arg) -> &mut Arg {
         let i = self.prog.len() - 1;
         self.prog.calls[i].ret = Some(arg);
         self.prog.calls[i].ret.as_mut().unwrap()
     }
 
-    #[inline]
     pub fn update_val(&mut self, val: Value) {
         let c = self.prog.calls.last_mut().unwrap();
         let arg_index = c.args.len() - 1;
@@ -195,25 +198,24 @@ fn gen_call(t: &Target, f: &FnInfo, s: &mut State) {
     }
 }
 
+/// generate value for any type
 fn gen_value(tid: TypeId, t: &Target, s: &mut State) -> Value {
     match t.type_of(tid) {
         TypeInfo::Num(num_info) => gen_num(num_info),
         TypeInfo::Ptr { dir, tid, depth } => {
-            assert!(*depth == 1, "Multi-level pointer not supported");
+            assert_eq!(*depth, 1, "Multi-level pointer not supported");
             gen_ptr(*dir, *tid, t, s)
         }
+        // TODO  what if tid is type of res
         TypeInfo::Slice { tid, l, h } => gen_slice(*tid, *l, *h, t, s),
         TypeInfo::Str { str_type, vals } => gen_str(str_type, vals, s),
         TypeInfo::Struct { fields, .. } => gen_struct(&fields[..], t, s),
         TypeInfo::Union { fields, .. } => gen_union(&fields[..], t, s),
         TypeInfo::Flag { flags, .. } => gen_flag(&flags[..]),
+
         TypeInfo::Alias { tid: under_id, .. } => gen_alias(tid, *under_id, t, s),
         TypeInfo::Res { tid: under_tid } => gen_res(tid, *under_tid, t, s),
-        TypeInfo::Len {
-            tid: _tid,
-            path: _p,
-            is_param: _is_param,
-        } => Value::Num(NumValue::Unsigned(0)),
+        TypeInfo::Len { .. } => Value::Num(NumValue::Unsigned(0)),
     }
 }
 
@@ -305,10 +307,10 @@ fn gen_str(str_type: &StrType, vals: &Option<Vec<String>>, s: &mut State) -> Val
     let len = rng.gen_range(s.conf.str_min_len, s.conf.str_max_len);
     match str_type {
         StrType::Str => {
-//            let val = rng
-//                .sample_iter::<char, Standard>(Standard)
-//                .take(len)
-//                .collect::<String>();
+            //            let val = rng
+            //                .sample_iter::<char, Standard>(Standard)
+            //                .take(len)
+            //                .collect::<String>();
             let val = rng.sample_iter(Alphanumeric).take(len).collect::<String>();
             s.record_str(StrType::Str, &val);
             Value::Str(val)
@@ -352,7 +354,7 @@ fn gen_slice(tid: TypeId, l: isize, h: isize, t: &Target, s: &mut State) -> Valu
 pub(crate) fn gen_slice_len(l: isize, h: isize) -> usize {
     match (l, h) {
         (-1, -1) => thread_rng().gen_range(0, 8),
-        (l, -1) => thread_rng().gen_range(0, l as usize),
+        (l, -1) => l as usize,
         (l, h) => thread_rng().gen_range(l as usize, h as usize),
     }
 }
@@ -485,7 +487,7 @@ fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf
     let index = seq[i];
     let mut deps = Vec::new();
     let mut dep_r = 0.8;
-    let mut unknown_r = 0.6;
+    let mut unknown_r = 0.5;
     let deta = 0.5;
 
     for (j, r) in rs.index_axis(Axis(0), index).iter().enumerate() {
@@ -497,9 +499,7 @@ fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf
             } else if set[j] && random::<f64>() < dep_r * deta {
                 deps.push(j);
             }
-        }
-
-        if r.eq(&Relation::Unknown) {
+        } else if r.eq(&Relation::Unknown) {
             if !set[j] && random::<f64>() < unknown_r {
                 deps.push(j);
                 set.set(j, true);
@@ -507,6 +507,8 @@ fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf
             } else if set[j] && random::<f64>() < unknown_r * deta {
                 deps.push(j);
             }
+        } else if random::<f64>() < 0.005 {
+            deps.push(j);
         }
     }
     seq.extend(deps);
