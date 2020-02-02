@@ -137,16 +137,18 @@ struct Use {
 }
 
 fn res_use(index: usize, f: &FnInfo, t: &Target, uses: &mut HashMap<TypeId, Use>) {
-    for p in f.iter_param() {
-        let mut id = p.tid;
-        let mut in_ = true;
-        if let TypeInfo::Ptr { tid, dir, depth } = t.type_of(id) {
-            assert!(*depth == 1, "Multi-level pointer not supported");
-            id = *tid;
-            in_ = *dir == PtrDir::In;
-        }
-        if t.is_res(id) {
-            record_use(uses, id, index, in_);
+    if f.has_params() {
+        for p in f.iter_param() {
+            let mut id = p.tid;
+            let mut in_ = true;
+            if let TypeInfo::Ptr { tid, dir, depth } = t.type_of(id) {
+                assert!(*depth == 1, "Multi-level pointer not supported");
+                id = *tid;
+                in_ = *dir == PtrDir::In;
+            }
+            if t.is_res(id) {
+                record_use(uses, id, index, in_);
+            }
         }
     }
 
