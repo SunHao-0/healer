@@ -87,14 +87,78 @@ fn adjust_size_param(p: &mut Prog, t: &Target) {
         let f = t.fn_of(c.fid);
         if f.has_params() {
             for (i, p) in f.iter_param().enumerate() {
-                if let Some(ident) = t.get_len_path(p.tid) {
-                    if let Some(j) = f.iter_param().position(|p| p.ident == ident) {
+                if let Some(path) = t.len_info_of(p.tid) {
+                    if let Some(j) = f.iter_param().position(|p| p.ident == path) {
                         if let Some(l) = c.args[j].val.len() {
                             c.args[i].val = Value::Num(NumValue::Unsigned(l as u64));
                         }
                     }
+                } else {
+                    adjust_size(p.tid, &mut c.args[i].val, t);
                 }
             }
+        }
+    }
+}
+
+fn adjust_size(tid: TypeId, v: &mut Value, t: &Target) {
+    match t.type_of(tid) {
+        TypeInfo::Ptr { tid, .. } => {
+            if v != &Value::None {
+                adjust_size(*tid, v, t);
+            }
+        }
+        TypeInfo::Slice { tid, .. } => {
+            if let Value::Group(vals) = v {
+                for v in vals.iter_mut() {
+                    adjust_size(*tid, v, t);
+                }
+            }
+        }
+        TypeInfo::Struct { fields, .. } => {
+            let vals = if let Value::Group(vals) = v { vals } else { panic!() };
+            asign_struct(fields, vals, t);
+        }
+        TypeInfo::Alias { tid, .. } => adjust_size(*tid, v, t),
+        _ => (),
+    }
+}
+
+fn asign_struct(fields: &[Field], vals: &mut [Value], t: &Target) {
+    for (i, f) in fields.iter().enumerate() {
+        if let Some(p) = t.len_info_of(f.tid) {
+            asign_len_val(i, p, fields, vals, t)
+        } else if let Some((_, fields)) = t.struct_info_of(f.tid) {
+            let vals = if let Value::Group(val) = &mut vals[i] { val } else { panic!() };
+            asign_struct(fields, vals, t)
+        }
+    }
+}
+
+fn asign_len_val(index: usize, path: &str, fields: &[Field], vals: &mut [Value], t: &Target) {
+    let mut sub_paths = path.split('.');
+    let mut p = sub_paths.next().unwrap();
+
+    let mut crt_field = fields;
+    let mut crt_vals = &vals[..];
+    loop {
+        if let Some(i) = crt_field.iter().position(|f| f.ident == p) {
+            if let Some(n_p) = sub_paths.next() {
+                if let Some((_, n_fields)) = t.struct_info_of(crt_field[i].tid) {
+                    crt_field = n_fields;
+                } else {
+                    panic!();
+                }
+                crt_vals = if let Value::Group(val) = &crt_vals[i] { val } else { panic!() };
+                p = n_p;
+            } else {
+                if let Some(l) = crt_vals[i].len() {
+                    vals[index] = Value::Num(NumValue::Unsigned(l as u64));
+                }
+                break;
+            }
+        } else {
+            panic!()
         }
     }
 }

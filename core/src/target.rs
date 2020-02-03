@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use fots::types::{FnId, FnInfo, Group, GroupId, Items, TypeId, TypeInfo};
+use fots::types::{FnId, FnInfo, Group, GroupId, Items, TypeId, TypeInfo, Field};
 use std::ptr::NonNull;
 
 pub struct Target {
@@ -40,7 +40,7 @@ impl Target {
         unsafe { self.fns[&fid].as_ref() }
     }
 
-    pub fn iter_group(&self) -> impl Iterator<Item = &Group> + '_ {
+    pub fn iter_group(&self) -> impl Iterator<Item=&Group> + '_ {
         self.groups.values()
     }
 
@@ -68,15 +68,23 @@ impl Target {
         }
     }
 
-    pub fn get_len_path(&self, tid: TypeId) -> Option<&str> {
+    pub fn len_info_of(&self, tid: TypeId) -> Option<&str> {
         match self.type_of(tid) {
-            TypeInfo::Alias { tid, .. } => self.get_len_path(*tid),
+            TypeInfo::Alias { tid, .. } => self.len_info_of(*tid),
             TypeInfo::Len { path, .. } => Some(path),
             _ => None,
         }
     }
 
+    pub fn struct_info_of(&self, tid: TypeId) -> Option<(&str, &[Field])> {
+        match self.type_of(tid) {
+            TypeInfo::Struct { fields, ident } => Some((ident, fields)),
+            TypeInfo::Alias { tid, .. } => self.struct_info_of(*tid),
+            _ => None,
+        }
+    }
+
     pub fn get_len_path_unchecked(&self, tid: TypeId) -> &str {
-        self.get_len_path(tid).unwrap()
+        self.len_info_of(tid).unwrap()
     }
 }
