@@ -10,7 +10,7 @@
 //! ich means it maynot be possible to traverse its execution flow
 //! samply by number of random input. In this case, we need add
 //! some other interfaces that modify that external/global state
-//! which means generating sequence of calls not single call.
+//! which means generating sequence of target not single call.
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -116,7 +116,11 @@ fn adjust_size(tid: TypeId, v: &mut Value, t: &Target) {
             }
         }
         TypeInfo::Struct { fields, .. } => {
-            let vals = if let Value::Group(vals) = v { vals } else { panic!() };
+            let vals = if let Value::Group(vals) = v {
+                vals
+            } else {
+                panic!()
+            };
             asign_struct(fields, vals, t);
         }
         TypeInfo::Alias { tid, .. } => adjust_size(*tid, v, t),
@@ -129,7 +133,11 @@ fn asign_struct(fields: &[Field], vals: &mut [Value], t: &Target) {
         if let Some(p) = t.len_info_of(f.tid) {
             asign_len_val(i, p, fields, vals, t)
         } else if let Some((_, fields)) = t.struct_info_of(f.tid) {
-            let vals = if let Value::Group(val) = &mut vals[i] { val } else { panic!() };
+            let vals = if let Value::Group(val) = &mut vals[i] {
+                val
+            } else {
+                panic!()
+            };
             asign_struct(fields, vals, t)
         }
     }
@@ -149,7 +157,11 @@ fn asign_len_val(index: usize, path: &str, fields: &[Field], vals: &mut [Value],
                 } else {
                     panic!();
                 }
-                crt_vals = if let Value::Group(val) = &crt_vals[i] { val } else { panic!() };
+                crt_vals = if let Value::Group(val) = &crt_vals[i] {
+                    val
+                } else {
+                    panic!()
+                };
                 p = n_p;
             } else {
                 if let Some(l) = crt_vals[i].len() {
@@ -532,6 +544,7 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
         set.set(index, true);
         seq.push(index);
         let i = seq.len() - 1;
+
         push_deps(rs, &mut set, &mut seq, i, conf);
 
         if seq.len() < conf.prog_min_len || seq.len() < conf.prog_max_len && rng.gen() {
@@ -540,7 +553,9 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
             break;
         }
     }
+    seq.shrink_to_fit();
     seq.reverse();
+    assert!(seq.len() >= conf.prog_min_len);
     seq
 }
 
@@ -551,7 +566,7 @@ fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf
     let index = seq[i];
     let mut deps = Vec::new();
     let mut dep_r = 0.8;
-    let mut unknown_r = 0.5;
+    let mut unknown_r = 0.4;
     let deta = 0.5;
 
     for (j, r) in rs.index_axis(Axis(0), index).iter().enumerate() {

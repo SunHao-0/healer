@@ -12,3 +12,4 @@ ndarray = "0.13.0"
 rand = "0.7.3"
 bitset-fixed = "0.1.0"
 maplit = "1.0.2"
+serde ={ version= "1.0.104" ,features = ["derive"]}

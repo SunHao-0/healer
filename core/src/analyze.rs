@@ -170,7 +170,7 @@ fn record_use(uses: &mut HashMap<TypeId, Use>, res: TypeId, fn_index: usize, in_
 
 /// Analyze call seq of prog, update RTable
 ///
-/// Analysis is based on the order of calls in a prog.
+/// Analysis is based on the order of target in a prog.
 /// If A is before B in a prog, then B has impact on A.
 /// Thr prog must be minimized befor being used.
 pub fn prog_analyze(g: &Group, r: &mut RTable, p: &Prog) {
