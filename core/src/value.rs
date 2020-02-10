@@ -8,7 +8,7 @@ use crate::prog::ArgIndex;
 use crate::target::Target;
 
 /// Value of type
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Value {
     /// Value that stores num, both signed and unsigned but not bigger then 8 bytes
     Num(NumValue),
@@ -24,7 +24,7 @@ pub enum Value {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum NumValue {
     Signed(i64),
     Unsigned(u64),
@@ -111,6 +111,12 @@ impl Value {
             Value::Opt { val, .. } => val.literal(),
             Value::Ref(_) => unreachable!(),
             Value::None => "NULL".into(),
+        }
+    }
+
+    pub fn shrink(&mut self) {
+        if let Value::Group(v) = self {
+            v.shrink_to_fit()
         }
     }
 }

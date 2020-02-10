@@ -10,14 +10,14 @@ pub type CId = usize;
 pub type ArgIndex = (CId, ArgPos);
 
 /// Position of arg in a call
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ArgPos {
     Arg(usize),
     Ret,
 }
 
 /// Seq of call of a group
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Prog {
     pub gid: GroupId,
     pub calls: Vec<Call>,
@@ -46,6 +46,13 @@ impl Prog {
     pub fn is_empty(&self) -> bool {
         self.calls.is_empty()
     }
+
+    pub fn shrink(&mut self) {
+        for c in self.calls.iter_mut() {
+            c.shrink();
+        }
+        self.calls.shrink_to_fit();
+    }
 }
 
 impl Index<ArgIndex> for Prog {
@@ -60,7 +67,7 @@ impl Index<ArgIndex> for Prog {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Call {
     /// prototype
     pub fid: FnId,
@@ -82,9 +89,19 @@ impl Call {
         self.args.push(arg);
         self.args.last_mut().unwrap()
     }
+
+    pub fn shrink(&mut self) {
+        for a in self.args.iter_mut() {
+            a.shrink();
+        }
+        if let Some(a) = self.ret.as_mut() {
+            a.shrink();
+        }
+        self.args.shrink_to_fit()
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Arg {
     pub tid: TypeId,
     pub val: Value,
@@ -96,5 +113,9 @@ impl Arg {
             tid,
             val: Value::None,
         }
+    }
+
+    pub fn shrink(&mut self) {
+        self.val.shrink()
     }
 }

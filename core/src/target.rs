@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use fots::types::{FnId, FnInfo, Group, GroupId, Items, TypeId, TypeInfo, Field};
+use fots::types::{Field, FnId, FnInfo, Group, GroupId, Items, NumInfo, TypeId, TypeInfo};
 use std::ptr::NonNull;
 
 pub struct Target {
@@ -40,7 +40,7 @@ impl Target {
         unsafe { self.fns[&fid].as_ref() }
     }
 
-    pub fn iter_group(&self) -> impl Iterator<Item=&Group> + '_ {
+    pub fn iter_group(&self) -> impl Iterator<Item = &Group> + '_ {
         self.groups.values()
     }
 
@@ -54,7 +54,7 @@ impl Target {
 
     pub fn is_str(&self, tid: TypeId) -> bool {
         match self.type_of(tid) {
-            TypeInfo::Alias { tid, .. } => self.is_res(*tid),
+            TypeInfo::Alias { tid, .. } => self.is_str(*tid),
             TypeInfo::Str { .. } => true,
             _ => false,
         }
@@ -62,8 +62,16 @@ impl Target {
 
     pub fn is_slice(&self, tid: TypeId) -> bool {
         match self.type_of(tid) {
-            TypeInfo::Alias { tid, .. } => self.is_res(*tid),
+            TypeInfo::Alias { tid, .. } => self.is_slice(*tid),
             TypeInfo::Slice { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_num(&self, tid: TypeId) -> bool {
+        match self.type_of(tid) {
+            TypeInfo::Alias { tid, .. } => self.is_num(*tid),
+            TypeInfo::Num { .. } => true,
             _ => false,
         }
     }
@@ -72,6 +80,14 @@ impl Target {
         match self.type_of(tid) {
             TypeInfo::Alias { tid, .. } => self.len_info_of(*tid),
             TypeInfo::Len { path, .. } => Some(path),
+            _ => None,
+        }
+    }
+
+    pub fn num_info_of(&self, tid: TypeId) -> Option<&NumInfo> {
+        match self.type_of(tid) {
+            TypeInfo::Alias { tid, .. } => self.num_info_of(*tid),
+            TypeInfo::Num(info) => Some(info),
             _ => None,
         }
     }
