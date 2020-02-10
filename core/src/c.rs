@@ -12,7 +12,7 @@ use std::fmt::{Display, Error, Formatter};
 use std::fmt::Write;
 
 /// C lang Script
-pub struct Script(Vec<Stmt>);
+pub struct Script(pub Vec<Stmt>);
 
 impl Display for Script {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -51,7 +51,9 @@ fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
     if let Some(tid) = pt.r_tid {
         let var_name = s.var_names.next_r();
         s.res.insert((call_index, ArgPos::Ret), var_name.clone());
-        decl(tid, &var_name, Some(call), t, s);
+
+        let (ts, decl) = declarator_map(tid, &var_name, t);
+        s.add_decl(ts, decl, Some(call));
     } else {
         s.stmts.push(Stmt::SimpleExp(call))
     };
@@ -80,9 +82,10 @@ fn translate_arg(
                         s.res.insert(index, var_name.clone());
                     }
                 }
-                match t.type_of(*tid) {
-                    TypeInfo::Str { .. } | TypeInfo::Slice { .. } => Exp::Var(var_name),
-                    _ => Exp::Ref(var_name),
+                if t.is_slice(*tid) || t.is_str(*tid) {
+                    Exp::Var(var_name)
+                } else {
+                    Exp::Ref(var_name)
                 }
             }
         }
@@ -107,22 +110,10 @@ fn translate_slice(under_id: TypeId, val: &Value, t: &Target, s: &mut State) -> 
     } else {
         panic!("Value type not match")
     };
-
-    let exps = if let TypeInfo::Ptr { tid, .. } = t.type_of(under_id) {
-        if let TypeInfo::Str { str_type, .. } = t.type_of(*tid) {
-            vals.iter()
-                .map(|v| translate_str(str_type, v))
-                .collect::<Vec<_>>()
-        } else {
-            vals.iter()
-                .map(|v| translate_arg(None, under_id, v, t, s))
-                .collect::<Vec<_>>()
-        }
-    } else {
-        vals.iter()
-            .map(|v| translate_arg(None, under_id, v, t, s))
-            .collect::<Vec<_>>()
-    };
+    let exps = vals
+        .iter()
+        .map(|v| translate_arg(None, under_id, v, t, s))
+        .collect();
     Exp::ListExp(exps)
 }
 
@@ -175,7 +166,13 @@ fn decl_num(num_info: &NumInfo, val: &Value, s: &mut State) -> String {
 
 fn decl_str(str_type: &StrType, val: &Value, s: &mut State) -> String {
     let name = s.var_names.next_p("s");
-    let (ts, decl) = map_str(str_type, &name);
+    let len = if let Value::Str(s) = val {
+        s.len()
+    } else {
+        panic!("Value type not match")
+    };
+
+    let (ts, decl) = map_str(str_type, &name, Some(len));
     let exp = translate_str(str_type, val);
     s.add_decl(ts, decl, Some(exp));
     name
@@ -183,7 +180,13 @@ fn decl_str(str_type: &StrType, val: &Value, s: &mut State) -> String {
 
 fn decl_slice(under_tid: TypeId, val: &Value, t: &Target, s: &mut State) -> String {
     let name = s.var_names.next_p("a");
-    let (ts, decl) = map_array(under_tid, &name, t);
+    let len = if let Value::Group(v) = val {
+        v.len()
+    } else {
+        panic!("Value type not match")
+    };
+
+    let (ts, decl) = map_array(under_tid, &name, Some(len), t);
     let exp = translate_slice(under_tid, val, t, s);
     s.add_decl(ts, decl, Some(exp));
     name
@@ -213,7 +216,6 @@ fn decl_union(ident: &str, fields: &[Field], val: &Value, t: &Target, s: &mut St
     let (ts, decl) = map_union(ident, &var_name);
     s.add_decl(ts, decl, None);
 
-    // decl(tid, &var_name, None, t, s);
     let (val, choice) = if let Value::Opt { choice, val } = val {
         (val, choice)
     } else {
@@ -226,20 +228,20 @@ fn decl_union(ident: &str, fields: &[Field], val: &Value, t: &Target, s: &mut St
     var_name
 }
 
-fn decl(tid: TypeId, var_name: &str, init: Option<Exp>, t: &Target, s: &mut State) {
-    let (ts, decl) = declarator_map(tid, var_name, t);
-    let decl = Declaration {
-        ts,
-        init: InitDeclarator { decl, init },
-    };
-    s.stmts.push(Stmt::VarDecl(decl));
-}
+//fn decl(tid: TypeId, var_name: &str, init: Option<Exp>, t: &Target, s: &mut State) {
+//    let (ts, decl) = declarator_map(tid, var_name, t);
+//    let decl = Declaration {
+//        ts,
+//        init: InitDeclarator { decl, init },
+//    };
+//    s.stmts.push(Stmt::VarDecl(decl));
+//}
 
 fn declarator_map(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
     match t.type_of(tid) {
         TypeInfo::Num(n) => map_num(n, var_name),
-        TypeInfo::Slice { tid, .. } => map_array(*tid, var_name, t),
-        TypeInfo::Str { str_type, .. } => map_str(str_type, var_name),
+        TypeInfo::Slice { tid, .. } => map_array(*tid, var_name, None, t),
+        TypeInfo::Str { str_type, .. } => map_str(str_type, var_name, None),
         TypeInfo::Struct { ident, .. } => (
             TypeSpecifier::Struct(ident.clone()),
             Declarator::Ident(var_name.to_string()),
@@ -291,20 +293,34 @@ fn map_ptr(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarato
     (ts, decl)
 }
 
-fn map_str(str_type: &StrType, var_name: &str) -> (TypeSpecifier, Declarator) {
+fn map_str(str_type: &StrType, var_name: &str, len: Option<usize>) -> (TypeSpecifier, Declarator) {
     let ts = TypeSpecifier::Char;
     let ident = Box::new(Declarator::Ident(var_name.to_string()));
 
     let decl = match str_type {
-        StrType::Str => Declarator::Array(ident),
+        StrType::Str => Declarator::Array {
+            decl: ident,
+            len: len.unwrap_or(0),
+        },
         StrType::FileName | StrType::CStr => Declarator::Ptr(ident),
     };
     (ts, decl)
 }
 
-fn map_array(tid: TypeId, var_name: &str, t: &Target) -> (TypeSpecifier, Declarator) {
+fn map_array(
+    tid: TypeId,
+    var_name: &str,
+    len: Option<usize>,
+    t: &Target,
+) -> (TypeSpecifier, Declarator) {
     let (ts, decl) = declarator_map(tid, var_name, t);
-    (ts, Declarator::Array(Box::new(decl)))
+    (
+        ts,
+        Declarator::Array {
+            decl: Box::new(decl),
+            len: len.unwrap_or(0),
+        },
+    )
 }
 
 fn map_num(n: &NumInfo, var_name: &str) -> (TypeSpecifier, Declarator) {
@@ -532,15 +548,15 @@ enum Declarator {
     Ident(String),
     // only for str type
     Ptr(Box<Declarator>),
-    // TODO ADD len of array declarator
-    Array(Box<Declarator>),
+    Array { len: usize, decl: Box<Declarator> },
 }
 
 impl Declarator {
     fn under_declarator(&self) -> Option<&Declarator> {
         match self {
             Declarator::Ident(_) => None,
-            Declarator::Array(d) | Declarator::Ptr(d) => Some(d),
+            Declarator::Array { decl, .. } => Some(decl),
+            Declarator::Ptr(d) => Some(d),
         }
     }
 }
@@ -557,26 +573,12 @@ impl Display for Declarator {
                     break;
                 }
                 Declarator::Ptr(_) => result = format!("*{}", result),
-                Declarator::Array(d) => {
-                    result = if let Declarator::Ptr(_) = **d {
-                        format!("({}[])", result)
-                    } else {
-                        format!("{}[]", result)
-                    };
+                Declarator::Array { len, .. } => {
+                    result = format!("{}[{}]", result, len);
                 }
             }
             decl = decl.under_declarator().unwrap();
         }
-        //        match self {
-        //            Declarator::Ident(ident) => write!(f, "{}", ident),
-        //            Declarator::Ptr(decl) => match decl {
-        //                Declarator::Ident(_) => todo!(),
-        //                Declarator::Ptr(_) => todo!(),
-        //                Declarator::Array(_) => todo!(),
-        //                _ => todo!()
-        //            },
-        //            Declarator::Array(d) => write!(f, "{}[]", d),
-        //        }
         write!(f, "{}", result)
     }
 }
