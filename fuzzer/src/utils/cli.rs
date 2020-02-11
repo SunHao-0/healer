@@ -22,35 +22,6 @@ impl App {
     pub fn into_cmd(self) -> Command {
         let mut cmd = Command::new(&self.bin);
         cmd.args(self.iter_arg());
-        //        cmd
-        //        for arg in self.iter_arg(){
-        //
-        //        }
-        //        for arg in self.args.into_iter() {
-        //            match arg {
-        //                Arg::Flag(f) => {
-        //                    cmd.arg(f);
-        //                }
-        //                Arg::Option { name, val } => {
-        //                    cmd.arg(name);
-        //                    match val {
-        //                        OptVal::Normal(val) => {
-        //                            cmd.arg(val);
-        //                        }
-        //                        OptVal::Multiple { vals, sp } => {
-        //                            if let Some(sp) = sp {
-        //                                let val = vals.join(&format!("{}", sp));
-        //                                cmd.arg(val);
-        //                            } else {
-        //                                for val in vals.into_iter() {
-        //                                    cmd.arg(val);
-        //                                }
-        //                            }
-        //                        }
-        //                    }
-        //                }
-        //            }
-        //        }
         cmd
     }
 
@@ -107,15 +78,13 @@ impl Iterator for IterArg {
                                 let val = vals.join(&sp);
                                 self.state = ArgState::Start;
                                 return Some(val);
+                            } else if let Some(val) = vals.pop() {
+                                self.state = ArgState::ReadingVal;
+                                self.arg_vals = Some(OptVal::multiple(vals, None));
+                                return Some(val);
                             } else {
-                                if let Some(val) = vals.pop() {
-                                    self.state = ArgState::ReadingVal;
-                                    self.arg_vals = Some(OptVal::multiple(vals, None));
-                                    return Some(val);
-                                } else {
-                                    self.state = ArgState::Start;
-                                    continue;
-                                }
+                                self.state = ArgState::Start;
+                                continue;
                             }
                         }
                     },
