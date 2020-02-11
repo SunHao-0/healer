@@ -7,7 +7,7 @@ pub fn ssh_run(
     addr: &str,
     port: u16,
     app: Option<App>,
-) -> tokio::io::Result<tokio::process::Child> {
+) -> tokio::process::Child {
     let ssh = App::new("ssh")
         .arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
         .arg(Arg::new_opt(
@@ -33,5 +33,6 @@ pub fn ssh_run(
         cmd.arg(&app.bin);
         cmd.args(app.iter_arg());
     }
-    dbg!(cmd).spawn()
+    cmd.spawn()
+        .unwrap_or_else(|e| panic!("Failed to spawn:{}", e))
 }
