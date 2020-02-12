@@ -29,35 +29,25 @@ pub enum Reason {
 
 impl Handle {
     pub fn kill(self) {
-        self.kill.send(()).unwrap();
+        if !self.kill.is_closed() {
+            self.kill.send(()).unwrap()
+        }
     }
 
-    pub fn is_alive(&mut self) -> bool {
-        if self.finished.is_none() {
-            return true;
+    pub fn check_finish_signal(&mut self) -> Option<Reason> {
+        if self.finished.is_some() {
+            return self.finished.clone();
         }
+
         if let Some(t) = self.timeout.as_mut() {
             if t.try_recv().is_ok() {
                 self.finished = Some(Reason::Timeout);
-                self.close();
-                return true;
             }
         }
         if let Ok(status) = self.done.try_recv() {
             self.finished = Some(Reason::Done(status.ok()));
-            self.close();
-            return true;
         }
-
-        false
-    }
-
-    fn close(&mut self) {
-        self.done.close();
-        if let Some(t) = self.timeout.as_mut() {
-            t.close();
-        }
-        // self.kill.close();
+        self.finished.clone()
     }
 }
 
@@ -73,6 +63,7 @@ pub fn spawn(app: App, timeout: Option<Duration>) -> Handle {
         .spawn()
         .unwrap_or_else(|e| panic!("Failed to spawn {}:{}", bin, e));
 
+    // The length of pipe is too small, redirect it to unbounded channel
     let stdin = handle.stdin.take().unwrap();
     let stdout = redirect(handle.stdout.take().unwrap());
     let stderr = redirect(handle.stderr.take().unwrap());
