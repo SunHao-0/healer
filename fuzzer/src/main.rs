@@ -1,21 +1,24 @@
-use fuzzer::qemu;
-use std::env;
+use fuzzer::{fuzz, Config};
+use std::path::PathBuf;
+use std::process::exit;
+use structopt::StructOpt;
+use tokio::fs::read_to_string;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "fuzzer", about = "Kernel fuzzer of healer.")]
+struct Settings {
+    #[structopt(short = "c", long, default_value = "healer-fuzzer.toml")]
+    config: PathBuf,
+}
 
 #[tokio::main]
 async fn main() {
-    let image = env::args().nth(1).unwrap();
-    let kernel = env::args().nth(2).unwrap();
+    let settings = Settings::from_args();
+    let conf: Config = toml::from_str(&read_to_string(settings.config).await.unwrap())
+        .unwrap_or_else(|e| {
+            eprintln!("Config Error:{}", e);
+            exit(1);
+        });
 
-    let cfg = qemu::Cfg {
-        target: "linux/amd64".to_string(),
-        mem_size: 2048,
-        cpu_num: 2,
-        image,
-        kernel,
-        ssh_key_path: "stretch.id_rsa".to_string(),
-        ssh_user: "root".to_string(),
-    };
-
-    let handle = qemu::boot(&cfg).await;
-    println!("{:?}", handle);
+    fuzz(conf).await;
 }

@@ -1,6 +1,6 @@
 use tokio::process::Command;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct App {
     pub bin: String,
     pub args: Vec<Arg>,
@@ -25,7 +25,8 @@ impl App {
         cmd
     }
 
-    pub fn iter_arg(self) -> impl Iterator<Item = String> {
+    pub fn iter_arg(mut self) -> impl Iterator<Item = String> {
+        self.args.reverse();
         IterArg {
             args: self.args,
             state: ArgState::Start,
@@ -112,13 +113,13 @@ impl Iterator for IterArg {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Arg {
     Flag(String),
     Option { name: String, val: OptVal },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum OptVal {
     Normal(String),
     Multiple { vals: Vec<String>, sp: Option<char> },

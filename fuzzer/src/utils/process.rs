@@ -13,15 +13,15 @@ pub struct Handle {
     kill: oneshot::Sender<()>,
     done: oneshot::Receiver<Result<ExitStatus>>,
 
-    finished: Option<Reason>,
+    finished: Option<ExitReason>,
 
     pub stdout: mpsc::UnboundedReceiver<BytesMut>,
     pub stderr: mpsc::UnboundedReceiver<BytesMut>,
     pub stdin: tokio::process::ChildStdin,
 }
 
-#[derive(Debug)]
-pub enum Reason {
+#[derive(Debug, Clone)]
+pub enum ExitReason {
     Timeout,
     Done(Option<ExitStatus>),
     Killed,
@@ -34,20 +34,41 @@ impl Handle {
         }
     }
 
-    pub fn check_finish_signal(&mut self) -> Option<Reason> {
+    pub fn check_if_exit(&mut self) -> Option<ExitReason> {
         if self.finished.is_some() {
             return self.finished.clone();
         }
 
         if let Some(t) = self.timeout.as_mut() {
             if t.try_recv().is_ok() {
-                self.finished = Some(Reason::Timeout);
+                self.finished = Some(ExitReason::Timeout);
             }
         }
         if let Ok(status) = self.done.try_recv() {
-            self.finished = Some(Reason::Done(status.ok()));
+            self.finished = Some(ExitReason::Done(status.ok()));
         }
         self.finished.clone()
+    }
+
+    pub async fn wait(mut self) -> ExitReason {
+        if self.finished.is_some() {
+            return self.finished.unwrap();
+        }
+
+        if let Some(timeout) = self.timeout {
+            if timeout.await.is_ok() {
+                self.finished = Some(ExitReason::Timeout);
+            }
+        }
+        if let Ok(status) = self.done.await {
+            self.finished = Some(ExitReason::Done(status.ok()));
+        }
+
+        if self.finished.is_none() {
+            self.finished = Some(ExitReason::Killed);
+        }
+
+        self.finished.unwrap()
     }
 }
 
@@ -85,9 +106,10 @@ fn redirect<T: AsyncRead + Send + Sync + 'static>(mut src: T) -> mpsc::Unbounded
     tokio::spawn(async move {
         loop {
             let mut buf = BytesMut::with_capacity(1024);
+
             if src.read_buf(&mut buf).await.is_ok() {
                 buf.truncate(buf.len());
-                if tx.send(buf).is_err() {
+                if !buf.is_empty() && tx.send(buf).is_err() {
                     break;
                 }
             } else {
@@ -120,9 +142,8 @@ fn monitor(
             if tokio::time::timeout(duration, kill_or_done(kill_rx, handle, done_tx))
                 .await
                 .is_err()
-            {
-                timeout_tx.send(()).unwrap()
-            }
+                && timeout_tx.send(()).is_err()
+            {}
         } else {
             kill_or_done(kill_rx, handle, done_tx).await
         }
@@ -137,13 +158,9 @@ async fn kill_or_done(
     done_tx: oneshot::Sender<Result<ExitStatus>>,
 ) {
     tokio::select! {
-        msg = kill_rx => {
-            if let Err(e) =  msg {
-                panic!(e)
-            }
-        }
+        _ = kill_rx => {}
         status =  handle => {
-            done_tx.send(status).unwrap();
+            if done_tx.send(status).is_err(){};
         }
     }
 }

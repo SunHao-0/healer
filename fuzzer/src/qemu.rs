@@ -2,9 +2,11 @@ use crate::ssh::ssh_run;
 use crate::utils::cli::{App, Arg, OptVal};
 use crate::utils::process;
 use crate::utils::process::Handle;
+use crate::Config;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::time::{delay_for, timeout, Duration};
+
 lazy_static! {
     static ref QEMUS: HashMap<String, App> = {
         let mut qemus = HashMap::new();
@@ -57,22 +59,22 @@ lazy_static! {
     };
 }
 
-pub struct Cfg {
+#[derive(Debug, Deserialize)]
+pub struct Qemu {
     pub target: String,
     pub cpu_num: u32,
     pub mem_size: u32,
     pub image: String,
     pub kernel: String,
-    // login needed
-    pub ssh_key_path: String,
-    pub ssh_user: String,
+
+    pub wait_boot_time: Option<u8>,
 }
 
-pub async fn boot(cfg: &Cfg) -> Handle {
-    let (qemu, qemu_port, _qmp_port) = build_qemu_cli(cfg);
+pub async fn boot(cfg: &Config) -> (Handle, u16) {
+    let (qemu, port) = build_qemu_cli(&cfg.qemu);
     let mut handle = process::spawn(qemu, Some(Duration::new(120, 0)));
 
-    if !is_boot_success(qemu_port, cfg).await {
+    if !is_boot_success(&mut handle, port, cfg).await {
         let msg = read_all(&mut handle.stderr);
         let err = String::from_utf8(
             msg.into_iter()
@@ -85,27 +87,33 @@ pub async fn boot(cfg: &Cfg) -> Handle {
     clear(&mut handle.stdout);
     clear(&mut handle.stderr);
 
-    handle
+    (handle, port)
 }
 
-async fn is_boot_success(port: u16, cfg: &Cfg) -> bool {
+async fn is_boot_success(handle: &mut Handle, port: u16, cfg: &Config) -> bool {
     const MAX_TRY: u8 = 5;
-    println!("Waiting qemu 10s ...");
-    delay_for(Duration::new(10, 0)).await;
 
-    let mut retry_duration = Duration::new(10, 0);
+    let wait = cfg.qemu.wait_boot_time.unwrap_or(5);
+    delay_for(Duration::new(wait as u64, 0)).await;
+
+    let mut retry_duration = Duration::new(2, 0);
     let ssh_timeout = Duration::new(10, 0);
     let mut try_ = 0;
     let test_app = App::new("pwd");
 
     while try_ < MAX_TRY {
+        if handle.check_if_exit().is_some() {
+            return false;
+        }
+
         let ssh_handle = ssh_run(
-            &cfg.ssh_key_path,
-            &cfg.ssh_user,
+            &cfg.ssh.key_path,
+            &cfg.ssh.user,
             "localhost",
             port,
-            Some(test_app.clone()),
+            test_app.clone(),
         );
+
         if let Ok(r) = timeout(ssh_timeout, ssh_handle).await {
             if let Ok(status) = r {
                 if status.success() {
@@ -122,13 +130,13 @@ async fn is_boot_success(port: u16, cfg: &Cfg) -> bool {
     false
 }
 
-fn build_qemu_cli(cfg: &Cfg) -> (App, u16, u16) {
+fn build_qemu_cli(cfg: &Qemu) -> (App, u16) {
     let default_qemu = QEMUS
         .get(&cfg.target)
         .unwrap_or_else(|| panic!("Unknown target:{}", &cfg.target))
         .clone();
-    let qemu_port = port_check::free_local_port().expect("No free port");
-    let qmp_port = port_check::free_local_port().expect("No free port");
+    let port = port_check::free_local_port().unwrap();
+
     let qemu = default_qemu
         .arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
         .arg(Arg::new_opt(
@@ -140,25 +148,15 @@ fn build_qemu_cli(cfg: &Cfg) -> (App, u16, u16) {
             OptVal::Multiple {
                 vals: vec![
                     String::from("user"),
-                    format!("hostfwd=tcp::{}-:22", qemu_port),
+                    format!("hostfwd=tcp::{}-:22", port),
+                    String::from("hostfwd=tcp::7070-:7070"),
                 ],
                 sp: Some(','),
             },
         ))
         .arg(Arg::new_opt("-hda", OptVal::Normal(cfg.image.clone())))
-        .arg(Arg::new_opt("-kernel", OptVal::Normal(cfg.kernel.clone())))
-        .arg(Arg::new_opt(
-            "-qmp",
-            OptVal::Multiple {
-                vals: vec![
-                    format!("tcp:{}:{}", "localhost", qmp_port),
-                    "server".to_string(),
-                    "nowait".to_string(),
-                ],
-                sp: Some(','),
-            },
-        ));
-    (qemu, qemu_port, qmp_port)
+        .arg(Arg::new_opt("-kernel", OptVal::Normal(cfg.kernel.clone())));
+    (qemu, port)
 }
 
 fn clear<T>(rx: &mut mpsc::UnboundedReceiver<T>) {
