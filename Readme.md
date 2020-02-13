@@ -7,4 +7,4 @@ Fots is a fuzzing oriented type system.<br/>
 It's used as a description language for interface. <br/>
 See fots/readme.md for more design.
 
-## Generator
+## Core

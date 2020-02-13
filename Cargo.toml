@@ -2,5 +2,7 @@
 members = [
     "fots",
     "core",
-    "tools"
+    "tools",
+    "fuzzer",
+    "executor"
 ]
