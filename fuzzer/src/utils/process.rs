@@ -1,4 +1,6 @@
 //! Startint long-term process, capture its stdin/stdout/stderr
+#![macro_use]
+
 
 use crate::utils::cli::App;
 use bytes::BytesMut;
@@ -41,6 +43,7 @@ impl Handle {
 
         if let Some(t) = self.timeout.as_mut() {
             if t.try_recv().is_ok() {
+                // ssss
                 self.finished = Some(ExitReason::Timeout);
             }
         }
@@ -163,4 +166,15 @@ async fn kill_or_done(
             if done_tx.send(status).is_err(){};
         }
     }
+}
+
+macro_rules! exits {
+	( $code:expr ) => {
+		::std::process::exit($code)
+	};
+
+	( $code :expr, $fmt:expr $( , $arg:expr )* ) => {{
+        eprintln!($fmt $( , $arg )*);
+		::std::process::exit($code)
+	}};
 }
