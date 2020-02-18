@@ -4,11 +4,10 @@ extern crate lazy_static;
 extern crate serde;
 
 use crate::corpus::Corpus;
-use crate::exec::{startup, ExecHandle, Executor};
+use crate::exec::{Executor, ExecutorConf};
 use crate::feedback::FeedBack;
 use crate::fuzzer::Fuzzer;
-use crate::qemu::{boot, Qemu};
-use crate::ssh::SshConfig;
+use crate::guest::{GuestConf, QemuConf, SSHConf};
 use crate::utils::process::Handle;
 use crate::utils::queue::CQueue;
 use crate::utils::split::Split;
@@ -21,36 +20,37 @@ use tokio::fs::read;
 use tokio::sync::Barrier;
 use tokio::time;
 
+#[macro_use]
+pub mod utils;
 pub mod corpus;
 pub mod exec;
 pub mod feedback;
 pub mod fuzzer;
-pub mod qemu;
-pub mod ssh;
-pub mod utils;
+pub mod guest;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub fots_bin: String,
     pub curpus: Option<String>,
     pub vm_num: usize,
-    pub qemu: Qemu,
-    pub ssh: SshConfig,
-    pub executor: Executor,
+
+    pub guest: GuestConf,
+    pub qemu: Option<QemuConf>,
+    pub ssh: Option<SSHConf>,
+
+    pub executor: ExecutorConf,
 }
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
 
     let (mut targets, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
-    // println!("Target Groups:{}",targets.groups.len());
 
     let candidates = Arc::new(candidates);
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
 
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
-    // let mut handles = Vec::new();
 
     for i in 0..cfg.vm_num {
         let target = targets.pop().unwrap();
@@ -69,9 +69,9 @@ pub async fn fuzz(cfg: Config) {
         let barrier = barrier.clone();
 
         tokio::spawn(async move {
-            let (qemu, executor) = init(cfg.as_ref()).await;
+            let (_qemu, executor) = init(cfg.as_ref()).await;
             barrier.wait().await;
-            fuzzer.as_ref().fuzz(qemu, executor).await;
+            fuzzer.as_ref().fuzz(executor).await;
         });
     }
 
@@ -87,10 +87,11 @@ pub async fn fuzz(cfg: Config) {
     }
 }
 
-pub async fn init(cfg: &Config) -> (Handle, ExecHandle) {
-    let (qemu, port) = boot(cfg).await;
-    let executor = startup(cfg, port).await;
-    (qemu, executor)
+pub async fn init(_cfg: &Config) -> (Handle, Executor) {
+    //    let (qemu, port) = boot(cfg).await;
+    //    let executor = startup(cfg, port).await;
+    //    (qemu, executor)
+    todo!()
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {

@@ -1,7 +1,6 @@
 use crate::corpus::Corpus;
-use crate::exec::ExecHandle;
+use crate::exec::Executor;
 use crate::feedback::FeedBack;
-use crate::utils::process::Handle;
 use crate::utils::queue::CQueue;
 use core::analyze::RTable;
 use core::gen::gen;
@@ -10,6 +9,7 @@ use core::target::Target;
 use executor::ExecResult;
 use fots::types::GroupId;
 use std::collections::HashMap;
+use std::process::exit;
 use std::sync::Arc;
 
 pub struct Fuzzer {
@@ -22,10 +22,10 @@ pub struct Fuzzer {
 }
 
 impl Fuzzer {
-    pub async fn fuzz(&self, _qemu: Handle, mut executor: ExecHandle) {
+    pub async fn fuzz(&self, mut executor: Executor) {
         loop {
             let p = self.get_prog().await;
-            let exec_result = executor.exec(&p);
+            let exec_result = executor.exec(&p).unwrap_or_else(|_e| exit(1));
 
             if self.has_new_branches(exec_result).await {
                 let p = self.minimize(&p);
