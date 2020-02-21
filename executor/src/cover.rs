@@ -74,7 +74,7 @@ pub fn open() -> CovHandle {
 }
 
 impl CovHandle {
-    pub fn collect<F: FnMut()>(&mut self, mut call: F) -> &[usize] {
+    pub fn collect<F: FnOnce()>(&mut self, call: F) -> &[usize] {
         self.clear();
         let _g = self.enable();
         call();
