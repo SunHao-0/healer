@@ -1,16 +1,22 @@
 use executor::cover;
-use nix::unistd::{read,write};
+use executor::picoc::Picoc;
 
 fn main() {
     let mut handle = cover::open();
-    let mut buf = [0; 64];
+    let mut pc = Picoc::default();
 
-    let c1 = handle.collect(|| {
-        read(0, &mut buf);
-        write(0,&buf);
+    let pc = handle.collect(|| {
+        if !pc.execute(String::from(
+            "\
+    char buf[64];
+    read(0,buf,64);
+    ",
+        )) {
+            eprintln!("Failed");
+        }
     });
 
-    for i in c1 {
-        println!("{:#x?}", i);
+    for p in pc {
+        println!("{:#x}", p);
     }
 }
