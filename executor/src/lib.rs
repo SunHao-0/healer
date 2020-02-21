@@ -9,8 +9,10 @@ use std::process::exit;
 
 #[macro_use]
 pub mod utils;
+mod bind;
 pub mod cover;
 pub mod exec;
+pub mod picoc;
 pub mod transfer;
 
 pub use exec::{Block, Error, ExecResult};
