@@ -10,7 +10,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn new(items: Items) -> Self {
+    pub fn from(items: Items) -> Self {
         let mut types = items
             .types
             .into_iter()
@@ -104,3 +104,7 @@ impl Target {
         self.len_info_of(tid).unwrap()
     }
 }
+
+// TODO
+unsafe impl Send for Target {}
+unsafe impl Sync for Target {}
