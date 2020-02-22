@@ -33,6 +33,39 @@ pub fn translate(p: &Prog, t: &Target) -> Script {
     Script(s.stmts)
 }
 
+pub struct IterTranslate<'a> {
+    p: &'a Prog,
+    t: &'a Target,
+    s: State,
+    call_index: usize,
+}
+
+impl<'a> Iterator for IterTranslate<'a> {
+    type Item = Script;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.call_index == self.p.len() {
+            None
+        } else {
+            let c = &self.p.calls[self.call_index];
+            translate_call(self.call_index, c, &self.t, &mut self.s);
+            let mut stmts = Vec::new();
+            std::mem::swap(&mut stmts, &mut self.s.stmts);
+            self.call_index += 1;
+            Some(Script(stmts))
+        }
+    }
+}
+
+pub fn iter_trans<'a>(p: &'a Prog, t: &'a Target) -> IterTranslate<'a> {
+    IterTranslate {
+        p,
+        t,
+        s: State::default(),
+        call_index: 0,
+    }
+}
+
 fn translate_call(call_index: usize, c: &Call, t: &Target, s: &mut State) {
     let pt = t.fn_of(c.fid);
 
@@ -364,6 +397,7 @@ impl State {
     }
 }
 
+#[derive(Clone)]
 pub enum Stmt {
     VarDecl(Declaration),
     Asign(Asignment),
@@ -380,6 +414,7 @@ impl Display for Stmt {
     }
 }
 
+#[derive(Clone)]
 pub enum Exp {
     CharLiteral(char),
     NumLiteral(String),
@@ -418,6 +453,7 @@ impl Display for Exp {
     }
 }
 
+#[derive(Clone)]
 pub struct CallExp {
     name: String,
     args: Vec<Exp>,
@@ -476,6 +512,7 @@ impl VarName {
     }
 }
 
+#[derive(Clone)]
 pub struct Declaration {
     ts: TypeSpecifier,
     init: InitDeclarator,
@@ -487,6 +524,7 @@ impl Display for Declaration {
     }
 }
 
+#[derive(Clone)]
 enum TypeSpecifier {
     Uint8,
     Uint16,
@@ -529,6 +567,7 @@ impl Display for TypeSpecifier {
     }
 }
 
+#[derive(Clone)]
 struct InitDeclarator {
     decl: Declarator,
     init: Option<Exp>,
@@ -544,6 +583,7 @@ impl Display for InitDeclarator {
     }
 }
 
+#[derive(Clone)]
 enum Declarator {
     Ident(String),
     // only for str type
@@ -583,6 +623,7 @@ impl Display for Declarator {
     }
 }
 
+#[derive(Clone)]
 pub struct Asignment {
     ident: String,
     init: Exp,
