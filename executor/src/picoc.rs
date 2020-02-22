@@ -1,11 +1,12 @@
 use crate::bind;
 use crate::bind::{picoc_clean, picoc_execute, picoc_init, picoc_insluce_header};
 
-pub struct Picoc(bind::Picoc);
+// Issue: Without boxed, picoc'll crash
+pub struct Picoc(Box<bind::Picoc>);
 
 impl Default for Picoc {
     fn default() -> Self {
-        let mut pc = bind::Picoc::default();
+        let mut pc = Box::new(bind::Picoc::default());
         picoc_init(&mut pc);
         picoc_insluce_header(&mut pc);
         Self(pc)
