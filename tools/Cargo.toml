@@ -7,10 +7,15 @@ description = "Tools for healer"
 license = "Apache-2.0"
 
 [dependencies]
-fots={path="../fots"}
+fots = { path="../fots" }
+core = { path="../core" }
+executor = { path="../executor" }
 pest = "2.1.2"
 pest_derive = "2.1.0"
 thiserror = "1.0.9"
 colored = "1.9.2"
 num-traits = "0.2"
 structopt = {version="0.3.7",default-features=true}
+serde ={ version= "1.0.104" ,features = ["derive"]}
+bincode = "1.2.1"
+exitcode = "1.1.2"
