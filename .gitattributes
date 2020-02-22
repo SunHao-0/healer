@@ -1,0 +1,3 @@
+*.c linguist-detectable=false
+*.fots linguist-detectable=false
+*.pest linguist-detectable=false
