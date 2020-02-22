@@ -10,16 +10,10 @@ use std::process::exit;
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
+#[allow(clippy::unreadable_literal)]
+#[allow(clippy::redundant_static_lifetimes)]
+#[allow(clippy::transmute_ptr_to_ptr)]
 mod bind_unix;
-
-/*
- * struct Picoc
- * void PicocParse(Picoc *pc, const char *FileName, const char *Source, int SourceLen, int RunIt, int CleanupNow, int CleanupSource, int EnableDebugger);
- * void PicocInitialise(Picoc *pc, int StackSize);
- * void PicocCleanup(Picoc *pc);
- * void PicocIncludeAllSystemHeaders(Picoc *pc);
- * #define PicocPlatformSetExitPoint(pc) setjmp((pc)->PicocExitBuf)
- * */
 
 #[derive(Default)]
 pub struct Picoc(bind_unix::Picoc);

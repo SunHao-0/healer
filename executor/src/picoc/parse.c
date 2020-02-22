@@ -907,11 +907,9 @@ void PicocParse(Picoc *pc, const char *FileName, const char *Source, int SourceL
 // A wrapper of picoc parse, this call doesn't own any resource.
 // if any error occurs, return -1.
 int PicocExecute(Picoc *pc, const char *FileName, const char *Source, int SourceLen){
-
     if (PicocPlatformSetExitPoint(pc)){
         return -1;
     }
-
     PicocParse(pc, FileName, Source, SourceLen,1,0,0,1);
     return 0;
 }

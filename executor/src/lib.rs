@@ -8,14 +8,14 @@ use std::io::{Read, Write};
 use std::process::exit;
 
 #[macro_use]
-pub mod utils;
+mod utils;
 mod bind;
 pub mod cover;
 pub mod exec;
 pub mod picoc;
-pub mod transfer;
+mod transfer;
 
-pub use exec::{Block, Error, ExecResult};
+pub use exec::{Error, ExecResult};
 
 /// Read prog from conn, translate by target, run the translated test program.
 pub fn exec_loop<T: Read + Write>(_t: Target, mut conn: T) {
