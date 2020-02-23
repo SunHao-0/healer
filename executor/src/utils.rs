@@ -18,7 +18,7 @@ pub fn event() -> (Notifier, Waiter) {
     let ef = eventfd(0, EfdFlags::EFD_SEMAPHORE)
         .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create event fd: {}", e));
     let ef = Rc::new(ef);
-    (Notifier { fd: ef.clone() }, Waiter { fd: ef.clone() })
+    (Notifier { fd: ef.clone() }, Waiter { fd: ef })
 }
 
 pub struct Notifier {
