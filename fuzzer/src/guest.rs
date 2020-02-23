@@ -4,10 +4,12 @@ use crate::Config;
 use bytes::BytesMut;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use os_pipe::{pipe, PipeReader, PipeWriter};
+use serde::export::Formatter;
 use std::collections::HashMap;
+use std::fmt;
 use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 
@@ -129,28 +131,50 @@ impl Guest {
 }
 
 impl Guest {
+    /// Boot guest or panic
     pub async fn boot(&mut self) {
         match self {
             Guest::LinuxQemu(ref mut guest) => guest.boot().await,
         }
     }
 
+    /// Judge if guest is  still alive
     pub async fn is_alive(&self) -> bool {
         match self {
             Guest::LinuxQemu(ref guest) => guest.is_alive().await,
         }
     }
 
+    /// Run command on guest,return handle or crash
     pub async fn run_cmd(&self, app: &App) -> Child {
         match self {
             Guest::LinuxQemu(ref guest) => guest.run_cmd(app).await,
         }
     }
 
-    pub async fn try_collect_crash(&mut self) -> Option<String> {
+    /// Try collect crash info guest, this could be none sometimes
+    pub async fn try_collect_crash(&mut self) -> Option<Crash> {
         match self {
             Guest::LinuxQemu(ref mut guest) => guest.try_collect_crash().await,
         }
+    }
+
+    /// Copy file from host to guest, return path in guest or crash
+    pub async fn copy<T: AsRef<Path>>(&self, path: T) -> PathBuf {
+        match self {
+            Guest::LinuxQemu(ref guest) => guest.copy(path).await,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Crash {
+    inner: String,
+}
+
+impl fmt::Display for Crash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.inner)
     }
 }
 
@@ -277,17 +301,8 @@ impl LinuxQemu {
         assert!(self.handle.is_some());
 
         let mut app = app.clone();
-        let bin = PathBuf::from(app.bin);
-        scp(&self.key, &self.user, &self.addr, self.port, &bin).await;
-
-        app.bin = format!(
-            "~/{}",
-            bin.file_name()
-                .unwrap_or_else(|| exits!(exitcode::DATAERR, "Bad app:{:?}", bin))
-                .to_str()
-                .unwrap()
-        );
-
+        let bin = self.copy(PathBuf::from(&app.bin)).await;
+        app.bin = String::from(bin.to_str().unwrap());
         let mut app = ssh_app(&self.key, &self.user, &self.addr, self.port, app).into_cmd();
         app.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -297,7 +312,40 @@ impl LinuxQemu {
             .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e))
     }
 
-    async fn try_collect_crash(&mut self) -> Option<String> {
+    pub async fn copy<T: AsRef<Path>>(&self, path: T) -> PathBuf {
+        let path = path.as_ref();
+        println!("{:?}", path);
+
+        assert!(path.is_file());
+
+        let file_name = path.file_name().unwrap().to_str().unwrap();
+        let guest_path = PathBuf::from(format!("~/{}", file_name));
+
+        let scp = SCP
+            .clone()
+            .arg(Arg::new_opt("-P", OptVal::normal(&self.port.to_string())))
+            .arg(Arg::new_opt("-i", OptVal::normal(&self.key)))
+            .arg(Arg::new_flag(path.to_str().unwrap()))
+            .arg(Arg::Flag(format!(
+                "{}@{}:{}",
+                self.user,
+                self.addr,
+                guest_path.display()
+            )));
+
+        let output = scp
+            .into_cmd()
+            .output()
+            .await
+            .unwrap_or_else(|e| panic!("Failed to spawn:{}", e));
+
+        if !output.status.success() {
+            panic!(String::from_utf8(output.stderr).unwrap());
+        }
+        guest_path
+    }
+
+    async fn try_collect_crash(&mut self) -> Option<Crash> {
         assert!(self.rp.is_some());
         match timeout(Duration::new(2, 0), self.handle.as_mut().unwrap()).await {
             Err(_e) => None,
@@ -310,7 +358,7 @@ impl LinuxQemu {
                     .read_to_string(&mut crash_info)
                     .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to read pipe of qemu:{}", e));
                 self.rp = None;
-                Some(crash_info)
+                Some(Crash { inner: crash_info })
             }
         }
     }
@@ -363,25 +411,6 @@ fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
         ssh = ssh.arg(Arg::Flag(app_arg));
     }
     ssh
-}
-
-async fn scp(key: &str, user: &str, addr: &str, port: u16, path: &PathBuf) {
-    let scp = SCP
-        .clone()
-        .arg(Arg::new_opt("-P", OptVal::normal(&port.to_string())))
-        .arg(Arg::new_opt("-i", OptVal::normal(key)))
-        .arg(Arg::new_flag(path.as_path().to_str().unwrap()))
-        .arg(Arg::Flag(format!("{}@{}:~/", user, addr)));
-
-    let output = scp
-        .into_cmd()
-        .output()
-        .await
-        .unwrap_or_else(|e| panic!("Failed to spawn:{}", e));
-
-    if !output.status.success() {
-        panic!(String::from_utf8(output.stderr).unwrap())
-    }
 }
 
 fn long_pipe() -> (PipeReader, PipeWriter) {
