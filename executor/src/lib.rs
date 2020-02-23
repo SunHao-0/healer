@@ -13,7 +13,7 @@ mod bind;
 pub mod cover;
 pub mod exec;
 pub mod picoc;
-mod transfer;
+pub mod transfer;
 
 pub use exec::{Error, ExecResult};
 
