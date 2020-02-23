@@ -1,3 +1,4 @@
+use executor::cover;
 use executor::picoc::Picoc;
 
 fn main() {

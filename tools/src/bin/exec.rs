@@ -1,8 +1,7 @@
 use core::prog::Prog;
-use executor::exec::exec;
+use executor::exec::fork_exec;
 use executor::exec::ExecResult;
 use std::fs::read;
-use std::io::stdout;
 use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
@@ -30,23 +29,22 @@ fn main() {
         exit(exitcode::DATAERR)
     });
 
-    exec(&p, &target, &mut stdout())
-    // let len = p.len();
-    // match fork_exec(p, &target) {
-    //     ExecResult::Ok(covs) => {
-    //         let mut total = 0;
-    //         let mut each = Vec::new();
-    //         for c in covs.iter() {
-    //             total += c.len();
-    //             each.push(c.len());
-    //         }
-    //
-    //         println!("Prog len:{},Total pc:{},Executed:{:?}", len, total, each);
-    //         exit(exitcode::OK)
-    //     }
-    //     ExecResult::Err(e) => {
-    //         eprintln!("Error: {}", e);
-    //         exit(exitcode::SOFTWARE)
-    //     }
-    // }
+    let len = p.len();
+    match fork_exec(p, &target) {
+        ExecResult::Ok(covs) => {
+            let mut total = 0;
+            let mut each = Vec::new();
+            for c in covs.iter() {
+                total += c.len();
+                each.push(c.len());
+            }
+
+            println!("Prog len:{},Total pc:{},Executed:{:?}", len, total, each);
+            exit(exitcode::OK)
+        }
+        ExecResult::Err(e) => {
+            eprintln!("Error: {}", e);
+            exit(exitcode::SOFTWARE)
+        }
+    }
 }
