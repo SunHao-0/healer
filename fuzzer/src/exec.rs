@@ -1,117 +1,131 @@
+use crate::guest;
+use crate::guest::{Crash, Guest};
+use crate::utils::cli::{App, Arg, OptVal};
 use crate::Config;
 use core::prog::Prog;
+use executor::transfer::{async_recv_result, async_send};
 use executor::ExecResult;
 use std::path::PathBuf;
+use std::process::exit;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
+use tokio::sync::oneshot;
 
 // config for executor
 #[derive(Debug, Deserialize)]
 pub struct ExecutorConf {
     pub path: PathBuf,
 }
-#[allow(dead_code)]
+
 pub struct Executor {
-    _handle: Child,
-    //  stream: TcpStream,
+    inner: ExecutorImpl,
+}
+
+enum ExecutorImpl {
+    Linux(LinuxExecutor),
 }
 
 impl Executor {
-    pub fn new(_cfg: &Config) -> Self {
-        todo!()
+    pub fn new(cfg: &Config) -> Self {
+        Self {
+            inner: ExecutorImpl::Linux(LinuxExecutor::new(cfg)),
+        }
     }
 
-    pub fn start(&mut self) {
-        todo!()
+    pub async fn start(&mut self) {
+        match self.inner {
+            ExecutorImpl::Linux(ref mut e) => e.start().await,
+        }
     }
 
-    pub fn exec(&mut self, _p: &Prog) -> Result<ExecResult, Crash> {
-        todo!()
+    pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
+        match self.inner {
+            ExecutorImpl::Linux(ref mut e) => e.exec(p).await,
+        }
     }
 }
 
-pub struct Crash;
+struct LinuxExecutor {
+    guest: Guest,
+    port: u16,
+    exec_handle: Option<Child>,
+    conn: Option<TcpStream>,
 
-//
-//pub async fn startup(conf: &Config, qemu_port: u16) -> Executor {
-//    scp(
-//        &conf.ssh.key_path,
-//        &conf.ssh.user,
-//        "localhost",
-//        qemu_port,
-//        &conf.executor.path,
-//    )
-//    .await;
-//
-//    //    let executor = App::new("./executor");
-//    let handle = ssh_run(
-//        &conf.ssh.key_path,
-//        &conf.ssh.user,
-//        "localhost",
-//        qemu_port,
-//        App::new("./executor"),
-//    );
-//
-//    Executor {
-//        _handle: handle,
-//        //    stream,
-//    }
-//}
-//
-//impl Executor {
-//    pub fn exec(&mut self, p: &Prog) -> ExecResult {
-//        exec(p)
-//    }
+    executor_bin_path: PathBuf,
+    target_path: PathBuf,
+}
 
-//    #[allow(dead_code)]
-//    async fn send_prog(&mut self, p: &Prog) {
-//        let mut bin = bincode::serialize(p).unwrap();
-//        bin.shrink_to_fit();
-//
-//        self.stream.write_u32(bin.len() as u32).await.unwrap();
-//
-//        println!("Send len:{}", bin.len());
-//        self.stream.write_all(&bin).await.unwrap();
-//
-//        println!("Send prog:{}", p.gid);
-//    }
-//    #[allow(dead_code)]
-//    async fn recv_result(&mut self) -> ExecResult {
-//        let len = self.stream.read_u32().await.unwrap();
-//        // let stdout = self.0.stdout.as_mut().unwrap();
-//        //        read_exact(&mut self.stream, &mut len).await;
-//        //        let len = u32::from_be_bytes(len);
-//
-//        // let len = self.0.stdout.as_mut().unwrap().read_u16().await.unwrap();
-//        println!("Recv len:{}", len);
-//
-//        let mut buf = BytesMut::with_capacity(len as usize);
-//        unsafe {
-//            buf.set_len(len as usize);
-//        }
-//        println!("buf len:{}", buf.len());
-//        self.stream.read_exact(&mut buf).await.unwrap();
-//
-//        //        read_exact(&mut self.stream, &mut buf[..]).await;
-//
-//        bincode::deserialize(&buf).unwrap()
-//    }
-// }
-//
-//async fn read_exact<T: AsyncRead>(src: &mut T, mut buf: &mut [u8]) {
-//    use tokio::io::ErrorKind;
-//    while !buf.is_empty() {
-//        match src.read(buf).await {
-//            Ok(n) => {
-//                let tmp = buf;
-//                buf = &mut tmp[n..];
-//            }
-//            Err(ref e) if e.kind() == ErrorKind::Interrupted => {}
-//            Err(e) => panic!(e),
-//        }
-//        println!("buf len:{}", buf.len());
-//    }
-//
-//    if !buf.is_empty() {
-//        panic!("failed to fill whole buffer")
-//    }
-//}
+impl LinuxExecutor {
+    pub fn new(cfg: &Config) -> Self {
+        let guest = Guest::new(cfg);
+        let port = port_check::free_local_port()
+            .unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port for executor driver"));
+
+        Self {
+            guest,
+            port,
+            exec_handle: None,
+            conn: None,
+
+            executor_bin_path: cfg.executor.path.clone(),
+            target_path: PathBuf::from(&cfg.fots_bin),
+        }
+    }
+
+    pub async fn start(&mut self) {
+        // handle should be set to kill on drop
+        self.exec_handle = None;
+        self.guest.boot().await;
+
+        let target = self.guest.copy(&self.target_path).await;
+
+        let (tx, rx) = oneshot::channel();
+        let host_addr = format!("{}:{}", guest::LINUX_QEMU_HOST_IP_ADDR, self.port);
+        tokio::spawn(async move {
+            let mut listener = TcpListener::bind(&host_addr).await.unwrap_or_else(|e| {
+                exits!(exitcode::OSERR, "Fail to listen on {}: {}", host_addr, e)
+            });
+            match listener.accept().await {
+                Ok((conn, addr)) => {
+                    println!("Executor driver: connected from: {}", addr);
+                    tx.send(conn).unwrap();
+                }
+                Err(e) => {
+                    eprintln!("Executor driver: fail to get client: {}", e);
+                    exit(exitcode::OSERR);
+                }
+            }
+        });
+
+        let executor = App::new(self.executor_bin_path.to_str().unwrap())
+            .arg(Arg::new_opt("-t", OptVal::normal(target.to_str().unwrap())))
+            .arg(Arg::new_opt(
+                "-a",
+                OptVal::normal(&format!(
+                    "{}:{}",
+                    guest::LINUX_QEMU_USER_NET_HOST_IP_ADDR,
+                    self.port
+                )),
+            ));
+
+        self.exec_handle = Some(self.guest.run_cmd(&executor).await);
+        self.conn = Some(rx.await.unwrap());
+    }
+
+    pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
+        // send must be success
+        assert!(self.conn.is_some());
+        async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
+
+        match async_recv_result(self.conn.as_mut().unwrap()).await {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                if !self.guest.is_alive().await {
+                    Err(self.guest.try_collect_crash().await)
+                } else {
+                    panic!("Connection lost: {}", e)
+                }
+            }
+        }
+    }
+}
