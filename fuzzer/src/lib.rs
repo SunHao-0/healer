@@ -14,8 +14,9 @@ use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::fs::read;
+use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
 use tokio::sync::{broadcast, Barrier};
 use tokio::time;
@@ -128,6 +129,22 @@ async fn load_target(cfg: &Config) -> Target {
     let items = Items::load(&read(&cfg.fots_bin).await.unwrap()).unwrap();
     // split(&mut items, cfg.vm_num)
     Target::from(items)
+}
+
+pub async fn prepare_env() {
+    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
+    use tokio::io::ErrorKind::*;
+
+    if let Err(e) = create_dir_all(format!("{}/crashes", work_dir)).await {
+        if e.kind() != AlreadyExists {
+            exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
+        }
+    }
+    if let Err(e) = create_dir_all(format!("{}/reports", work_dir)).await {
+        if e.kind() != AlreadyExists {
+            exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
+        }
+    }
 }
 
 // fn split(items: &mut Items, n: usize) -> Vec<Target> {

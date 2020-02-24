@@ -1,4 +1,4 @@
-use fuzzer::{fuzz, Config};
+use fuzzer::{fuzz, prepare_env, Config};
 use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
@@ -19,6 +19,8 @@ async fn main() {
             eprintln!("Config Error:{}", e);
             exit(1);
         });
+
+    prepare_env().await;
 
     fuzz(conf).await
 }
