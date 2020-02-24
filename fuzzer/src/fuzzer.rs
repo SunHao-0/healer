@@ -1,36 +1,167 @@
 use crate::corpus::Corpus;
 use crate::exec::Executor;
-use crate::feedback::FeedBack;
+use crate::feedback::{Block, Branch, FeedBack};
+use crate::guest::Crash;
+use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
 use core::analyze::RTable;
 use core::gen::gen;
+use core::minimize::minimize;
 use core::prog::Prog;
 use core::target::Target;
-use executor::ExecResult;
+use executor::{ExecResult, Reason};
 use fots::types::GroupId;
-use std::collections::HashMap;
-use std::process::exit;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
 pub struct Fuzzer {
-    pub target: Target,
+    pub target: Arc<Target>,
     pub rt: HashMap<GroupId, RTable>,
     pub conf: core::gen::Config,
     pub corpus: Arc<Corpus>,
     pub feedback: Arc<FeedBack>,
     pub candidates: Arc<CQueue<Prog>>,
+    pub record: Arc<TestCaseRecord>,
+    pub shutdown: broadcast::Receiver<()>,
 }
 
 impl Fuzzer {
-    pub async fn fuzz(&self, mut executor: Executor) {
+    pub async fn fuzz(mut self, mut executor: Executor) {
+        use broadcast::TryRecvError::*;
         loop {
-            let p = self.get_prog().await;
-            let exec_result = executor.exec(&p).unwrap_or_else(|_e| exit(1));
-
-            if self.has_new_branches(exec_result).await {
-                let p = self.minimize(&p);
-                self.corpus.insert(p).await;
+            match self.shutdown.try_recv() {
+                Ok(_) => {
+                    self.record.psersist().await;
+                    return;
+                }
+                Err(e) => match e {
+                    Empty => (),
+                    Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
+                },
             }
+
+            let p = self.get_prog().await;
+            match executor.exec(&p).await {
+                Ok(exec_result) => match exec_result {
+                    ExecResult::Ok(raw_branches) => {
+                        self.feedback_analyze(p, raw_branches, &mut executor).await
+                    }
+                    ExecResult::Failed(reason) => self.failed_analyze(p, reason).await,
+                },
+                Err(crash) => self.crash_analyze(p, crash.unwrap_or_default()).await,
+            }
+        }
+    }
+
+    async fn failed_analyze(&self, p: Prog, reason: Reason) {
+        self.record.insert_failed(p, reason).await
+    }
+
+    async fn crash_analyze(&self, p: Prog, crash: Crash) {
+        self.record.insert_crash(p, crash).await
+    }
+
+    async fn feedback_analyze(
+        &self,
+        p: Prog,
+        raw_blocks: Vec<Vec<usize>>,
+        executor: &mut Executor,
+    ) {
+        for (call_index, raw_blocks) in raw_blocks.iter().enumerate() {
+            let (new_blocks_1, new_branches_1) = self.feedback_info_of(raw_blocks).await;
+
+            if !new_blocks_1.is_empty() || !new_branches_1.is_empty() {
+                let p = p.sub_prog(call_index);
+                let exec_result = self.exec_no_crash(executor, &p).await;
+
+                if let ExecResult::Ok(raw_blocks) = exec_result {
+                    if raw_blocks.len() == call_index + 1 {
+                        let (new_block_2, new_branches_2) =
+                            self.feedback_info_of(&raw_blocks[call_index]).await;
+
+                        let new_block: HashSet<_> =
+                            new_blocks_1.intersection(&new_block_2).cloned().collect();
+                        let new_branches: HashSet<_> = new_branches_1
+                            .intersection(&new_branches_2)
+                            .cloned()
+                            .collect();
+
+                        if !new_block.is_empty() || !new_branches.is_empty() {
+                            let minimized_p = minimize(&p, |_| true);
+                            let raw_branches = self.exec_no_fail(executor, &minimized_p).await;
+
+                            let mut blocks = Vec::new();
+                            let mut branches = Vec::new();
+                            for raw_branches in raw_branches.iter() {
+                                let (block, branch) = self.cook_raw_block(raw_branches);
+                                blocks.push(block);
+                                branches.push(branch);
+                            }
+                            blocks.shrink_to_fit();
+                            branches.shrink_to_fit();
+
+                            self.record
+                                .insert_executed(
+                                    &minimized_p,
+                                    &blocks[..],
+                                    &branches[..],
+                                    &new_block,
+                                    &new_branches,
+                                )
+                                .await;
+                            self.corpus.insert(minimized_p).await;
+                            self.feedback.merge(new_block, new_branches).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn feedback_info_of(&self, raw_blocks: &[usize]) -> (HashSet<Block>, HashSet<Branch>) {
+        let (blocks, branches) = self.cook_raw_block(raw_blocks);
+        let new_blocks = self.feedback.diff_block(&blocks[..]).await;
+        let new_branches = self.feedback.diff_branch(&branches[..]).await;
+        (new_blocks, new_branches)
+    }
+
+    fn cook_raw_block(&self, raw_blocks: &[usize]) -> (Vec<Block>, Vec<Branch>) {
+        let blocks: Vec<Block> = raw_blocks.iter().map(|b| Block::from(*b)).collect();
+        let branches: Vec<Branch> = blocks
+            .iter()
+            .cloned()
+            .tuple_windows()
+            .map(|(b1, b2)| Branch::from((b1, b2)))
+            .collect();
+        (blocks, branches)
+    }
+
+    async fn exec_no_crash(&self, executor: &mut Executor, p: &Prog) -> ExecResult {
+        match executor.exec(p).await {
+            Ok(exec_result) => exec_result,
+            Err(crash) => exits!(
+                exitcode::SOFTWARE,
+                "Unexpected crash: {}",
+                crash.unwrap_or_default()
+            ),
+        }
+    }
+
+    async fn exec_no_fail(&self, executor: &mut Executor, p: &Prog) -> Vec<Vec<usize>> {
+        match executor.exec(p).await {
+            Ok(exec_result) => match exec_result {
+                ExecResult::Ok(raw_branches) => raw_branches,
+                ExecResult::Failed(reason) => {
+                    exits!(exitcode::SOFTWARE, "Unexpected failed: {}", reason)
+                }
+            },
+            Err(crash) => exits!(
+                exitcode::SOFTWARE,
+                "Unexpected crash: {}",
+                crash.unwrap_or_default()
+            ),
         }
     }
 
@@ -40,19 +171,5 @@ impl Fuzzer {
         } else {
             gen(&self.target, &self.rt, &self.conf)
         }
-    }
-
-    fn minimize(&self, p: &Prog) -> Prog {
-        p.clone()
-    }
-
-    async fn has_new_branches(&self, exec_result: ExecResult) -> bool {
-        let mut has = false;
-        for branches in exec_result.0.into_iter() {
-            if self.feedback.merge(branches).await.is_some() {
-                has = true;
-            }
-        }
-        has
     }
 }

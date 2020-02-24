@@ -8,25 +8,28 @@ use crate::exec::{Executor, ExecutorConf};
 use crate::feedback::FeedBack;
 use crate::fuzzer::Fuzzer;
 use crate::guest::{GuestConf, QemuConf, SSHConf};
-use crate::utils::process::Handle;
+use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
-use crate::utils::split::Split;
 use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
 use std::sync::Arc;
 use tokio::fs::read;
-use tokio::sync::Barrier;
+use tokio::signal::ctrl_c;
+use tokio::sync::{broadcast, Barrier};
 use tokio::time;
 
 #[macro_use]
 pub mod utils;
 pub mod corpus;
 pub mod exec;
+#[allow(dead_code)]
 pub mod feedback;
 pub mod fuzzer;
 pub mod guest;
+pub mod report;
+pub mod stats;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -44,54 +47,70 @@ pub struct Config {
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
 
-    let (mut targets, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
+    let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
 
+    // shared between multi tasks
+    let target = Arc::new(target);
     let candidates = Arc::new(candidates);
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
+    let record = Arc::new(TestCaseRecord::new(target.clone()));
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
 
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
 
     for i in 0..cfg.vm_num {
-        let target = targets.pop().unwrap();
         let cfg = cfg.clone();
-        println!("Fuzzer{}: Groups {}", i, target.groups.len());
 
-        let fuzzer = Arc::new(Fuzzer {
+        let fuzzer = Fuzzer {
             rt: static_analyze(&target),
+            target: target.clone(),
             conf: Default::default(),
-            corpus: corpus.clone(),
-            feedback: feedback.clone(),
             candidates: candidates.clone(),
 
-            target,
-        });
+            corpus: corpus.clone(),
+            feedback: feedback.clone(),
+            record: record.clone(),
+
+            shutdown: shutdown_tx.subscribe(),
+        };
         let barrier = barrier.clone();
 
         tokio::spawn(async move {
-            let (_qemu, executor) = init(cfg.as_ref()).await;
+            let mut executor = Executor::new(&cfg);
+            println!("Booting kernel, executor ({})...", i);
+            executor.start().await;
             barrier.wait().await;
-            fuzzer.as_ref().fuzz(executor).await;
+            fuzzer.fuzz(executor).await;
         });
     }
 
     barrier.wait().await;
+    tokio::spawn(async move {
+        ctrl_c().await.expect("failed to listen for event");
+        shutdown_tx.send(()).unwrap();
+        eprintln!("Stopping, wait for persisting data...");
+        while shutdown_tx.receiver_count() != 0 {}
+    });
+
     loop {
+        use broadcast::TryRecvError::*;
+        match shutdown_rx.try_recv() {
+            Ok(_) => return,
+            Err(e) => match e {
+                Empty => (),
+                Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
+            },
+        }
         time::delay_for(time::Duration::new(15, 0)).await;
         println!(
-            "Corpus:{} Feedback:{} candidates:{}",
+            "Corpus:{} Bnranches:{} Blocks:{} candidates:{}",
             corpus.len().await,
-            feedback.len().await,
+            feedback.branch_len().await,
+            feedback.block_len().await,
             candidates.len().await
         );
     }
-}
-
-pub async fn init(_cfg: &Config) -> (Handle, Executor) {
-    //    let (qemu, port) = boot(cfg).await;
-    //    let executor = startup(cfg, port).await;
-    //    (qemu, executor)
-    todo!()
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
@@ -105,25 +124,26 @@ async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
     }
 }
 
-async fn load_target(cfg: &Config) -> Vec<Target> {
-    let mut items = Items::load(&read(&cfg.fots_bin).await.unwrap()).unwrap();
-    split(&mut items, cfg.vm_num)
+async fn load_target(cfg: &Config) -> Target {
+    let items = Items::load(&read(&cfg.fots_bin).await.unwrap()).unwrap();
+    // split(&mut items, cfg.vm_num)
+    Target::from(items)
 }
 
-fn split(items: &mut Items, n: usize) -> Vec<Target> {
-    assert!(items.groups.len() > n);
-
-    let mut result = Vec::new();
-    let total = items.groups.len();
-
-    for n in Split::new(total, n) {
-        let sub_groups = items.groups.drain(items.groups.len() - n..);
-        let target = Target::new(Items {
-            types: items.types.clone(),
-            groups: sub_groups.collect(),
-            rules: vec![],
-        });
-        result.push(target);
-    }
-    result
-}
+// fn split(items: &mut Items, n: usize) -> Vec<Target> {
+//     assert!(items.groups.len() > n);
+//
+//     let mut result = Vec::new();
+//     let total = items.groups.len();
+//
+//     for n in Split::new(total, n) {
+//         let sub_groups = items.groups.drain(items.groups.len() - n..);
+//         let target = Target::from(Items {
+//             types: items.types.clone(),
+//             groups: sub_groups.collect(),
+//             rules: vec![],
+//         });
+//         result.push(target);
+//     }
+//     result
+// }

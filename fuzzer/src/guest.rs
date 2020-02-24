@@ -167,9 +167,17 @@ impl Guest {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Crash {
     inner: String,
+}
+
+impl Default for Crash {
+    fn default() -> Self {
+        Crash {
+            inner: String::from("$$"),
+        }
+    }
 }
 
 impl fmt::Display for Crash {
@@ -227,7 +235,7 @@ impl LinuxQemu {
 
         if let Some(ref mut h) = self.handle {
             h.kill()
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill:{}", e));
+                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill running guest:{}", e));
             self.rp = None;
         }
 
@@ -236,7 +244,7 @@ impl LinuxQemu {
             let (rp, wp) = long_pipe();
             let wp2 = wp
                 .try_clone()
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "LinuxQemu: Fail to clone pipe:{}", e));
+                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to clone pipe:{}", e));
             let handle = cmd
                 .stdin(std::process::Stdio::piped())
                 .stdout(wp)
@@ -259,7 +267,7 @@ impl LinuxQemu {
             if retry == MAX_RETRY {
                 handle
                     .kill()
-                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill:{}", e));
+                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill failed guest:{}", e));
                 let mut buf = String::new();
                 rp.read_to_string(&mut buf).unwrap_or_else(|e| {
                     exits!(exitcode::OSERR, "Fail to read to end of pipe:{}", e)
@@ -292,7 +300,7 @@ impl LinuxQemu {
             Err(_) => false,
             Ok(status) => match status {
                 Ok(status) => status.success(),
-                Err(e) => exits!(exitcode::OSERR, "Fail to spawn:{}", e),
+                Err(e) => exits!(exitcode::OSERR, "Fail to spawn detector(ssh:pwd):{}", e),
             },
         }
     }

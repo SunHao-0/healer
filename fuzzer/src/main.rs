@@ -1,5 +1,4 @@
-use fuzzer::guest::Guest;
-use fuzzer::Config;
+use fuzzer::{fuzz, Config};
 use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
@@ -20,9 +19,6 @@ async fn main() {
             eprintln!("Config Error:{}", e);
             exit(1);
         });
-    println!("Booting");
-    let mut g = Guest::new(&conf);
-    g.boot().await;
-    println!("Boot ok");
-    println!("Is alive:{}", g.is_alive().await);
+
+    fuzz(conf).await
 }
