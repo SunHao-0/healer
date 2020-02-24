@@ -20,16 +20,12 @@ pub use exec::{Error, ExecResult};
 /// Read prog from conn, translate by target, run the translated test program.
 pub fn exec_loop<T: Read + Write>(_t: Target, mut conn: T) {
     loop {
-        let p = transfer::recv_prog(&mut conn).unwrap_or_else(|e| {
-            eprintln!("Recving:{}", e);
-            exit(exitcode::DATAERR)
-        });
+        let p = transfer::recv_prog(&mut conn)
+            .unwrap_or_else(|e| exits!(exitcode::SOFTWARE, "Fail to recv:{}", e));
 
         let result = exec::fork_exec(p, &_t);
 
-        transfer::send(&result, &mut conn).unwrap_or_else(|e| {
-            eprintln!("Send {:?}:{}", result, e);
-            exit(exitcode::DATAERR)
-        });
+        transfer::send(&result, &mut conn)
+            .unwrap_or_else(|e| exits!(exitcode::SOFTWARE, "Fail to Send {:?}:{}", result, e));
     }
 }

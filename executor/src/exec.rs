@@ -10,6 +10,7 @@ use core::target::Target;
 use nix::fcntl::{fcntl, FcntlArg};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::signal::{kill, Signal};
+use nix::sys::wait::waitpid;
 use nix::unistd::{dup2, fork, ForkResult, Pid};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -21,11 +22,11 @@ use std::process::exit;
 pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
     // transfer usefull data
     let (mut rp, mut wp) = os_pipe::pipe()
-        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Executor: Fail to pipe : {}", e));
+        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create date pipe : {}", e));
     fcntl(wp.as_raw_fd(), FcntlArg::F_SETPIPE_SZ(1024 * 1024)).unwrap_or_else(|e| {
         exits!(
             exitcode::OSERR,
-            "Fail to set pipe size to {} :{}",
+            "Fail to set buf size for data pipe to {} :{}",
             1024 * 1024,
             e
         )
@@ -33,7 +34,7 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
 
     // collect err msg
     let (mut err_rp, err_wp) = os_pipe::pipe()
-        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Executor: Fail to pipe : {}", e));
+        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create err pipe : {}", e));
     // sync data transfer
     let (notifer, waiter) = event();
 
@@ -43,10 +44,22 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
             drop(err_rp);
             drop(notifer);
 
-            dup2(err_wp.as_raw_fd(), 2)
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to redirect: {}", e));
-            dup2(err_wp.as_raw_fd(), 1)
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to redirect: {}", e));
+            dup2(err_wp.as_raw_fd(), 2).unwrap_or_else(|e| {
+                exits!(
+                    exitcode::OSERR,
+                    "Fail to redirect stderr to {}: {}",
+                    err_wp.as_raw_fd(),
+                    e
+                )
+            });
+            dup2(err_wp.as_raw_fd(), 1).unwrap_or_else(|e| {
+                exits!(
+                    exitcode::OSERR,
+                    "Fail to redirect stdout to {}: {}",
+                    err_wp.as_raw_fd(),
+                    e
+                )
+            });
             drop(err_wp);
             sync_exec(&p, t, &mut wp, waiter);
             exit(exitcode::OK)
@@ -58,7 +71,7 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
 
             watch(child, &mut rp, &mut err_rp, notifer)
         }
-        Err(e) => exits!(exitcode::OSERR, "Executor: Fail to fork: {}", e),
+        Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
     }
 }
 
@@ -78,9 +91,7 @@ fn watch<T: Read + AsRawFd>(
         match poll(&mut fds, 500) {
             Ok(0) => {
                 // timeout
-                kill(child, Some(Signal::SIGKILL))
-                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill: {}", e));
-
+                kill_and_wait(child);
                 return if covs.is_empty() {
                     ExecResult::Err(Error(String::from("Time out")))
                 } else {
@@ -91,8 +102,7 @@ fn watch<T: Read + AsRawFd>(
             Ok(_) => {
                 if let Some(revents) = fds[1].revents() {
                     if !revents.is_empty() {
-                        kill(child, Some(Signal::SIGKILL))
-                            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill: {}", e));
+                        kill_and_wait(child);
 
                         let mut err_msg = Vec::new();
                         err.read_to_end(&mut err_msg).unwrap();
@@ -109,7 +119,7 @@ fn watch<T: Read + AsRawFd>(
                 if let Some(revents) = fds[0].revents() {
                     if revents.contains(PollFlags::POLLIN) {
                         let len = data.read_u32::<NativeEndian>().unwrap_or_else(|e| {
-                            exits!(exitcode::OSERR, "Fail to read len of covs: {}", e)
+                            exits!(exitcode::OSERR, "Fail to read length of covs: {}", e)
                         });
                         let len = len as usize * mem::size_of::<usize>();
                         let mut buf = bytes::BytesMut::with_capacity(len);
@@ -117,7 +127,7 @@ fn watch<T: Read + AsRawFd>(
                             buf.set_len(len);
                         }
                         data.read_exact(&mut buf).unwrap_or_else(|e| {
-                            exits!(exitcode::IOERR, "Fail to read len {} of covs: {}", len, e)
+                            exits!(exitcode::IOERR, "Fail to read covs(len {}): {}", len, e)
                         });
                         notifer.notify();
 
@@ -127,9 +137,28 @@ fn watch<T: Read + AsRawFd>(
                     }
                 }
             }
-            Err(e) => exits!(exitcode::SOFTWARE, "Executor: Fail to poll: {}", e),
+            Err(e) => exits!(exitcode::SOFTWARE, "Fail to poll: {}", e),
         }
     }
+}
+
+fn kill_and_wait(child: Pid) {
+    kill(child, Some(Signal::SIGKILL)).unwrap_or_else(|e| {
+        exits!(
+            exitcode::OSERR,
+            "Fail to kill subprocess(pid {}): {}",
+            child,
+            e
+        )
+    });
+    waitpid(child, None).unwrap_or_else(|e| {
+        exits!(
+            exitcode::OSERR,
+            "Fail to wait subprocess(pid {}) to terminate: {}",
+            child,
+            e
+        )
+    });
 }
 
 pub fn sync_exec<T: Write>(p: &Prog, t: &Target, out: &mut T, waiter: Waiter) {
@@ -149,50 +178,6 @@ pub fn sync_exec<T: Write>(p: &Prog, t: &Target, out: &mut T, waiter: Waiter) {
         }
     }
 }
-
-/// Execute prog call by call, send covs in to anything writeable call by call
-// pub fn exec<T: Write>(p: &Prog, t: &Target, out: &mut T) {
-//     for cov in iter_exec(p, t) {
-//         send_covs(cov, out)
-//     }
-// }
-//
-// pub fn iter_exec<'a>(p: &'a Prog, t: &'a Target) -> IterExec<'a> {
-//     IterExec {
-//         pc: Default::default(),
-//         handle: cover::open(),
-//         p: iter_trans(p, t),
-//         finished: false,
-//     }
-// }
-//
-// struct IterExec<'a> {
-//     pc: Picoc,
-//     handle: CovHandle,
-//     p: IterTranslate<'a>,
-//     finished: bool,
-// }
-//
-// impl<'a> Iterator for IterExec<'a> {
-//     type Item = &[usize];
-//
-//     fn next<'b>(&'b mut self) -> Option<Self::Item> {
-//         if self.finished {
-//             return None;
-//         }
-//         if let Some(stmts) = self.p.next() {
-//             let covs = self.handle.collect(|| {
-//                 let prog = stmts.to_string();
-//                 if !self.pc.execute(prog) {
-//                     self.finished = true;
-//                 }
-//             });
-//             Some(covs)
-//         } else {
-//             None
-//         }
-//     }
-// }
 
 fn send_covs<T: Write>(covs: &[usize], out: &mut T) {
     use byte_slice_cast::*;

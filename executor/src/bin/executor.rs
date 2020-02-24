@@ -34,7 +34,6 @@ fn main() {
         eprintln!("Fail to connect to healer-fuzzer:{}", e);
         exit(exitcode::NOHOST);
     });
-    println!("Started...");
 
     exec_loop(target, conn)
 }
