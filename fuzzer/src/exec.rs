@@ -7,6 +7,7 @@ use executor::transfer::{async_recv_result, async_send};
 use executor::ExecResult;
 use std::path::PathBuf;
 use std::process::exit;
+use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
 use tokio::sync::oneshot;
@@ -77,6 +78,11 @@ impl LinuxExecutor {
         self.exec_handle = None;
         self.guest.boot().await;
 
+        self.start_executer().await
+    }
+
+    pub async fn start_executer(&mut self) {
+        self.exec_handle = None;
         let target = self.guest.copy(&self.target_path).await;
 
         let (tx, rx) = oneshot::channel();
@@ -115,15 +121,31 @@ impl LinuxExecutor {
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
         // send must be success
         assert!(self.conn.is_some());
-        async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
+        loop {
+            async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
 
-        match async_recv_result(self.conn.as_mut().unwrap()).await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                if !self.guest.is_alive().await {
-                    Err(self.guest.try_collect_crash().await)
-                } else {
-                    panic!("Connection lost: {}", e)
+            match async_recv_result(self.conn.as_mut().unwrap()).await {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    if !self.guest.is_alive().await {
+                        return Err(self.guest.try_collect_crash().await);
+                    } else {
+                        let mut handle = self.exec_handle.take().unwrap();
+                        let mut stderr = handle.stderr.take().unwrap();
+                        handle.await.unwrap_or_else(|e| {
+                            exits!(exitcode::OSERR, "Fail to wait executor handle:{}", e)
+                        });
+
+                        let mut err = Vec::new();
+                        stderr.read_to_end(&mut err).await.unwrap();
+                        eprintln!(
+                            "Executor: Connection lost, restarting : {}:\n{}\n",
+                            e,
+                            String::from_utf8(err).unwrap()
+                        );
+                        self.start_executer().await;
+                        continue;
+                    }
                 }
             }
         }
