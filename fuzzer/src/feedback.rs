@@ -65,13 +65,30 @@ impl FeedBack {
         }
     }
 
-    pub async fn branch_len(&self) -> usize {
-        let b = self.branches.lock().await;
-        b.len()
+    pub async fn is_empty(&self) -> bool {
+        let (block_empty, branch_empty) = tokio::join!(
+            async {
+                let inner = self.blocks.lock().await;
+                inner.is_empty()
+            },
+            async {
+                let inner = self.branches.lock().await;
+                inner.is_empty()
+            }
+        );
+        block_empty || branch_empty
     }
 
-    pub async fn block_len(&self) -> usize {
-        let b = self.blocks.lock().await;
-        b.len()
+    pub async fn len(&self) -> (usize, usize) {
+        tokio::join!(
+            async {
+                let inner = self.blocks.lock().await;
+                inner.len()
+            },
+            async {
+                let inner = self.branches.lock().await;
+                inner.len()
+            }
+        )
     }
 }
