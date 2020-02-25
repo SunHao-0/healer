@@ -2,6 +2,7 @@ use crate::feedback::{Block, Branch};
 use crate::guest::Crash;
 use chrono::prelude::*;
 use chrono::DateTime;
+use circular_queue::CircularQueue;
 use core::c::{translate, Script};
 use core::prog::Prog;
 use core::target::Target;
@@ -13,24 +14,27 @@ use tokio::fs::write;
 use tokio::sync::Mutex;
 
 pub struct TestCaseRecord {
-    normal: Mutex<Vec<ExecutedCase>>,
-    failed: Mutex<Vec<FailedCase>>,
+    normal: Mutex<CircularQueue<ExecutedCase>>,
+    failed: Mutex<CircularQueue<FailedCase>>,
+    crash: Mutex<CircularQueue<CrashedCase>>,
+
     target: Arc<Target>,
     id_n: Mutex<usize>,
+    work_dir: String,
 
     normal_num: Mutex<usize>,
     failed_num: Mutex<usize>,
     crashed_num: Mutex<usize>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct TestCase {
     id: usize,
     title: String,
     test_time: DateTime<Local>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ExecutedCase {
     meta: TestCase,
     /// execute test program
@@ -45,27 +49,31 @@ struct ExecutedCase {
     new_block: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct FailedCase {
     meta: TestCase,
     p: String,
     reason: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct CrashedCase {
     meta: TestCase,
     p: String,
+    repo: bool,
     crash: Crash,
 }
 
 impl TestCaseRecord {
-    pub fn new(t: Arc<Target>) -> Self {
+    pub fn new(t: Arc<Target>, work_dir: String) -> Self {
         Self {
-            normal: Mutex::new(Vec::new()),
-            failed: Mutex::new(Vec::new()),
+            normal: Mutex::new(CircularQueue::with_capacity(1024 * 64)),
+            failed: Mutex::new(CircularQueue::with_capacity(1024 * 64)),
+            crash: Mutex::new(CircularQueue::with_capacity(1024)),
             target: t,
+
             id_n: Mutex::new(0),
+            work_dir,
             normal_num: Mutex::new(0),
             failed_num: Mutex::new(0),
             crashed_num: Mutex::new(0),
@@ -105,10 +113,9 @@ impl TestCaseRecord {
             let mut exec_n = self.normal_num.lock().await;
             *exec_n += 1;
         }
-        self.try_persist_normal_case().await;
     }
 
-    pub async fn insert_crash(&self, p: Prog, crash: Crash) {
+    pub async fn insert_crash(&self, p: Prog, crash: Crash, repo: bool) {
         let stmts = translate(&p, &self.target);
         let case = CrashedCase {
             meta: TestCase {
@@ -118,12 +125,19 @@ impl TestCaseRecord {
             },
             p: stmts.to_string(),
             crash,
+            repo,
         };
+
+        self.persist_crash_case(&case).await;
+
+        {
+            let mut crashes = self.crash.lock().await;
+            crashes.push(case);
+        }
         {
             let mut crashed_num = self.crashed_num.lock().await;
             *crashed_num += 1;
         }
-        self.persist_crash_case(case).await
     }
 
     pub async fn insert_failed(&self, p: Prog, reason: Reason) {
@@ -145,28 +159,38 @@ impl TestCaseRecord {
             let mut failed_num = self.failed_num.lock().await;
             *failed_num += 1;
         }
-        self.try_persist_failed_case().await
     }
 
     pub async fn psersist(&self) {
-        tokio::join!(
-            self.try_persist_normal_case(),
-            self.try_persist_failed_case()
-        );
+        tokio::join!(self.persist_normal_case(), self.persist_failed_case());
     }
 
-    async fn try_persist_normal_case(&self) {
-        const MAX_NORMAL_NUM: usize = 256;
-        let mut cases = Vec::new();
-        {
-            let mut normal_cases = self.normal.lock().await;
-            if normal_cases.len() < MAX_NORMAL_NUM {
-                return;
+    pub async fn len(&self) -> (usize, usize, usize) {
+        tokio::join!(
+            async {
+                let normal_num = self.normal_num.lock().await;
+                *normal_num
+            },
+            async {
+                let failed_num = self.failed_num.lock().await;
+                *failed_num
+            },
+            async {
+                let crashed_num = self.crashed_num.lock().await;
+                *crashed_num
             }
-            std::mem::swap(&mut cases, &mut normal_cases);
+        )
+    }
+
+    async fn persist_normal_case(&self) {
+        let cases = self.normal.lock().await;
+        if cases.is_empty() {
+            return;
         }
-        let path = format!("./{}/{}_{}", "reports", "n", Local::now());
-        let report = serde_json::to_string_pretty(&cases).unwrap();
+        let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
+
+        let path = format!("{}/normal_case.json", self.work_dir);
+        let report = serde_json::to_string(&cases).unwrap();
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
@@ -177,18 +201,14 @@ impl TestCaseRecord {
         })
     }
 
-    async fn try_persist_failed_case(&self) {
-        const MAX_FAILED_NUM: usize = 32;
-        let mut cases = Vec::new();
-        {
-            let mut failed_cases = self.failed.lock().await;
-            if failed_cases.len() < MAX_FAILED_NUM {
-                return;
-            }
-            std::mem::swap(&mut cases, &mut failed_cases);
+    async fn persist_failed_case(&self) {
+        let cases = self.failed.lock().await;
+        if cases.is_empty() {
+            return;
         }
-        let path = format!("./{}/{}_{}", "reports", "f", Local::now());
-        let report = serde_json::to_string_pretty(&cases).unwrap();
+        let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
+        let path = format!("{}/failed_case.json", self.work_dir);
+        let report = serde_json::to_string(&cases).unwrap();
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
@@ -199,9 +219,9 @@ impl TestCaseRecord {
         })
     }
 
-    async fn persist_crash_case(&self, case: CrashedCase) {
-        let path = format!("./{}/{}", "crashes", case.meta.title);
-        let crash = serde_json::to_string_pretty(&case).unwrap();
+    async fn persist_crash_case(&self, case: &CrashedCase) {
+        let path = format!("{}/crashes/{}", self.work_dir, &case.meta.title);
+        let crash = serde_json::to_string_pretty(case).unwrap();
         write(&path, crash).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
@@ -215,7 +235,7 @@ impl TestCaseRecord {
     fn title_of(&self, p: &Prog, stmts: &Script) -> String {
         let group = String::from(self.target.group_name_of(p.gid));
         let target_call = stmts.0.last().unwrap().to_string();
-        format!("{}: {}", group, target_call)
+        format!("{}__{}", group, target_call)
     }
 
     async fn next_id(&self) -> usize {
