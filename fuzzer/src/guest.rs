@@ -322,8 +322,6 @@ impl LinuxQemu {
 
     pub async fn copy<T: AsRef<Path>>(&self, path: T) -> PathBuf {
         let path = path.as_ref();
-        println!("{:?}", path);
-
         assert!(path.is_file());
 
         let file_name = path.file_name().unwrap().to_str().unwrap();
