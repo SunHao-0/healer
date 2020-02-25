@@ -24,7 +24,7 @@ impl Corpus {
         inner.is_empty()
     }
 
-    pub async fn dump(self) -> bincode::Result<Vec<u8>> {
+    pub async fn dump(&self) -> bincode::Result<Vec<u8>> {
         let inner = self.inner.lock().await;
         let mut progs = inner
             .iter()
