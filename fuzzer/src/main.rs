@@ -21,6 +21,5 @@ async fn main() {
         });
 
     prepare_env().await;
-
     fuzz(conf).await
 }

@@ -10,16 +10,16 @@ use crate::fuzzer::Fuzzer;
 use crate::guest::{GuestConf, QemuConf, SSHConf};
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
+use circular_queue::CircularQueue;
 use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
 use tokio::sync::{broadcast, Barrier};
-use tokio::time;
+use tokio::time::Duration;
 
 #[macro_use]
 pub mod utils;
@@ -31,6 +31,7 @@ pub mod fuzzer;
 pub mod guest;
 pub mod report;
 pub mod stats;
+use stats::StatSource;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -47,6 +48,7 @@ pub struct Config {
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
+    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
 
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
 
@@ -55,8 +57,8 @@ pub async fn fuzz(cfg: Config) {
     let candidates = Arc::new(candidates);
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
-    let record = Arc::new(TestCaseRecord::new(target.clone()));
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
+    let record = Arc::new(TestCaseRecord::new(target.clone(), work_dir.clone()));
+    let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
 
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
 
@@ -74,7 +76,9 @@ pub async fn fuzz(cfg: Config) {
             record: record.clone(),
 
             shutdown: shutdown_tx.subscribe(),
+            work_dir: work_dir.clone(),
         };
+
         let barrier = barrier.clone();
 
         tokio::spawn(async move {
@@ -93,25 +97,38 @@ pub async fn fuzz(cfg: Config) {
         eprintln!("Stopping, wait for persisting data...");
         while shutdown_tx.receiver_count() != 0 {}
     });
+    let mut sampler = stats::Sampler {
+        source: StatSource {
+            corpus,
+            feedback,
+            candidates,
+            record,
+        },
+        interval: Duration::new(15, 0),
+        stats: CircularQueue::with_capacity(1024),
+        shutdown: shutdown_rx,
+        work_dir,
+    };
+    sampler.sample().await;
 
-    loop {
-        use broadcast::TryRecvError::*;
-        match shutdown_rx.try_recv() {
-            Ok(_) => return,
-            Err(e) => match e {
-                Empty => (),
-                Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
-            },
-        }
-        time::delay_for(time::Duration::new(15, 0)).await;
-        println!(
-            "Corpus:{} Bnranches:{} Blocks:{} candidates:{}",
-            corpus.len().await,
-            feedback.branch_len().await,
-            feedback.block_len().await,
-            candidates.len().await
-        );
-    }
+    // loop {
+    //     use broadcast::TryRecvError::*;
+    //     match shutdown_rx.try_recv() {
+    //         Ok(_) => return,
+    //         Err(e) => match e {
+    //             Empty => (),
+    //             Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
+    //         },
+    //     }
+    //     time::delay_for(time::Duration::new(15, 0)).await;
+    //     println!(
+    //         "Corpus:{} Bnranches:{} Blocks:{} candidates:{}",
+    //         corpus.len().await,
+    //         feedback.branch_len().await,
+    //         feedback.block_len().await,
+    //         candidates.len().await
+    //     );
+    // }
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {

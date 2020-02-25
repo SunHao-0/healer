@@ -14,12 +14,15 @@ use fots::types::GroupId;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tokio::fs::write;
 use tokio::sync::broadcast;
 
 pub struct Fuzzer {
     pub target: Arc<Target>,
     pub rt: HashMap<GroupId, RTable>,
     pub conf: core::gen::Config,
+    pub work_dir: String,
+
     pub corpus: Arc<Corpus>,
     pub feedback: Arc<FeedBack>,
     pub candidates: Arc<CQueue<Prog>>,
@@ -33,7 +36,7 @@ impl Fuzzer {
         loop {
             match self.shutdown.try_recv() {
                 Ok(_) => {
-                    self.record.psersist().await;
+                    self.peresist().await;
                     return;
                 }
                 Err(e) => match e {
@@ -55,12 +58,31 @@ impl Fuzzer {
         }
     }
 
+    async fn peresist(self) {
+        // self.corpus.dump()
+        let corpus_path = format!("{}/corpus", self.work_dir);
+        let corpus = self
+            .corpus
+            .dump()
+            .await
+            .unwrap_or_else(|e| exits!(exitcode::DATAERR, "Fail to dump corpus: {}", e));
+        write(&corpus_path, corpus).await.unwrap_or_else(|e| {
+            exits!(
+                exitcode::IOERR,
+                "Fail to persist corpus to {} : {}",
+                corpus_path,
+                e
+            )
+        });
+        self.record.psersist().await;
+    }
+
     async fn failed_analyze(&self, p: Prog, reason: Reason) {
         self.record.insert_failed(p, reason).await
     }
 
     async fn crash_analyze(&self, p: Prog, crash: Crash) {
-        self.record.insert_crash(p, crash).await
+        self.record.insert_crash(p, crash, false).await
     }
 
     async fn feedback_analyze(
@@ -99,6 +121,7 @@ impl Fuzzer {
                                 blocks.push(block);
                                 branches.push(branch);
                             }
+
                             blocks.shrink_to_fit();
                             branches.shrink_to_fit();
 
@@ -127,14 +150,22 @@ impl Fuzzer {
         (new_blocks, new_branches)
     }
 
+    /// calculate branch, return depuped blocks and branches
     fn cook_raw_block(&self, raw_blocks: &[usize]) -> (Vec<Block>, Vec<Branch>) {
-        let blocks: Vec<Block> = raw_blocks.iter().map(|b| Block::from(*b)).collect();
-        let branches: Vec<Branch> = blocks
+        let mut blocks: Vec<Block> = raw_blocks.iter().map(|b| Block::from(*b)).collect();
+        let mut branches: Vec<Branch> = blocks
             .iter()
             .cloned()
             .tuple_windows()
             .map(|(b1, b2)| Branch::from((b1, b2)))
             .collect();
+
+        blocks.sort();
+        blocks.dedup();
+        blocks.shrink_to_fit();
+        branches.sort();
+        branches.dedup();
+        branches.shrink_to_fit();
         (blocks, branches)
     }
 
