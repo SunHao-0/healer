@@ -5,13 +5,13 @@
 
 
 
-void StdintSetupFunc(Picoc *pc)
+void TypesSetupFunc(Picoc *pc)
 {
 }
 
 
 
-const char StdintDefs [] = " typedef signed char __int8_t; \
+const char TypesDefs [] = " typedef signed char __int8_t; \
 typedef unsigned char __uint8_t; \
 typedef signed short __int16_t; \
 typedef unsigned short __uint16_t; \
@@ -54,7 +54,14 @@ typedef unsigned long uint_fast32_t; \
 typedef unsigned long uint_fast64_t; \
 typedef long intptr_t; \
 typedef unsigned long uintptr_t; \
-typedef struct A { int32_t a;};\
+typedef int uid_t; \
+typedef int gid_t; \
+typedef int pid_t; \
+typedef int off_t; \
+typedef int size_t; \
+typedef int ssize_t; \
+typedef int useconds_t; \
+typedef unsigned int mode_t;\
 ";
 
 #endif

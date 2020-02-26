@@ -326,8 +326,7 @@ static int EXDEVValue = EXDEV;
 
 
 /* creates various system-dependent definitions */
-void StdErrnoSetupFunc(Picoc *pc)
-{
+void StdErrnoSetupFunc(Picoc *pc) {
     /* defines */
 #ifdef EACCES
     VariableDefinePlatformVar(pc, NULL, "EACCES", &pc->IntType, (union AnyValue *)&EACCESValue, FALSE);
@@ -649,7 +648,7 @@ void StdErrnoSetupFunc(Picoc *pc)
     VariableDefinePlatformVar(pc, NULL, "EXDEV", &pc->IntType, (union AnyValue *)&EXDEVValue, FALSE);
 #endif
 
-    VariableDefinePlatformVar(pc, NULL, "errno", &pc->IntType, (union AnyValue *)&errno, TRUE);
+    VariableDefinePlatformVar(pc, NULL, "errno", &pc->IntType, (union AnyValue *) &errno, TRUE);
 }
 
 #endif /* !BUILTIN_MINI_STDLIB */

@@ -648,13 +648,23 @@ extern const char StdboolDefs[];
 void StdboolSetupFunc(Picoc *pc);
 
 /* unistd.c */
-extern const char UnistdDefs[];
+// extern const char UnistdDefs[];
 extern struct LibraryFunction UnistdFunctions[];
 void UnistdSetupFunc(Picoc *pc);
 
 /*stdint.c*/
-extern const char StdintDefs[];
-void StdintSetupFunc(Picoc *pc);
+extern const char TypesDefs[];
+void TypesSetupFunc(Picoc *pc);
 
+
+/*fcntl.c*/
+// extern const char FcntlDefs[];
+extern struct LibraryFunction FcntlFunctions[];
+void FcntlSetupFunc(Picoc* pc);
+
+
+/*sys.c*/
+extern struct LibraryFunction SysFunctions[];
+void SysSetupFunc(Picoc *pc);
 
 #endif /* INTERPRETER_H */
