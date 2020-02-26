@@ -2,6 +2,8 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate serde;
+#[macro_use]
+extern crate log;
 
 use crate::corpus::Corpus;
 use crate::exec::{Executor, ExecutorConf};
@@ -15,6 +17,7 @@ use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
+use std::process;
 use std::sync::Arc;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
@@ -31,6 +34,7 @@ pub mod fuzzer;
 pub mod guest;
 pub mod report;
 pub mod stats;
+
 use stats::StatSource;
 
 #[derive(Debug, Deserialize)]
@@ -49,8 +53,8 @@ pub struct Config {
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
     let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
-
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
+    info!("Corpus: {}", candidates.len().await);
 
     // shared between multi tasks
     let target = Arc::new(target);
@@ -62,7 +66,13 @@ pub async fn fuzz(cfg: Config) {
 
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
 
-    for i in 0..cfg.vm_num {
+    info!(
+        "Booting {} {}/{} on {} ...",
+        cfg.vm_num, cfg.guest.os, cfg.guest.arch, cfg.guest.platform
+    );
+    let now = std::time::Instant::now();
+
+    for _ in 0..cfg.vm_num {
         let cfg = cfg.clone();
 
         let fuzzer = Fuzzer {
@@ -83,7 +93,6 @@ pub async fn fuzz(cfg: Config) {
 
         tokio::spawn(async move {
             let mut executor = Executor::new(&cfg);
-            println!("Booting kernel, executor ({})...", i);
             executor.start().await;
             barrier.wait().await;
             fuzzer.fuzz(executor).await;
@@ -91,10 +100,12 @@ pub async fn fuzz(cfg: Config) {
     }
 
     barrier.wait().await;
+    info!("Boot finished, cost {}s.", now.elapsed().as_secs());
+
     tokio::spawn(async move {
         ctrl_c().await.expect("failed to listen for event");
         shutdown_tx.send(()).unwrap();
-        eprintln!("Stopping, wait for persisting data...");
+        warn!("Stopping, persisting data...");
         while shutdown_tx.receiver_count() != 0 {}
     });
     let mut sampler = stats::Sampler {
@@ -110,25 +121,6 @@ pub async fn fuzz(cfg: Config) {
         work_dir,
     };
     sampler.sample().await;
-
-    // loop {
-    //     use broadcast::TryRecvError::*;
-    //     match shutdown_rx.try_recv() {
-    //         Ok(_) => return,
-    //         Err(e) => match e {
-    //             Empty => (),
-    //             Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
-    //         },
-    //     }
-    //     time::delay_for(time::Duration::new(15, 0)).await;
-    //     println!(
-    //         "Corpus:{} Bnranches:{} Blocks:{} candidates:{}",
-    //         corpus.len().await,
-    //         feedback.branch_len().await,
-    //         feedback.block_len().await,
-    //         candidates.len().await
-    //     );
-    // }
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
@@ -149,15 +141,18 @@ async fn load_target(cfg: &Config) -> Target {
 }
 
 pub async fn prepare_env() {
+    pretty_env_logger::init_timed();
+    let pid = process::id();
+    std::env::set_var("HEALER_FUZZER_PID", format!("{}", pid));
+    info!("Pid: {}", pid);
+
     let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
+    std::env::set_var("HEALER_WORK_DIR", &work_dir);
+    info!("Work-dir: {}", work_dir);
+
     use tokio::io::ErrorKind::*;
 
     if let Err(e) = create_dir_all(format!("{}/crashes", work_dir)).await {
-        if e.kind() != AlreadyExists {
-            exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
-        }
-    }
-    if let Err(e) = create_dir_all(format!("{}/reports", work_dir)).await {
         if e.kind() != AlreadyExists {
             exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
         }

@@ -71,7 +71,7 @@ impl Sampler {
                 crashed_case,
             };
             self.stats.push(stat);
-            println!("corpus {},blocks {},branches {},candidates {},normal_case {},failed_case {},crashed_case {}", corpus, blocks, branches, candidates, normal_case, failed_case, crashed_case);
+            info!("corpus {},blocks {},branches {},candidates {},normal_case {},failed_case {},crashed_case {}", corpus, blocks, branches, candidates, normal_case, failed_case, crashed_case);
         }
     }
 

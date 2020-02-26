@@ -93,7 +93,7 @@ impl LinuxExecutor {
             });
             match listener.accept().await {
                 Ok((conn, addr)) => {
-                    println!("Executor driver: connected from: {}", addr);
+                    info!("connected from: {}", addr);
                     tx.send(conn).unwrap();
                 }
                 Err(e) => {
@@ -138,7 +138,7 @@ impl LinuxExecutor {
 
                         let mut err = Vec::new();
                         stderr.read_to_end(&mut err).await.unwrap();
-                        eprintln!(
+                        warn!(
                             "Executor: Connection lost, restarting : {}:\n{}\n",
                             e,
                             String::from_utf8(err).unwrap()

@@ -98,11 +98,11 @@ lazy_static! {
 #[derive(Debug, Deserialize)]
 pub struct GuestConf {
     /// Kernel to be tested
-    os: String,
+    pub os: String,
     /// Arch of build kernel
-    arch: String,
+    pub arch: String,
     /// Platform to run kernel, qemu or real env
-    platform: String,
+    pub platform: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,7 +167,7 @@ impl Guest {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize,Serialize)]
 pub struct Crash {
     inner: String,
 }

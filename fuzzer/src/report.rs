@@ -27,41 +27,41 @@ pub struct TestCaseRecord {
     crashed_num: Mutex<usize>,
 }
 
-#[derive(Serialize, Clone)]
-struct TestCase {
-    id: usize,
-    title: String,
-    test_time: DateTime<Local>,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct TestCase {
+    pub id: usize,
+    pub title: String,
+    pub test_time: DateTime<Local>,
 }
 
-#[derive(Serialize, Clone)]
-struct ExecutedCase {
-    meta: TestCase,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ExecutedCase {
+    pub meta: TestCase,
     /// execute test program
-    p: String,
+    pub p: String,
     /// number of blocks per call
-    block_num: Vec<usize>,
+    pub block_num: Vec<usize>,
     /// number of branchs per call
-    branch_num: Vec<usize>,
+    pub branch_num: Vec<usize>,
     /// new branch of last call
-    new_branch: usize,
+    pub new_branch: usize,
     /// new block of last call
-    new_block: usize,
+    pub new_block: usize,
 }
 
-#[derive(Serialize, Clone)]
-struct FailedCase {
-    meta: TestCase,
-    p: String,
-    reason: String,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct FailedCase {
+    pub meta: TestCase,
+    pub p: String,
+    pub reason: String,
 }
 
-#[derive(Serialize, Clone)]
-struct CrashedCase {
-    meta: TestCase,
-    p: String,
-    repo: bool,
-    crash: Crash,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CrashedCase {
+    pub meta: TestCase,
+    pub p: String,
+    pub repo: bool,
+    pub crash: Crash,
 }
 
 impl TestCaseRecord {
@@ -190,7 +190,7 @@ impl TestCaseRecord {
         let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
 
         let path = format!("{}/normal_case.json", self.work_dir);
-        let report = serde_json::to_string(&cases).unwrap();
+        let report = serde_json::to_string_pretty(&cases).unwrap();
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
@@ -208,7 +208,7 @@ impl TestCaseRecord {
         }
         let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
         let path = format!("{}/failed_case.json", self.work_dir);
-        let report = serde_json::to_string(&cases).unwrap();
+        let report = serde_json::to_string_pretty(&cases).unwrap();
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
