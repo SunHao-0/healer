@@ -53,6 +53,14 @@ impl Prog {
         }
         self.calls.shrink_to_fit();
     }
+
+    /// Return prog that contains calls from 0..=index
+    pub fn sub_prog(&self, index: usize) -> Prog {
+        Self {
+            gid: self.gid,
+            calls: Vec::from(&self.calls[..=index]),
+        }
+    }
 }
 
 impl Index<ArgIndex> for Prog {

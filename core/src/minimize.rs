@@ -1,8 +1,10 @@
 use crate::prog::Prog;
 
-pub fn minimize<F>(_p: &Prog, _eq: F) -> Prog
+// TODO
+pub fn minimize<F>(p: &Prog, eq: F) -> Prog
 where
-    F: Fn(&Prog) -> bool,
+    F: FnOnce(&Prog) -> bool,
 {
-    todo!()
+    eq(p);
+    p.clone()
 }

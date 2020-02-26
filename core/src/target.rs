@@ -103,6 +103,10 @@ impl Target {
     pub fn get_len_path_unchecked(&self, tid: TypeId) -> &str {
         self.len_info_of(tid).unwrap()
     }
+
+    pub fn group_name_of(&self, gid: GroupId) -> &str {
+        &self.groups[&gid].ident
+    }
 }
 
 // TODO
