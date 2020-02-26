@@ -5,6 +5,7 @@ use crate::guest::Crash;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
 use core::analyze::RTable;
+use core::c::translate;
 use core::gen::gen;
 use core::minimize::minimize;
 use core::prog::Prog;
@@ -53,13 +54,15 @@ impl Fuzzer {
                     }
                     ExecResult::Failed(reason) => self.failed_analyze(p, reason).await,
                 },
-                Err(crash) => self.crash_analyze(p, crash.unwrap_or_default()).await,
+                Err(crash) => {
+                    self.crash_analyze(p, crash.unwrap_or_default(), &mut executor)
+                        .await
+                }
             }
         }
     }
 
     async fn peresist(self) {
-        // self.corpus.dump()
         let corpus_path = format!("{}/corpus", self.work_dir);
         let corpus = self
             .corpus
@@ -81,8 +84,28 @@ impl Fuzzer {
         self.record.insert_failed(p, reason).await
     }
 
-    async fn crash_analyze(&self, p: Prog, crash: Crash) {
-        self.record.insert_crash(p, crash, false).await
+    async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
+        warn!("Trying to repo crash:{}", crash);
+        let stmts = translate(&p, &self.target);
+        warn!("Caused by:\n{}", stmts.to_string());
+
+        executor.start().await;
+        match executor.exec(&p).await {
+            Ok(exec_result) => {
+                match exec_result {
+                    ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
+                    ExecResult::Failed(reason) => warn!("Repo failto, executed failed: {}", reason),
+                };
+                self.record.insert_crash(p, crash, false).await
+            }
+            Err(repo_crash) => {
+                self.record
+                    .insert_crash(p, repo_crash.unwrap_or(crash), true)
+                    .await;
+                warn!("Repo successfully, restarting guest ...");
+                executor.start().await;
+            }
+        }
     }
 
     async fn feedback_analyze(
