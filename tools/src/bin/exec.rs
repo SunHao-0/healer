@@ -42,7 +42,7 @@ fn main() {
             println!("Prog len:{},Total pc:{},Executed:{:?}", len, total, each);
             exit(exitcode::OK)
         }
-        ExecResult::Err(e) => {
+        ExecResult::Failed(e) => {
             eprintln!("Error: {}", e);
             exit(exitcode::SOFTWARE)
         }
