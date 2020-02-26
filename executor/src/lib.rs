@@ -5,7 +5,6 @@ extern crate nix;
 
 use core::target::Target;
 use std::io::{Read, Write};
-use std::process::exit;
 
 #[macro_use]
 mod utils;
@@ -15,7 +14,7 @@ pub mod exec;
 pub mod picoc;
 pub mod transfer;
 
-pub use exec::{Error, ExecResult};
+pub use exec::{ExecResult, Reason};
 
 /// Read prog from conn, translate by target, run the translated test program.
 pub fn exec_loop<T: Read + Write>(_t: Target, mut conn: T) {

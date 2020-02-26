@@ -88,12 +88,12 @@ fn watch<T: Read + AsRawFd>(
     let mut covs = Vec::new();
 
     loop {
-        match poll(&mut fds, 500) {
+        match poll(&mut fds, 1000) {
             Ok(0) => {
                 // timeout
                 kill_and_wait(child);
                 return if covs.is_empty() {
-                    ExecResult::Err(Error(String::from("Time out")))
+                    ExecResult::Failed(Reason(String::from("Time out")))
                 } else {
                     covs.shrink_to_fit();
                     ExecResult::Ok(covs)
@@ -107,7 +107,7 @@ fn watch<T: Read + AsRawFd>(
                         let mut err_msg = Vec::new();
                         err.read_to_end(&mut err_msg).unwrap();
                         if covs.is_empty() {
-                            return ExecResult::Err(Error(String::from_utf8(err_msg).unwrap()));
+                            return ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()));
                         } else {
                             covs.shrink_to_fit();
                             return ExecResult::Ok(covs);
@@ -192,13 +192,13 @@ fn send_covs<T: Write>(covs: &[usize], out: &mut T) {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecResult {
     Ok(Vec<Vec<usize>>),
-    Err(Error),
+    Failed(Reason),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Error(String);
+pub struct Reason(String);
 
-impl fmt::Display for Error {
+impl fmt::Display for Reason {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.0)
     }
