@@ -14,7 +14,7 @@ fn main() {
         "string.c",
         "time.c",
         "unistd.c",
-        "sys.c"
+        "sys.c",
     ];
     let picoc_srcs = vec![
         "clibrary.c",
