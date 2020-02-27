@@ -7,6 +7,16 @@ use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
 
+const BOOK_TOML: &str = r#"[book]
+title = "Healer Report"
+authors = ["Healer"]
+description = "Report of fuzzing result"
+
+[output.html.fold]
+enable = true
+level = 0
+"#;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "repot")]
 struct Settings {
@@ -29,7 +39,7 @@ fn main() {
 
     writeln!(summary, "# Summary").unwrap();
 
-    writeln!(summary, "-[Crashes](crash/crash.md)").unwrap();
+    writeln!(summary, "- [Crashes](crash/crash.md)").unwrap();
 
     if let Some(crashes) = settings.crashes {
         for crash in crashes.into_iter() {
@@ -42,14 +52,14 @@ fn main() {
                 exit(1);
             });
             let crash_md = report_crash(&crash);
-            let path = format!("crash/{}.md", crash.meta.title);
+            let path = format!("{}.md", crash.meta.title);
 
-            writeln!(summary, "      -[{}]({})", crash.meta.title, path).unwrap();
+            writeln!(summary, "    - [{}](carsh/{})", crash.meta.title, path).unwrap();
             crashes_mds.push((path, crash_md));
         }
     }
 
-    writeln!(summary, "-[Failed](failed/failed.md)").unwrap();
+    writeln!(summary, "- [Failed](failed/failed.md)").unwrap();
     if let Some(failed) = settings.failed {
         let failed = read(&failed).unwrap_or_else(|e| {
             eprintln!("Fail to read {:?}: {}", failed, e);
@@ -61,16 +71,15 @@ fn main() {
         });
         for case in failed_cases.into_iter() {
             let failed_md = report_failed(&case);
-            let path = format!("failed/{}.md", case.meta.title);
+            let path = format!("{}.md", case.meta.title);
 
-            writeln!(summary, "      -[{}]({})", case.meta.title, path).unwrap();
-
+            writeln!(summary, "    - [{}](failed/{})", case.meta.title, path).unwrap();
             failed_mds.push((path, failed_md));
         }
     }
 
     let normal_path = settings.normal;
-    writeln!(summary, "-[Normal](normal/normal.md)").unwrap();
+    writeln!(summary, "- [Normal](normal/normal.md)").unwrap();
     let normal_cases = read(&normal_path).unwrap_or_else(|e| {
         eprintln!("Fail to read {:?}: {}", normal_path, e);
         exit(1);
@@ -82,10 +91,9 @@ fn main() {
         });
     for case in normal_cases.into_iter() {
         let normal_case_md = report_normal(&case);
-        let path = format!("normal/{}.md", case.meta.title);
+        let path = format!("{}.md", case.meta.title);
 
-        writeln!(summary, "      -[{}]({})", case.meta.title, path).unwrap();
-
+        writeln!(summary, "    - [{}](normal/{})", case.meta.title, path).unwrap();
         normal_mds.push((path, normal_case_md));
     }
 
@@ -96,26 +104,28 @@ fn main() {
 
     out.push("crash");
     create_dir_all(&out).unwrap();
-    out.pop();
     for (f_name, crash) in crashes_mds.into_iter() {
         persist(&out, &f_name, crash);
     }
-
+    out.pop();
 
     out.push("failed");
     create_dir_all(&out).unwrap();
-    out.pop();
     for (f_name, failed) in failed_mds.into_iter() {
         persist(&out, &f_name, failed);
     }
-
+    out.pop();
 
     out.push("normal");
     create_dir_all(&out).unwrap();
-    out.pop();
     for (f_name, normal) in normal_mds.into_iter() {
         persist(&out, &f_name, normal);
     }
+    out.pop();
+
+    out.pop();
+    out.push("book.toml");
+    write(&out, BOOK_TOML).unwrap();
 }
 
 fn report_crash(crash: &CrashedCase) -> String {
@@ -125,9 +135,11 @@ fn report_crash(crash: &CrashedCase) -> String {
     writeln!(buf, "**Repo**: {}</br>", crash.repo).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", crash.meta.test_time).unwrap();
     writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "``` c").unwrap();
     for line in crash.p.lines() {
-        writeln!(buf, "{}</br>", line).unwrap();
+        writeln!(buf, "{}", line).unwrap();
     }
+    writeln!(buf, "```").unwrap();
     writeln!(buf, "## *Crash*").unwrap();
     for line in crash.crash.to_string().lines() {
         writeln!(buf, "{}</br>", line).unwrap();
@@ -141,9 +153,11 @@ fn report_failed(failed: &FailedCase) -> String {
     writeln!(buf, "**Id**:   {}</br>", failed.meta.id).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", failed.meta.test_time).unwrap();
     writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "``` c").unwrap();
     for line in failed.p.lines() {
-        writeln!(buf, "{}</br>", line).unwrap();
+        writeln!(buf, "{}", line).unwrap();
     }
+    writeln!(buf, "```").unwrap();
     writeln!(buf, "## *Reason*").unwrap();
     for line in failed.reason.lines() {
         writeln!(buf, "{}</br>", line).unwrap();
@@ -157,9 +171,11 @@ fn report_normal(normal: &ExecutedCase) -> String {
     writeln!(buf, "**Id**:   {}</br>", normal.meta.id).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", normal.meta.test_time).unwrap();
     writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "``` c").unwrap();
     for line in normal.p.lines() {
-        writeln!(buf, "{}</br>", line).unwrap();
+        writeln!(buf, "{}", line).unwrap();
     }
+    writeln!(buf, "```").unwrap();
     writeln!(buf, "## *Feedback*").unwrap();
     writeln!(buf, "Block:  {:?}</br>", normal.block_num).unwrap();
     writeln!(buf, "Branch: {:?}</br>", normal.branch_num).unwrap();
@@ -171,6 +187,5 @@ fn report_normal(normal: &ExecutedCase) -> String {
 fn persist(dir: &PathBuf, f_name: &str, content: String) {
     let mut p = dir.clone();
     p.push(f_name);
-    println!("Writing:{:?}",p);
     write(p, content).unwrap()
 }
