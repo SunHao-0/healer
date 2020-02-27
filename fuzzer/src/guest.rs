@@ -167,7 +167,7 @@ impl Guest {
     }
 }
 
-#[derive(Debug, Clone, Deserialize,Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Crash {
     inner: String,
 }

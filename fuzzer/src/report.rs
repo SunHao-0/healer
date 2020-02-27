@@ -3,7 +3,7 @@ use crate::guest::Crash;
 use chrono::prelude::*;
 use chrono::DateTime;
 use circular_queue::CircularQueue;
-use core::c::{translate, Script};
+use core::c::{translate};
 use core::prog::Prog;
 use core::target::Target;
 use executor::Reason;
@@ -90,12 +90,13 @@ impl TestCaseRecord {
     ) {
         let block_num = blocks.iter().map(|blocks| blocks.len()).collect();
         let branch_num = branches.iter().map(|branches| branches.len()).collect();
+        let id = self.next_id().await;
+        let title = self.title_of(&p, id);
         let stmts = translate(&p, &self.target);
-        let title = self.title_of(&p, &stmts);
 
         let case = ExecutedCase {
             meta: TestCase {
-                id: self.next_id().await,
+                id,
                 title,
                 test_time: Local::now(),
             },
@@ -116,11 +117,12 @@ impl TestCaseRecord {
     }
 
     pub async fn insert_crash(&self, p: Prog, crash: Crash, repo: bool) {
+        let id = self.next_id().await;
         let stmts = translate(&p, &self.target);
         let case = CrashedCase {
             meta: TestCase {
-                id: self.next_id().await,
-                title: self.title_of(&p, &stmts),
+                id,
+                title: self.title_of(&p, id),
                 test_time: Local::now(),
             },
             p: stmts.to_string(),
@@ -141,11 +143,13 @@ impl TestCaseRecord {
     }
 
     pub async fn insert_failed(&self, p: Prog, reason: Reason) {
+        let id = self.next_id().await;
         let stmts = translate(&p, &self.target);
+
         let case = FailedCase {
             meta: TestCase {
-                id: self.next_id().await,
-                title: self.title_of(&p, &stmts),
+                id,
+                title: self.title_of(&p, id),
                 test_time: Local::now(),
             },
             p: stmts.to_string(),
@@ -232,10 +236,10 @@ impl TestCaseRecord {
         })
     }
 
-    fn title_of(&self, p: &Prog, stmts: &Script) -> String {
+    fn title_of(&self, p: &Prog, id: usize) -> String {
         let group = String::from(self.target.group_name_of(p.gid));
-        let target_call = stmts.0.last().unwrap().to_string();
-        format!("{}__{}", group, target_call)
+        let f = String::from(&self.target.fn_of(p.calls.last().unwrap().fid).dec_name);
+        format!("{}_{}_{}", group, f, id)
     }
 
     async fn next_id(&self) -> usize {
