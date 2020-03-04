@@ -1,10 +1,6 @@
-use crate::cover;
-use crate::picoc::Picoc;
 use crate::utils::{event, Notifier, Waiter};
 use byte_slice_cast::*;
-use byteorder::WriteBytesExt;
 use byteorder::*;
-use core::c::iter_trans;
 use core::prog::Prog;
 use core::target::Target;
 use nix::fcntl::{fcntl, FcntlArg};
@@ -12,9 +8,10 @@ use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::signal::{kill, Signal};
 use nix::sys::wait::waitpid;
 use nix::unistd::{dup2, fork, ForkResult, Pid};
+use os_pipe::PipeWriter;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::mem;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
@@ -161,34 +158,6 @@ fn kill_and_wait(child: Pid) {
     });
 }
 
-pub fn sync_exec<T: Write>(p: &Prog, t: &Target, out: &mut T, waiter: Waiter) {
-    let mut picoc = Picoc::default();
-    let mut handle = cover::open();
-    let mut success = false;
-
-    for stmts in iter_trans(p, t) {
-        let covs = handle.collect(|| {
-            success = picoc.execute(stmts.to_string());
-        });
-        if success {
-            send_covs(covs, out);
-            waiter.wait()
-        } else {
-            exit(exitcode::SOFTWARE)
-        }
-    }
-}
-
-fn send_covs<T: Write>(covs: &[usize], out: &mut T) {
-    use byte_slice_cast::*;
-    assert!(!covs.is_empty());
-
-    out.write_u32::<NativeEndian>(covs.len() as u32)
-        .unwrap_or_else(|e| exits!(exitcode::IOERR, "Fail to write len of covs: {}", e));
-    out.write_all(covs.as_byte_slice())
-        .unwrap_or_else(|e| exits!(exitcode::IOERR, "Fail to write covs: {}", e));
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecResult {
     Ok(Vec<Vec<usize>>),
@@ -202,4 +171,23 @@ impl fmt::Display for Reason {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.0)
     }
+}
+
+#[cfg(feature = "interprete")]
+mod interprete;
+
+#[cfg(feature = "jit")]
+mod jit;
+
+#[cfg(feature = "syscall")]
+mod syscall;
+
+pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
+    #[cfg(feature = "interprete")]
+    use interprete::exec;
+    #[cfg(feature = "jit")]
+    use jit::exec;
+    #[cfg(feature = "syscall")]
+    use syscall::exec;
+    exec(p, t, out, waiter);
 }

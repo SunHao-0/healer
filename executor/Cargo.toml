@@ -4,7 +4,12 @@ version = "0.1.0"
 authors = ["sam <sunhaoyl@outlook.com>"]
 edition = "2018"
 build = "build.rs"
-links = "picoc"
+
+[features]
+default = ["interprete"]
+jit = []
+interprete = []
+syscall = []
 
 [dependencies]
 core = {path="../core"}
@@ -24,3 +29,4 @@ byte-slice-cast = "0.3.5"
 
 [build-dependencies]
 cc = "1.0"
+bindgen = "0.53.1"

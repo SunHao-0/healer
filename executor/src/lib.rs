@@ -8,10 +8,8 @@ use std::io::{Read, Write};
 
 #[macro_use]
 mod utils;
-mod bind;
 pub mod cover;
 pub mod exec;
-pub mod picoc;
 pub mod transfer;
 
 pub use exec::{ExecResult, Reason};
