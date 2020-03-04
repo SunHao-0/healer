@@ -16,6 +16,8 @@ use std::mem;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
 
+mod cths;
+
 pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
     // transfer usefull data
     let (mut rp, mut wp) = os_pipe::pipe()
