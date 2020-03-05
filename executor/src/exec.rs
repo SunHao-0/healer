@@ -6,19 +6,23 @@ use core::target::Target;
 use nix::fcntl::{fcntl, FcntlArg};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::signal::{kill, Signal};
-use nix::sys::wait::waitpid;
+use nix::sys::wait::{waitpid, WaitPidFlag};
 use nix::unistd::{dup2, fork, ForkResult, Pid};
 use os_pipe::PipeWriter;
+use rand::random;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::Read;
 use std::mem;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
-
-mod cths;
+use std::thread::sleep;
+use std::time::Duration;
 
 pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
+    if random::<f64>() < 0.0025 {
+        bg_run(&p, t);
+    }
     // transfer usefull data
     let (mut rp, mut wp) = os_pipe::pipe()
         .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create date pipe : {}", e));
@@ -69,6 +73,58 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
             drop(waiter);
 
             watch(child, &mut rp, &mut err_rp, notifer)
+        }
+        Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
+    }
+}
+
+fn bg_run(p: &Prog, t: &Target) {
+    #[cfg(feature = "interprete")]
+    use interprete::bg_exec;
+    #[cfg(feature = "jit")]
+    use jit::bg_exec;
+    #[cfg(feature = "syscall")]
+    use syscall::bg_exec;
+
+    match fork() {
+        Ok(ForkResult::Child) => match fork() {
+            Ok(ForkResult::Child) => {
+                for _ in 0..3 {
+                    let mut wait_call = p.calls.len();
+                    match fork() {
+                        Ok(ForkResult::Child) => {
+                            bg_exec(p, t);
+                            exit(0);
+                        }
+                        Ok(ForkResult::Parent { child }) => loop {
+                            sleep(Duration::from_millis(100));
+                            match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                                Ok(status) => {
+                                    if status.pid().is_some() {
+                                        kill_and_wait(child);
+                                        break;
+                                    }
+                                }
+                                Err(_) => {
+                                    kill_and_wait(child);
+                                    break;
+                                }
+                            }
+                            wait_call -= 1;
+                            if wait_call == 0 {
+                                kill_and_wait(child);
+                                break;
+                            }
+                        },
+                        Err(_) => exit(0),
+                    }
+                }
+                exit(0);
+            }
+            _ => exit(0),
+        },
+        Ok(ForkResult::Parent { child }) => {
+            waitpid(child, None).unwrap();
         }
         Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
     }
@@ -176,13 +232,13 @@ impl fmt::Display for Reason {
 }
 
 #[cfg(feature = "interprete")]
-mod interprete;
+pub mod interprete;
 
 #[cfg(feature = "jit")]
-mod jit;
+pub mod jit;
 
 #[cfg(feature = "syscall")]
-mod syscall;
+pub mod syscall;
 
 pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     #[cfg(feature = "interprete")]

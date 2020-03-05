@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [features]
-default = ["interprete"]
+default = ["jit"]
 jit = []
 interprete = []
 syscall = []
@@ -26,8 +26,8 @@ thiserror = "1.0.9"
 nix = "0.17.0"
 os_pipe = "0.9.1"
 byte-slice-cast = "0.3.5"
-lazy_static = "1.4.0"
 maplit = "1.0.2"
+tcc = "0.1.0"
 
 [build-dependencies]
 cc = "1.0"

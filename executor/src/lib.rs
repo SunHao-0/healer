@@ -3,8 +3,6 @@ extern crate thiserror;
 #[macro_use]
 extern crate nix;
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate maplit;
 
 use core::target::Target;
