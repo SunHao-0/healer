@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 // These calls has no c wrapper
 // pivot_root
-// syscalls
 // subpage_prot
 // tkill
 // lookup_dcookie
@@ -36,7 +35,7 @@ use std::collections::HashMap;
 // sgetmask
 
 lazy_static! {
-    static ref CTHS: HashMap<&'static str, Vec<&'static str>> = {
+    pub static ref CTHS: HashMap<&'static str, Vec<&'static str>> = {
         hashmap! {
         "epoll_create" => vec!["sys/epoll.h"],
         "msync" => vec!["sys/mman.h"],

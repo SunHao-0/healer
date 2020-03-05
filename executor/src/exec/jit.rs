@@ -1,44 +1,79 @@
 use crate::utils::Waiter;
+use core::c;
+use core::c::cths::CTHS;
 use core::c::iter_trans;
 use core::prog::Prog;
 use core::target::Target;
 use os_pipe::PipeWriter;
+use std::fmt::Write;
+use std::os::raw::c_int;
 use std::os::unix::io::*;
+use std::process::exit;
+use tcc::Symbol;
 
-pub fn exec(_p: &Prog, _t: &Target, _out: &mut PipeWriter, _waiter: Waiter) {
-    todo!()
+pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
+    let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd());
+
+    if p.is_empty() {
+        eprintln!("Fail to instrument");
+        exit(exitcode::SOFTWARE);
+    }
+
+    let mut cc = tcc::Tcc::new();
+    cc.add_sysinclude_path("/usr/local/lib/tcc/include")
+        .unwrap();
+    cc.add_library_path("/usr/local/lib/tcc").unwrap();
+    cc.set_output_type(tcc::OutputType::Memory)
+        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
+    cc.compile_string(&p)
+        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to compile generated prog: {}", p));
+    let mut p = cc
+        .relocate()
+        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to relocate compiled prog"));
+    let execute: fn() -> c_int = {
+        let symbol = p.get_symbol("execute").unwrap();
+        unsafe { std::mem::transmute(symbol.as_ptr()) }
+    };
+
+    let code = execute();
+    if code == 0 {
+        exit(exitcode::OK)
+    } else {
+        exits!(
+            exitcode::SOFTWARE,
+            "Fail to execute: {:?}",
+            StatusCode::from(code)
+        )
+    }
 }
 
-fn instrument_prog(p: &Prog, t: &target, data_fd: RawFd, sync_fd: RawFd) -> String {
-    const STUB: &str = r#"  "#;
-    const VAR_KCOV_FD: &str = "fd";
-    const VAR_COVER: &str = "cover";
-    const VAR_COVER_LEN: &str = "n";
-    const KCOV_SIZE: &str = "1024 * 1024 * 8";
-    const VAL_KCOV_OPEN_ERR: i32 = StatusCode::KcovOpenErr as i32;
-    const VAL_KCOV_CLOSE_ERR: i32 = StatusCode::KcovCloseErr as i32;
-    const VAL_SEND_ERR: i32 = StatusCode::CovSendErr as i32;
-
-    let mut includes = String::from(
-        r#"
-#include <stdio.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
-    "#,
-    );
-
-    let sync_send = r#"
-int sync_send(unsigned long *cover, int len){
-    // TODO
+pub fn bg_exec(p: &Prog, t: &Target) {
+    let p = c::to_prog(p, t);
+    if !p.is_empty() {
+        let mut cc = tcc::Tcc::new();
+        cc.add_sysinclude_path("/usr/local/lib/tcc/include")
+            .unwrap();
+        cc.add_library_path("/usr/local/lib/tcc").unwrap();
+        cc.set_output_type(tcc::OutputType::Memory).unwrap();
+        cc.compile_string(&p).unwrap();
+        cc.run(&["healer-executor-bg-exec"]).unwrap()
+    }
 }
-    "#;
+
+pub fn instrument_prog(p: &Prog, t: &Target, data_fd: RawFd, sync_fd: RawFd) -> String {
+    let mut includes = hashset! {
+        "stdio.h",
+        "stddef.h",
+        "stdint.h",
+        "stdlib.h",
+        "sys/types.h",
+        "sys/stat.h",
+        "sys/ioctl.h",
+        "sys/mman.h",
+        "unistd.h",
+        "fcntl.h",
+        "string.h"
+    };
 
     let macros = r#"
 #define KCOV_INIT_TRACE  _IOR('c', 1, unsigned long)
@@ -48,10 +83,49 @@ int sync_send(unsigned long *cover, int len){
 #define KCOV_TRACE_PC    0
     "#;
 
+    let sync_send = format!(
+        r#"
+int sync_send(unsigned long *cover, uint32_t len){{
+    if (len == 0){{
+        return 0;
+    }}
+    char *cover_ = (void*)(cover + 1);
+    int l2;
+    int event_fd = {}, data_fd = {};
+    char l[4];
+    char event[8];
+
+    memcpy(l, &len, 4);
+    if (write(data_fd, l, 4) == -1){{
+        return -1;
+    }}
+
+    len = len * sizeof(unsigned long);
+    while(1){{
+        l2 = write(data_fd, cover_, len);
+        if(l2 == -1){{
+            return -1;
+        }}
+        len -= l2;
+        cover_ += l2;
+
+        if (len == 0){{
+            break;
+        }}
+    }}
+    if(read(event_fd, event, 8) == -1){{
+        return -1;
+    }}
+    return 0;
+}}"#,
+        sync_fd, data_fd
+    );
+
     let kcov_open = format!(
         r#"
     int fd;
-    unsigned long *cover, len;
+    unsigned long *cover;
+    uint32_t len = 0;
 
     fd = open("/sys/kernel/debug/kcov", O_RDWR);
     if (fd == -1)
@@ -69,7 +143,15 @@ int sync_send(unsigned long *cover, int len){
     );
 
     let mut stmts = Vec::new();
-    for s in iter_trans(p, t) {
+    for (i, s) in iter_trans(p, t).enumerate() {
+        let call_name = t.fn_of(p.calls[i].fid).call_name.clone();
+        let header = if let Some(h) = CTHS.get(&call_name as &str) {
+            h
+        } else {
+            return String::new();
+        };
+        includes.extend(header);
+
         let generated_call = s.to_string();
         let s = format!(
             r#"
@@ -82,26 +164,75 @@ int sync_send(unsigned long *cover, int len){
             return {};
     if (sync_send(cover, len) == -1)
         return {};"#,
-            VAR_KCOV_FD,
-            VAR_COVER,
-            VAR_COVER_LEN,
+            StatusCode::KcovEnableErr as i32,
             generated_call,
-            VAL_KCOV_OPEN_ERR,
-            VAL_KCOV_CLOSE_ERR,
-            VAL_SEND_ERR
+            StatusCode::KcovDisableErr as i32,
+            StatusCode::CovSendErr as i32
         );
         stmts.push(s);
     }
 
-    todo!()
+    let clean = format!(
+        r#"
+    if (munmap(cover, COVER_SIZE * sizeof(unsigned long)))
+            return {};
+    if (close(fd))
+            return {};
+    return {};
+    "#,
+        StatusCode::MmapErr as i32,
+        StatusCode::KcovCloseErr as i32,
+        StatusCode::Ok as i32
+    );
+
+    let execute = {
+        let mut buf = String::new();
+        writeln!(buf, "{}", kcov_open).unwrap();
+        for s in stmts {
+            writeln!(buf, "{}", s).unwrap();
+        }
+        writeln!(buf, "{}", clean).unwrap();
+        format!("int execute(){{\n{}}}", buf)
+    };
+
+    let mut buf = String::new();
+    writeln!(buf, "#define _GNU_SOURCE").unwrap();
+
+    for header in includes.into_iter() {
+        writeln!(buf, "#include<{}>", header).unwrap();
+    }
+    writeln!(buf, "{}", macros).unwrap();
+    writeln!(buf, "{}", sync_send).unwrap();
+    writeln!(buf, "{}", execute).unwrap();
+    buf
 }
 
+#[derive(Debug)]
 enum StatusCode {
     Ok = 0,
     KcovOpenErr,
+    KcovCloseErr,
     KcovInitErr,
     KcovEnableErr,
     KcovDisableErr,
     CovSendErr,
     MmapErr,
+}
+
+impl From<i32> for StatusCode {
+    fn from(val: i32) -> Self {
+        use StatusCode::*;
+
+        match val {
+            0 => Ok,
+            1 => KcovOpenErr,
+            2 => KcovCloseErr,
+            3 => KcovInitErr,
+            4 => KcovEnableErr,
+            5 => KcovDisableErr,
+            6 => CovSendErr,
+            7 => MmapErr,
+            _ => unreachable!(),
+        }
+    }
 }

@@ -38,6 +38,15 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     }
 }
 
+pub fn bg_exec(p: &Prog, t: &Target) {
+    let mut picoc = Picoc::default();
+    for stmts in iter_trans(p, t) {
+        if !picoc.execute(stmts.to_string()) {
+            exit(exitcode::SOFTWARE)
+        }
+    }
+}
+
 fn send_covs<T: Write>(covs: &[usize], out: &mut T) {
     use byte_slice_cast::*;
     assert!(!covs.is_empty());
