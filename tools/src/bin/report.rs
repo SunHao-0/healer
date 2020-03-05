@@ -23,7 +23,7 @@ struct Settings {
     #[structopt(short = "c", long = "crash")]
     crashes: Option<Vec<PathBuf>>,
     #[structopt(short = "n", long = "normal")]
-    normal: PathBuf,
+    normal: Option<PathBuf>,
     #[structopt(short = "f", long = "failed")]
     failed: Option<PathBuf>,
     #[structopt(short = "o", long = "out")]
@@ -78,23 +78,24 @@ fn main() {
         }
     }
 
-    let normal_path = settings.normal;
-    writeln!(summary, "- [Normal](normal/normal.md)").unwrap();
-    let normal_cases = read(&normal_path).unwrap_or_else(|e| {
-        eprintln!("Fail to read {:?}: {}", normal_path, e);
-        exit(1);
-    });
-    let normal_cases: Vec<ExecutedCase> =
-        serde_json::from_slice(&normal_cases).unwrap_or_else(|e| {
-            eprintln!("Fail to deserialize: {}", e);
+    if let Some(normal_path) = settings.normal {
+        writeln!(summary, "- [Normal](normal/normal.md)").unwrap();
+        let normal_cases = read(&normal_path).unwrap_or_else(|e| {
+            eprintln!("Fail to read {:?}: {}", normal_path, e);
             exit(1);
         });
-    for case in normal_cases.into_iter() {
-        let normal_case_md = report_normal(&case);
-        let path = format!("{}.md", case.meta.title);
+        let normal_cases: Vec<ExecutedCase> =
+            serde_json::from_slice(&normal_cases).unwrap_or_else(|e| {
+                eprintln!("Fail to deserialize: {}", e);
+                exit(1);
+            });
+        for case in normal_cases.into_iter() {
+            let normal_case_md = report_normal(&case);
+            let path = format!("{}.md", case.meta.title);
 
-        writeln!(summary, "    - [{}](normal/{})", case.meta.title, path).unwrap();
-        normal_mds.push((path, normal_case_md));
+            writeln!(summary, "    - [{}](normal/{})", case.meta.title, path).unwrap();
+            normal_mds.push((path, normal_case_md));
+        }
     }
 
     let mut out: PathBuf = settings.out;
@@ -134,7 +135,7 @@ fn report_crash(crash: &CrashedCase) -> String {
     writeln!(buf, "**Id**:   {}</br>", crash.meta.id).unwrap();
     writeln!(buf, "**Repo**: {}</br>", crash.repo).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", crash.meta.test_time).unwrap();
-    writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "## Prog").unwrap();
     writeln!(buf, "``` c").unwrap();
     for line in crash.p.lines() {
         writeln!(buf, "{}", line).unwrap();
@@ -152,7 +153,7 @@ fn report_failed(failed: &FailedCase) -> String {
     writeln!(buf, "# {}", failed.meta.title).unwrap();
     writeln!(buf, "**Id**:   {}</br>", failed.meta.id).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", failed.meta.test_time).unwrap();
-    writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "## Prog").unwrap();
     writeln!(buf, "``` c").unwrap();
     for line in failed.p.lines() {
         writeln!(buf, "{}", line).unwrap();
@@ -170,7 +171,7 @@ fn report_normal(normal: &ExecutedCase) -> String {
     writeln!(buf, "# {}", normal.meta.title).unwrap();
     writeln!(buf, "**Id**:   {}</br>", normal.meta.id).unwrap();
     writeln!(buf, "**Test Time**: {}</br>", normal.meta.test_time).unwrap();
-    writeln!(buf, "## {}", "Prog").unwrap();
+    writeln!(buf, "## Prog").unwrap();
     writeln!(buf, "``` c").unwrap();
     for line in normal.p.lines() {
         writeln!(buf, "{}", line).unwrap();

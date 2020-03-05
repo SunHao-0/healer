@@ -2,16 +2,16 @@
 extern crate thiserror;
 #[macro_use]
 extern crate nix;
+#[macro_use]
+extern crate maplit;
 
 use core::target::Target;
 use std::io::{Read, Write};
 
 #[macro_use]
 mod utils;
-mod bind;
 pub mod cover;
 pub mod exec;
-pub mod picoc;
 pub mod transfer;
 
 pub use exec::{ExecResult, Reason};

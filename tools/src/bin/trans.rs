@@ -31,7 +31,7 @@ fn main() {
         exit(exitcode::DATAERR)
     });
 
-    let script = c::translate(&p, &target);
+    let script = c::to_prog(&p, &target);
 
     println!("{}", script)
 }

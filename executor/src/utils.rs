@@ -1,6 +1,6 @@
 use nix::sys::eventfd::{eventfd, EfdFlags};
 use nix::unistd::{close, read, write};
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::rc::Rc;
 
 macro_rules! exits {
@@ -47,6 +47,12 @@ impl Drop for Notifier {
     }
 }
 
+impl AsRawFd for Notifier {
+    fn as_raw_fd(&self) -> RawFd {
+        *self.fd
+    }
+}
+
 pub struct Waiter {
     fd: Rc<RawFd>,
 }
@@ -71,5 +77,11 @@ impl Drop for Waiter {
                 )
             })
         }
+    }
+}
+
+impl AsRawFd for Waiter {
+    fn as_raw_fd(&self) -> RawFd {
+        *self.fd
     }
 }

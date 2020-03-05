@@ -11,7 +11,9 @@ use std::fmt::{Display, Error, Formatter};
 
 use std::fmt::Write;
 
-/// C lang Script
+pub mod cths;
+
+/// C Script
 pub struct Script(pub Vec<Stmt>);
 
 impl Display for Script {
@@ -23,7 +25,7 @@ impl Display for Script {
     }
 }
 
-pub fn translate(p: &Prog, t: &Target) -> Script {
+pub fn to_script(p: &Prog, t: &Target) -> Script {
     let mut s: State = Default::default();
 
     // for each prototype and call
@@ -31,6 +33,36 @@ pub fn translate(p: &Prog, t: &Target) -> Script {
         translate_call(i, c, t, &mut s);
     }
     Script(s.stmts)
+}
+
+pub fn to_prog(p: &Prog, t: &Target) -> String {
+    use crate::c::cths::CTHS;
+
+    let mut includes = hashset! {  "stddef.h","stdint.h","stdlib.h",};
+    let mut c_stmts = String::new();
+
+    for (call_index, stmts) in iter_trans(p, t).enumerate() {
+        let call_name = t.fn_of(p.calls[call_index].fid).call_name.clone();
+        if let Some(header) = CTHS.get(&call_name as &str) {
+            includes.extend(header);
+        }
+        writeln!(c_stmts, "{}", stmts.to_string()).unwrap();
+    }
+
+    let mut incs = String::new();
+    writeln!(incs, "#define _GNU_SOURCE").unwrap();
+    for header in includes.into_iter() {
+        writeln!(incs, "#include<{}>", header).unwrap();
+    }
+    format!(
+        r#"{}
+
+int main(int argc, char **argv){{
+{}
+return 0;
+}}"#,
+        incs, c_stmts
+    )
 }
 
 pub struct IterTranslate<'a> {

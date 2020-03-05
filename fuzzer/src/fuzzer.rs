@@ -5,7 +5,7 @@ use crate::guest::Crash;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
 use core::analyze::RTable;
-use core::c::translate;
+use core::c::to_script;
 use core::gen::gen;
 use core::minimize::minimize;
 use core::prog::Prog;
@@ -38,6 +38,7 @@ impl Fuzzer {
             match self.shutdown.try_recv() {
                 Ok(_) => {
                     self.peresist().await;
+                    drop(executor);
                     return;
                 }
                 Err(e) => match e {
@@ -86,7 +87,7 @@ impl Fuzzer {
 
     async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
         warn!("Trying to repo crash:{}", crash);
-        let stmts = translate(&p, &self.target);
+        let stmts = to_script(&p, &self.target);
         warn!("Caused by:\n{}", stmts.to_string());
 
         executor.start().await;

@@ -1,25 +1,28 @@
-use crate::cover;
-use crate::picoc::Picoc;
 use crate::utils::{event, Notifier, Waiter};
 use byte_slice_cast::*;
-use byteorder::WriteBytesExt;
 use byteorder::*;
-use core::c::iter_trans;
 use core::prog::Prog;
 use core::target::Target;
 use nix::fcntl::{fcntl, FcntlArg};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::signal::{kill, Signal};
-use nix::sys::wait::waitpid;
+use nix::sys::wait::{waitpid, WaitPidFlag};
 use nix::unistd::{dup2, fork, ForkResult, Pid};
+use os_pipe::PipeWriter;
+use rand::random;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::mem;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 
 pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
+    if random::<f64>() < 0.0025 {
+        bg_run(&p, t);
+    }
     // transfer usefull data
     let (mut rp, mut wp) = os_pipe::pipe()
         .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create date pipe : {}", e));
@@ -70,6 +73,58 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
             drop(waiter);
 
             watch(child, &mut rp, &mut err_rp, notifer)
+        }
+        Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
+    }
+}
+
+fn bg_run(p: &Prog, t: &Target) {
+    #[cfg(feature = "interprete")]
+    use interprete::bg_exec;
+    #[cfg(feature = "jit")]
+    use jit::bg_exec;
+    #[cfg(feature = "syscall")]
+    use syscall::bg_exec;
+
+    match fork() {
+        Ok(ForkResult::Child) => match fork() {
+            Ok(ForkResult::Child) => {
+                for _ in 0..3 {
+                    let mut wait_call = p.calls.len();
+                    match fork() {
+                        Ok(ForkResult::Child) => {
+                            bg_exec(p, t);
+                            exit(0);
+                        }
+                        Ok(ForkResult::Parent { child }) => loop {
+                            sleep(Duration::from_millis(100));
+                            match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                                Ok(status) => {
+                                    if status.pid().is_some() {
+                                        kill_and_wait(child);
+                                        break;
+                                    }
+                                }
+                                Err(_) => {
+                                    kill_and_wait(child);
+                                    break;
+                                }
+                            }
+                            wait_call -= 1;
+                            if wait_call == 0 {
+                                kill_and_wait(child);
+                                break;
+                            }
+                        },
+                        Err(_) => exit(0),
+                    }
+                }
+                exit(0);
+            }
+            _ => exit(0),
+        },
+        Ok(ForkResult::Parent { child }) => {
+            waitpid(child, None).unwrap();
         }
         Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
     }
@@ -161,34 +216,6 @@ fn kill_and_wait(child: Pid) {
     });
 }
 
-pub fn sync_exec<T: Write>(p: &Prog, t: &Target, out: &mut T, waiter: Waiter) {
-    let mut picoc = Picoc::default();
-    let mut handle = cover::open();
-    let mut success = false;
-
-    for stmts in iter_trans(p, t) {
-        let covs = handle.collect(|| {
-            success = picoc.execute(stmts.to_string());
-        });
-        if success {
-            send_covs(covs, out);
-            waiter.wait()
-        } else {
-            exit(exitcode::SOFTWARE)
-        }
-    }
-}
-
-fn send_covs<T: Write>(covs: &[usize], out: &mut T) {
-    use byte_slice_cast::*;
-    assert!(!covs.is_empty());
-
-    out.write_u32::<NativeEndian>(covs.len() as u32)
-        .unwrap_or_else(|e| exits!(exitcode::IOERR, "Fail to write len of covs: {}", e));
-    out.write_all(covs.as_byte_slice())
-        .unwrap_or_else(|e| exits!(exitcode::IOERR, "Fail to write covs: {}", e));
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecResult {
     Ok(Vec<Vec<usize>>),
@@ -202,4 +229,23 @@ impl fmt::Display for Reason {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.0)
     }
+}
+
+#[cfg(feature = "interprete")]
+pub mod interprete;
+
+#[cfg(feature = "jit")]
+pub mod jit;
+
+#[cfg(feature = "syscall")]
+pub mod syscall;
+
+pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
+    #[cfg(feature = "interprete")]
+    use interprete::exec;
+    #[cfg(feature = "jit")]
+    use jit::exec;
+    #[cfg(feature = "syscall")]
+    use syscall::exec;
+    exec(p, t, out, waiter);
 }

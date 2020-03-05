@@ -1,25 +1,15 @@
 /// Binding of picoc
-use crate::bind::bind_unix::{
-    PicocCleanup, PicocExecute, PicocIncludeAllSystemHeaders, PicocInitialise,
-};
 use std::ffi::CStr;
 use std::os::raw::c_int;
 use std::process::exit;
 
-#[allow(dead_code)]
-#[allow(non_snake_case)]
-#[allow(non_camel_case_types)]
-#[allow(non_upper_case_globals)]
-#[allow(clippy::unreadable_literal)]
-#[allow(clippy::redundant_static_lifetimes)]
-#[allow(clippy::transmute_ptr_to_ptr)]
-mod bind_unix;
+include!(concat!(env!("OUT_DIR"), "/bind_unix.rs"));
 
 #[derive(Default)]
-pub struct Picoc(bind_unix::Picoc);
+pub struct PicocWrapper(Picoc);
 
 /// Run cprog by picoc, exit if any error occurs in prog
-pub fn picoc_execute(pc: &mut Picoc, mut p: String) -> bool {
+pub fn picoc_execute(pc: &mut PicocWrapper, mut p: String) -> bool {
     assert!(!p.is_empty());
     const DEFAULT_FILE_NAME: &str = "heal_prog\0";
     // Len of p without \0
@@ -37,7 +27,7 @@ pub fn picoc_execute(pc: &mut Picoc, mut p: String) -> bool {
 
     unsafe {
         PicocExecute(
-            &mut pc.0 as *mut bind_unix::Picoc,
+            &mut pc.0 as *mut Picoc,
             file_name.as_ptr(),
             p.as_ptr(),
             len as ::std::os::raw::c_int,
@@ -46,23 +36,23 @@ pub fn picoc_execute(pc: &mut Picoc, mut p: String) -> bool {
 }
 
 /// Clean up inner state of picoc
-pub fn picoc_clean(pc: &mut Picoc) {
+pub fn picoc_clean(pc: &mut PicocWrapper) {
     unsafe {
-        PicocCleanup(&mut pc.0 as *mut bind_unix::Picoc);
+        PicocCleanup(&mut pc.0 as *mut Picoc);
     }
 }
 
 /// Include all predefine c header
-pub fn picoc_insluce_header(pc: &mut Picoc) {
+pub fn picoc_insluce_header(pc: &mut PicocWrapper) {
     unsafe {
-        PicocIncludeAllSystemHeaders(&mut pc.0 as *mut bind_unix::Picoc);
+        PicocIncludeAllSystemHeaders(&mut pc.0 as *mut Picoc);
     }
 }
 
 /// Init state of picoc
-pub fn picoc_init(pc: &mut Picoc) {
+pub fn picoc_init(pc: &mut PicocWrapper) {
     const DEFAULT_STACK_SIZE: c_int = 128 * 1024;
     unsafe {
-        PicocInitialise(&mut pc.0 as *mut bind_unix::Picoc, DEFAULT_STACK_SIZE);
+        PicocInitialise(&mut pc.0 as *mut Picoc, DEFAULT_STACK_SIZE);
     }
 }

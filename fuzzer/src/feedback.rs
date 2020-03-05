@@ -16,8 +16,14 @@ pub struct Branch(usize);
 
 impl From<(Block, Block)> for Branch {
     fn from((b1, b2): (Block, Block)) -> Self {
-        let b1 = b1.0 >> 1;
-        Self(b1 ^ b2.0)
+        let mut a = b1.0;
+        // hash algorithm from syzkaller
+        a = (a ^ 61) ^ (a >> 16);
+        a = a + (a << 3);
+        a = a ^ (a >> 4);
+        a *= 0x27d4_eb2d;
+        a = a ^ (a >> 15);
+        Self(a ^ b2.0)
     }
 }
 

@@ -3,7 +3,7 @@ use crate::guest::Crash;
 use chrono::prelude::*;
 use chrono::DateTime;
 use circular_queue::CircularQueue;
-use core::c::{translate};
+use core::c::to_script;
 use core::prog::Prog;
 use core::target::Target;
 use executor::Reason;
@@ -63,7 +63,7 @@ pub struct CrashedCase {
     pub repo: bool,
     pub crash: Crash,
 }
-
+#[allow(clippy::len_without_is_empty)]
 impl TestCaseRecord {
     pub fn new(t: Arc<Target>, work_dir: String) -> Self {
         Self {
@@ -92,7 +92,7 @@ impl TestCaseRecord {
         let branch_num = branches.iter().map(|branches| branches.len()).collect();
         let id = self.next_id().await;
         let title = self.title_of(&p, id);
-        let stmts = translate(&p, &self.target);
+        let stmts = to_script(&p, &self.target);
 
         let case = ExecutedCase {
             meta: TestCase {
@@ -118,7 +118,7 @@ impl TestCaseRecord {
 
     pub async fn insert_crash(&self, p: Prog, crash: Crash, repo: bool) {
         let id = self.next_id().await;
-        let stmts = translate(&p, &self.target);
+        let stmts = to_script(&p, &self.target);
         let case = CrashedCase {
             meta: TestCase {
                 id,
@@ -144,7 +144,7 @@ impl TestCaseRecord {
 
     pub async fn insert_failed(&self, p: Prog, reason: Reason) {
         let id = self.next_id().await;
-        let stmts = translate(&p, &self.target);
+        let stmts = to_script(&p, &self.target);
 
         let case = FailedCase {
             meta: TestCase {

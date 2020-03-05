@@ -4,7 +4,12 @@ version = "0.1.0"
 authors = ["sam <sunhaoyl@outlook.com>"]
 edition = "2018"
 build = "build.rs"
-links = "picoc"
+
+[features]
+default = ["jit"]
+jit = []
+interprete = []
+syscall = []
 
 [dependencies]
 core = {path="../core"}
@@ -21,6 +26,9 @@ thiserror = "1.0.9"
 nix = "0.17.0"
 os_pipe = "0.9.1"
 byte-slice-cast = "0.3.5"
+maplit = "1.0.2"
+tcc = "0.1.0"
 
 [build-dependencies]
 cc = "1.0"
+bindgen = "0.53.1"
