@@ -52,7 +52,7 @@ pub struct Config {
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
-    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
+    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or_else(|_| String::from("."));
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
     info!("Corpus: {}", candidates.len().await);
 
@@ -146,7 +146,7 @@ pub async fn prepare_env() {
     std::env::set_var("HEALER_FUZZER_PID", format!("{}", pid));
     info!("Pid: {}", pid);
 
-    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or(String::from("."));
+    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or_else(|_| String::from("."));
     std::env::set_var("HEALER_WORK_DIR", &work_dir);
     info!("Work-dir: {}", work_dir);
 

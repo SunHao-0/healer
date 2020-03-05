@@ -54,7 +54,7 @@ impl Sampler {
                 },
             }
 
-            time::delay_for(self.interval.clone()).await;
+            time::delay_for(self.interval).await;
             let (corpus, (blocks, branches), candidates, (normal_case, failed_case, crashed_case)) = tokio::join!(
                 self.source.corpus.len(),
                 self.source.feedback.len(),
