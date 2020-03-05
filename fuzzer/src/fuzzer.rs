@@ -38,6 +38,7 @@ impl Fuzzer {
             match self.shutdown.try_recv() {
                 Ok(_) => {
                     self.peresist().await;
+                    drop(executor);
                     return;
                 }
                 Err(e) => match e {
