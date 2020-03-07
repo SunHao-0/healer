@@ -25,6 +25,11 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     cc.add_library_path("/usr/local/lib/tcc").unwrap();
     cc.set_output_type(tcc::OutputType::Memory)
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
+    cc.set_error_func(Some(Box::new(|e|{
+        if e.contains("error"){
+            eprintln!("{}",e);
+        }
+    })));
     cc.compile_string(&p)
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to compile generated prog: {}", p));
     let mut p = cc
