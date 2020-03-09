@@ -12,12 +12,10 @@ use std::process::exit;
 use tcc::Symbol;
 
 pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
-    let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd());
-
-    if p.is_empty() {
-        eprintln!("Fail to instrument");
+    let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd()).unwrap_or_else(|e| {
+        eprintln!("{}", e);
         exit(exitcode::SOFTWARE);
-    }
+    });
 
     let mut cc = tcc::Tcc::new();
     cc.add_sysinclude_path("/usr/local/lib/tcc/include")
@@ -25,9 +23,9 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     cc.add_library_path("/usr/local/lib/tcc").unwrap();
     cc.set_output_type(tcc::OutputType::Memory)
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
-    cc.set_error_func(Some(Box::new(|e|{
-        if e.contains("error"){
-            eprintln!("{}",e);
+    cc.set_error_func(Some(Box::new(|e| {
+        if e.contains("error") {
+            eprintln!("{}", e);
         }
     })));
     cc.compile_string(&p)
@@ -65,7 +63,7 @@ pub fn bg_exec(p: &Prog, t: &Target) {
     }
 }
 
-pub fn instrument_prog(p: &Prog, t: &Target, data_fd: RawFd, sync_fd: RawFd) -> String {
+pub fn instrument_prog(p: &Prog, t: &Target, data_fd: RawFd, sync_fd: RawFd) -> Result<String, String> {
     let mut includes = hashset! {
         "stdio.h",
         "stddef.h",
@@ -153,7 +151,7 @@ int sync_send(unsigned long *cover, uint32_t len){{
         let header = if let Some(h) = CTHS.get(&call_name as &str) {
             h
         } else {
-            return String::new();
+            return Err(format!("Fail to instrument: {}", call_name));
         };
         includes.extend(header);
 
@@ -209,7 +207,7 @@ int sync_send(unsigned long *cover, uint32_t len){{
     writeln!(buf, "{}", macros).unwrap();
     writeln!(buf, "{}", sync_send).unwrap();
     writeln!(buf, "{}", execute).unwrap();
-    buf
+    Ok(buf)
 }
 
 #[derive(Debug)]
