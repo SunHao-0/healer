@@ -86,16 +86,16 @@ impl Fuzzer {
     }
 
     async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
-        warn!("Trying to repo crash:{}", crash);
+        warn!("========== Crashed ========= \n{}", crash);
         let stmts = to_script(&p, &self.target);
         warn!("Caused by:\n{}", stmts.to_string());
-
+        warn!("Restarting to repro ...");
         executor.start().await;
         match executor.exec(&p).await {
             Ok(exec_result) => {
                 match exec_result {
                     ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
-                    ExecResult::Failed(reason) => warn!("Repo failto, executed failed: {}", reason),
+                    ExecResult::Failed(reason) => warn!("Repo failed, executed failed: {}", reason),
                 };
                 self.record.insert_crash(p, crash, false).await
             }
