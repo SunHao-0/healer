@@ -429,7 +429,7 @@ fn gen_slice(tid: TypeId, l: isize, h: isize, t: &Target, s: &mut State) -> Valu
 
 pub(crate) fn gen_slice_len(l: isize, h: isize) -> usize {
     match (l, h) {
-        (-1, -1) => thread_rng().gen_range(0, 8),
+        (-1, -1) => thread_rng().gen_range(1, 8),
         (l, -1) => l as usize,
         (l, h) => thread_rng().gen_range(l as usize, h as usize),
     }
