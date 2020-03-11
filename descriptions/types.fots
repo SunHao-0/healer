@@ -121,11 +121,11 @@ struct sigevent {
 }
 
 struct utsname {
-       sysname   *Out cstr
-       nodename  *Out cstr
-       release   *Out cstr
-       version   *Out cstr
-       machine   *Out cstr
+       sysname   *cstr
+       nodename  *cstr
+       release   *cstr
+       version   *cstr
+       machine   *cstr
 }
 
 struct sysinfo {
@@ -357,13 +357,13 @@ struct __user_cap_data_struct {
 
 type cap_user_data_t = *__user_cap_data_struct
 
-union epoll_data_t {
+union epoll_data {
     fd          fd_t
 }
 
 struct epoll_event {
      events         u32
-     data           epoll_data_t
+     data           epoll_data
 }
 
 struct timespec {
@@ -372,8 +372,8 @@ struct timespec {
 }
 
 struct itimerspec {
-        it_interval     struct timespec
-        it_value        struct timespec
+        it_interval    timespec
+        it_value       timespec
 }
 
 struct old_linux_dirent {
