@@ -1,7 +1,6 @@
 /// Driver for kernel to be tested
 use crate::utils::cli::{App, Arg, OptVal};
 use crate::Config;
-use bytes::BytesMut;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use os_pipe::{pipe, PipeReader, PipeWriter};
 use serde::export::Formatter;
@@ -77,7 +76,7 @@ lazy_static! {
                 "-o",
                 OptVal::normal("StrictHostKeyChecking=no"),
             ))
-            .arg(Arg::new_opt("-o", OptVal::normal("ConnectTimeout=3s")))
+            .arg(Arg::new_opt("-o", OptVal::normal("ConnectTimeout=10s")))
     };
     pub static ref SCP: App = {
         App::new("scp")
@@ -156,6 +155,12 @@ impl Guest {
     pub async fn try_collect_crash(&mut self) -> Option<Crash> {
         match self {
             Guest::LinuxQemu(ref mut guest) => guest.try_collect_crash().await,
+        }
+    }
+
+    pub async fn clear(&mut self) {
+        match self {
+            Guest::LinuxQemu(ref mut guest) => guest.clear().await,
         }
     }
 
@@ -242,6 +247,8 @@ impl LinuxQemu {
         let (mut handle, mut rp) = {
             let mut cmd = self.vm.clone().into_cmd();
             let (rp, wp) = long_pipe();
+            fcntl(rp.as_raw_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
+                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to set flag on pipe:{}", e));
             let wp2 = wp
                 .try_clone()
                 .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to clone pipe:{}", e));
@@ -279,7 +286,7 @@ impl LinuxQemu {
             retry += 1;
         }
         // clear useless data in pipe
-        read_until_block(&mut rp);
+        read_all_nonblock(&mut rp);
         self.handle = Some(handle);
         self.rp = Some(rp);
     }
@@ -320,6 +327,12 @@ impl LinuxQemu {
             .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e))
     }
 
+    async fn clear(&mut self) {
+        if let Some(r) = self.rp.as_mut() {
+            read_all_nonblock(r);
+        }
+    }
+
     pub async fn copy<T: AsRef<Path>>(&self, path: T) -> PathBuf {
         let path = path.as_ref();
         assert!(path.is_file());
@@ -357,12 +370,8 @@ impl LinuxQemu {
             Err(_e) => None,
             Ok(_) => {
                 self.handle = None;
-                let mut crash_info = String::new();
-                self.rp
-                    .as_mut()
-                    .unwrap()
-                    .read_to_string(&mut crash_info)
-                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to read pipe of qemu:{}", e));
+                let crash = read_all_nonblock(self.rp.as_mut().unwrap());
+                let crash_info = String::from_utf8_lossy(&crash).to_string();
                 self.rp = None;
                 Some(Crash { inner: crash_info })
             }
@@ -429,40 +438,25 @@ fn long_pipe() -> (PipeReader, PipeWriter) {
             e
         )
     });
-    fcntl(wp.as_raw_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
-        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to set flag on pipe:{}", e));
-    fcntl(rp.as_raw_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
-        .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to set flag on pipe:{}", e));
 
     (rp, wp)
 }
 
-fn read_until_block(rp: &mut PipeReader) -> BytesMut {
+fn read_all_nonblock(rp: &mut PipeReader) -> Vec<u8> {
     const BUF_LEN: usize = 1024 * 1024;
-    let mut result = BytesMut::with_capacity(BUF_LEN);
+    let mut result = Vec::with_capacity(BUF_LEN);
     unsafe {
         result.set_len(BUF_LEN);
     }
-
-    let mut buf = &mut result[..];
-    let mut count = 0;
-    loop {
-        match rp.read(buf) {
-            Ok(n) => {
-                assert_ne!(n, 0);
-                count += n;
-                buf = &mut buf[n..];
-            }
-
-            Err(e) => match e.kind() {
-                ErrorKind::WouldBlock => break,
-                _ => panic!(e),
-            },
-        }
+    match rp.read(&mut result[..]) {
+        Ok(n) => unsafe {
+            result.set_len(n);
+        },
+        Err(e) => match e.kind() {
+            ErrorKind::WouldBlock => (),
+            _ => panic!(e),
+        },
     }
-    unsafe {
-        result.set_len(count);
-    }
-    result.truncate(count);
+    result.shrink_to_fit();
     result
 }
