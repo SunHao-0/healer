@@ -113,7 +113,6 @@ impl LinuxExecutor {
                     self.port
                 )),
             ));
-
         self.exec_handle = Some(self.guest.run_cmd(&executor).await);
         self.conn = Some(rx.await.unwrap());
     }
@@ -121,33 +120,39 @@ impl LinuxExecutor {
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
         // send must be success
         assert!(self.conn.is_some());
-        loop {
-            async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
+        async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
 
-            match async_recv_result(self.conn.as_mut().unwrap()).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    if !self.guest.is_alive().await {
-                        return Err(self.guest.try_collect_crash().await);
-                    } else {
-                        let mut handle = self.exec_handle.take().unwrap();
-                        let mut stderr = handle.stderr.take().unwrap();
-                        handle.await.unwrap_or_else(|e| {
-                            exits!(exitcode::OSERR, "Fail to wait executor handle:{}", e)
-                        });
+        match async_recv_result(self.conn.as_mut().unwrap()).await {
+            Ok(result) => {
+                self.guest.clear().await;
+                return Ok(result);
+            }
+            Err(_) => {
+                if !self.guest.is_alive().await {
+                    return Err(self.guest.try_collect_crash().await);
+                } else {
+                    let mut handle = self.exec_handle.take().unwrap();
+                    let mut stdout = handle.stdout.take().unwrap();
+                    let mut stderr = handle.stderr.take().unwrap();
+                    handle.await.unwrap_or_else(|e| {
+                        exits!(exitcode::OSERR, "Fail to wait executor handle:{}", e)
+                    });
 
-                        let mut err = Vec::new();
-                        stderr.read_to_end(&mut err).await.unwrap();
-                        warn!(
-                            "Executor: Connection lost, restarting : {}:\n{}\n",
-                            e,
-                            String::from_utf8(err).unwrap()
-                        );
-                        self.start_executer().await;
-                        continue;
-                    }
+                    let mut err = Vec::new();
+                    stderr.read_to_end(&mut err).await.unwrap();
+                    let mut out = Vec::new();
+                    stdout.read_to_end(&mut out).await.unwrap();
+
+                    warn!(
+                        "Executor: Connection lost. STDOUT:{}. STDERR: {}",
+                        String::from_utf8(out).unwrap(),
+                        String::from_utf8(err).unwrap()
+                    );
+                    self.start_executer().await;
                 }
             }
         }
+        // Caused by internal err
+        Ok(ExecResult::Ok(Vec::new()))
     }
 }
