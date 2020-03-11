@@ -198,22 +198,22 @@ fn watch<T: Read + AsRawFd>(
 }
 
 fn kill_and_wait(child: Pid) {
-    kill(child, Some(Signal::SIGKILL)).unwrap_or_else(|e| {
-        exits!(
-            exitcode::OSERR,
+    if let Err(e) = kill(child, Some(Signal::SIGKILL)) {
+        eprintln!(
+            // exitcode::OSERR,
             "Fail to kill subprocess(pid {}): {}",
             child,
             e
-        )
-    });
-    waitpid(child, None).unwrap_or_else(|e| {
-        exits!(
-            exitcode::OSERR,
-            "Fail to wait subprocess(pid {}) to terminate: {}",
+        );
+    }
+    if let Err(e) = waitpid(child, None) {
+        eprintln!(
+            // exitcode::OSERR,
+            "Fail to wait subprocess(pid {}): {}",
             child,
             e
-        )
-    });
+        );
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
