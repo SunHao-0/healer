@@ -63,10 +63,15 @@ pub fn bg_exec(p: &Prog, t: &Target) {
     }
 }
 
-pub fn instrument_prog(p: &Prog, t: &Target, data_fd: RawFd, sync_fd: RawFd) -> Result<String, String> {
+pub fn instrument_prog(
+    p: &Prog,
+    t: &Target,
+    data_fd: RawFd,
+    sync_fd: RawFd,
+) -> Result<String, String> {
     let mut includes = hashset! {
         "stdio.h",
-        "stddef.h",
+         "stddef.h",
         "stdint.h",
         "stdlib.h",
         "sys/types.h",
