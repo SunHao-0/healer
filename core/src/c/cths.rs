@@ -481,7 +481,8 @@ lazy_static! {
         "readlink" => vec!["fcntl.h", "unistd.h"],
         "kexec_file_load" => vec!["linux/kexec.h"],
         "setresuid32" => vec!["unistd.h"],
-        "fstatvfs" => vec!["sys/statvfs.h"]
+        "fstatvfs" => vec!["sys/statvfs.h"],
+        "klogctl" => vec!["sys/klog.h"]
         }
     };
 }
