@@ -1,9 +1,60 @@
 use std::env;
+use std::fs::create_dir;
+use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
     if cfg!(feature = "interprete") {
         bind_picoc()
+    } else if cfg!(feature = "jit") {
+        let tcc_src = env::current_dir().unwrap().join("tcc-0.9.27");
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let build_dir = out_dir.join("build");
+        println!("TCC-SRC:{}", tcc_src.display());
+        println!("OUT_DIR:{}", out_dir.display());
+        println!("BUILD_DIR:{}", build_dir.display());
+        if let Err(e) = create_dir(&build_dir) {
+            if let ErrorKind::AlreadyExists = e.kind() {
+                println!("WARN: BUILD_DIR already exists");
+            } else {
+                panic!(e);
+            }
+        }
+
+        let conf_status = Command::new(tcc_src.join("configure"))
+            .arg(format!("--prefix={}", out_dir.display()))
+            .current_dir(&build_dir)
+            .status()
+            .unwrap();
+        if !conf_status.success() {
+            panic!("Fail to configure: {:?}", conf_status)
+        }
+
+        let make_status = Command::new("make")
+            .current_dir(&build_dir)
+            .arg(format!(
+                "-j{}",
+                env::var("NUM_JOBS").unwrap_or(String::from("1"))
+            ))
+            .status()
+            .unwrap();
+        if !make_status.success() {
+            panic!("Fail to make: {:?}", conf_status)
+        }
+
+        let install_status = Command::new("make")
+            .current_dir(&build_dir)
+            .arg("install")
+            .status()
+            .unwrap();
+        if !install_status.success() {
+            panic!("Fail to install: {:?}", conf_status)
+        }
+
+        println!("cargo:rustc-link-search=native={}/lib", out_dir.display());
+        println!("cargo:rustc-link-lib=static=tcc");
+        println!("cargo:rerun-if-changed={}", tcc_src.display());
     }
 }
 
@@ -69,8 +120,8 @@ fn build_picoc() {
         files.push(format!("picoc/cstdlib/{}", cstdlib))
     }
 
-    files.push(format!("picoc/platform/library_{}.c", os).into());
-    files.push(format!("picoc/platform/platform_{}.c", os).into());
+    files.push(format!("picoc/platform/library_{}.c", os));
+    files.push(format!("picoc/platform/platform_{}.c", os));
 
     cc::Build::new()
         .no_default_flags(true)
