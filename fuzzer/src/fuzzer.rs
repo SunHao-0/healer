@@ -167,8 +167,12 @@ impl Fuzzer {
         }
     }
 
-    async fn minimize(&self, p: &Prog, new_block: &HashSet<Block>,
-                      executor: &mut Executor) -> Prog {
+    async fn minimize(
+        &self,
+        p: &Prog,
+        new_block: &HashSet<Block>,
+        executor: &mut Executor,
+    ) -> Prog {
         let mut p = p.clone();
         let mut p_orig;
         let mut i = 0;
