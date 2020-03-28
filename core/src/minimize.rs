@@ -18,7 +18,7 @@ where
     p
 }
 
-fn remove(p: &mut Prog, i: usize) -> bool {
+pub fn remove(p: &mut Prog, i: usize) -> bool {
     let calls = find_calls(p, i);
     if calls.is_empty() {
         return false;
@@ -28,10 +28,9 @@ fn remove(p: &mut Prog, i: usize) -> bool {
         if !calls.contains(&j) {
             for arg in call.args.iter_mut() {
                 for_each_ref_mut(&mut arg.val, |(ref mut cid, _)| {
-                    let count =
-                        calls
-                            .iter()
-                            .fold(0, |acc, x| if *cid > *x { acc + 1 } else { acc });
+                    let count = calls
+                        .iter()
+                        .fold(0, |acc, x| if *cid > *x { acc + 1 } else { acc });
                     *cid -= count;
                 });
             }
