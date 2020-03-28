@@ -18,9 +18,11 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     });
 
     let mut cc = tcc::Tcc::new();
-    cc.add_sysinclude_path("/usr/local/lib/tcc/include")
+    cc.add_sysinclude_path("./healer/runtime/tcc/include")
         .unwrap();
-    cc.add_library_path("/usr/local/lib/tcc").unwrap();
+    // cc.add_sysinclude_path("/usr/local/lib/tcc/include")
+    //     .unwrap();
+    // cc.add_library_path("/usr/local/lib/tcc").unwrap();
     cc.set_output_type(tcc::OutputType::Memory)
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
     cc.set_error_func(Some(Box::new(|e| {
