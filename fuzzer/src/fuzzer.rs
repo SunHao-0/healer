@@ -4,6 +4,7 @@ use crate::feedback::{Block, Branch, FeedBack};
 use crate::guest::Crash;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
+use core::analyze::prog_analyze;
 use core::analyze::RTable;
 use core::c::to_script;
 use core::gen::gen;
@@ -17,10 +18,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::fs::write;
 use tokio::sync::broadcast;
+use tokio::sync::Mutex;
 
 pub struct Fuzzer {
     pub target: Arc<Target>,
-    pub rt: HashMap<GroupId, RTable>,
+    pub rt: Arc<Mutex<HashMap<GroupId, RTable>>>,
     pub conf: core::gen::Config,
     pub work_dir: String,
 
@@ -137,6 +139,11 @@ impl Fuzzer {
                         if !new_block.is_empty() || !new_branches.is_empty() {
                             let minimized_p = self.minimize(&p, &new_block, executor).await;
                             let raw_branches = self.exec_no_fail(executor, &minimized_p).await;
+                            {
+                                let g = &self.target.groups[&p.gid];
+                                let mut r = self.rt.lock().await;
+                                prog_analyze(g, r.get_mut(&p.gid).unwrap(), &p);
+                            }
 
                             let mut blocks = Vec::new();
                             let mut branches = Vec::new();
@@ -173,23 +180,29 @@ impl Fuzzer {
         new_block: &HashSet<Block>,
         executor: &mut Executor,
     ) -> Prog {
+        assert!(!p.calls.is_empty());
+
         let mut p = p.clone();
+        if p.len() == 1 {
+            return p;
+        }
+
         let mut p_orig;
         let mut i = 0;
         while i != p.len() - 1 {
             p_orig = p.clone();
             if !remove(&mut p, i) {
                 i += 1;
-                continue;
-            }
-            if let ExecResult::Ok(cover) = self.exec_no_crash(executor, &p).await {
+            } else if let ExecResult::Ok(cover) = self.exec_no_crash(executor, &p).await {
                 let (new_blocks_1, _) = self.feedback_info_of(cover.last().unwrap()).await;
-                if !new_blocks_1.is_empty() && new_blocks_1.intersection(new_block).count() != 0 {
-                    continue;
+                if new_blocks_1.is_empty() || new_blocks_1.intersection(new_block).count() == 0 {
+                    i += 1;
+                    p = p_orig;
                 }
+            } else {
+                p = p_orig;
+                return p;
             }
-            i += 1;
-            p = p_orig;
         }
         p
     }
@@ -251,7 +264,10 @@ impl Fuzzer {
         if let Some(p) = self.candidates.pop().await {
             p
         } else {
-            gen(&self.target, &self.rt, &self.conf)
+            {
+                let rt = self.rt.lock().await;
+                gen(&self.target, &rt, &self.conf)
+            }
         }
     }
 }

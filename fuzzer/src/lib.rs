@@ -21,6 +21,7 @@ use std::process;
 use std::sync::Arc;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
+use tokio::sync::Mutex;
 use tokio::sync::{broadcast, Barrier};
 use tokio::time::Duration;
 
@@ -62,6 +63,8 @@ pub async fn fuzz(cfg: Config) {
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
     let record = Arc::new(TestCaseRecord::new(target.clone(), work_dir.clone()));
+    let rt = Arc::new(Mutex::new(static_analyze(&target)));
+
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
 
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
@@ -76,7 +79,7 @@ pub async fn fuzz(cfg: Config) {
         let cfg = cfg.clone();
 
         let fuzzer = Fuzzer {
-            rt: static_analyze(&target),
+            rt: rt.clone(),
             target: target.clone(),
             conf: Default::default(),
             candidates: candidates.clone(),
