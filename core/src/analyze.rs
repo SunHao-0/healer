@@ -18,16 +18,14 @@ use crate::target::Target;
 #[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Ord)]
 pub enum Relation {
     None,
-    Some,
-    Unknown,
+    Some
 }
 
 impl Display for Relation {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let fm = match self {
             Relation::None => "0",
-            Relation::Some => "1",
-            Relation::Unknown => "2",
+            Relation::Some => "1"
         };
         write!(f, "{}", fm)
     }
@@ -35,7 +33,7 @@ impl Display for Relation {
 
 impl Default for Relation {
     fn default() -> Self {
-        Relation::Unknown
+        Relation::None
     }
 }
 
@@ -46,11 +44,7 @@ pub struct RTable(Array2<Relation>);
 impl RTable {
     /// Crate new relation table for n interfaces, use default value for relation
     pub fn new(n: usize) -> Self {
-        let mut rt = RTable(Array2::default((n, n)));
-        for i in 0..n {
-            rt[(i, i)] = Relation::None; // ignore self impact
-        }
-        rt
+        RTable(Array2::default((n, n)))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -186,8 +180,11 @@ pub fn prog_analyze(g: &Group, r: &mut RTable, p: &Prog) {
     }
 
     for i in (0..id_index.len()).rev() {
-        for j in 0..i {
-            r[(id_index[i], id_index[j])] = Relation::Some;
+        if i != 0 {
+            r[(id_index[i], id_index[i - 1])] = Relation::Some;
         }
+        // for j in 0..i {
+        //     r[(id_index[i], id_index[j])] = Relation::Some;
+        // }
     }
 }
