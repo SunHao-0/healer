@@ -18,14 +18,14 @@ use crate::target::Target;
 #[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Ord)]
 pub enum Relation {
     None,
-    Some
+    Some,
 }
 
 impl Display for Relation {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let fm = match self {
             Relation::None => "0",
-            Relation::Some => "1"
+            Relation::Some => "1",
         };
         write!(f, "{}", fm)
     }

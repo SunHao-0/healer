@@ -332,7 +332,7 @@ fn gen_flag(flags: &[Flag]) -> Value {
 
     let mut rng = thread_rng();
 
-    if rng.gen::<f64>() >= 0.9 {
+    if rng.gen::<f64>() < 0.005 {
         Value::Num(NumValue::Signed(rng.gen::<u8>() as i64))
     } else {
         let flag = flags.iter().choose(&mut rng).unwrap();
@@ -544,7 +544,7 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
         let index = choose_call(&sps);
         sps[index] *= conf.sp_delta;
         seq.push(index);
-        i = seq.len() -1;
+        i = seq.len() - 1;
         push_deps(rs, &mut seq, i, &mut sps, conf);
     }
 
@@ -556,13 +556,14 @@ fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
 
 fn should_stop(prog_len: usize, conf: &Config) -> bool {
     let crt_progress = (prog_len as f64) / (conf.prog_max_len as f64);
-    !(prog_len < conf.prog_min_len || (prog_len < conf.prog_max_len && random::<f64>() > crt_progress))
+    !(prog_len < conf.prog_min_len
+        || (prog_len < conf.prog_max_len && random::<f64>() > crt_progress))
 }
 
 fn choose_call(sps: &[f64]) -> usize {
     let mut rng = thread_rng();
     let mut cum_sum = std::iter::repeat(0.0).take(sps.len()).collect::<Vec<_>>();
-    let mut pre =0.0;
+    let mut pre = 0.0;
 
     for (i, sum) in cum_sum.iter_mut().enumerate() {
         *sum += sps[i] + pre;
