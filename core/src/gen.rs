@@ -579,6 +579,7 @@ fn choose_call(sps: &[f64]) -> usize {
     unreachable!()
 }
 
+#[allow(clippy::collapsible_if)]
 fn push_deps(rs: &RTable, seq: &mut Vec<usize>, mut i: usize, sps: &mut [f64], conf: &Config) {
     let mut call_index;
 
