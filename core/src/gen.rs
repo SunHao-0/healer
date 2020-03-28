@@ -14,7 +14,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use bitset_fixed::BitSet;
 use ndarray::Axis;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
@@ -35,6 +34,7 @@ pub struct Config {
     pub str_min_len: usize,
     pub str_max_len: usize,
     pub path_max_depth: usize,
+    pub sp_delta: f64,
 }
 
 impl Default for Config {
@@ -45,6 +45,7 @@ impl Default for Config {
             str_min_len: 0,
             str_max_len: 32,
             path_max_depth: 4,
+            sp_delta: 0.4,
         }
     }
 }
@@ -535,61 +536,61 @@ fn gen_num(type_info: &NumInfo) -> Value {
 fn choose_seq(rs: &RTable, conf: &Config) -> Vec<usize> {
     assert!(!rs.is_empty());
 
-    let mut rng = thread_rng();
-    let mut set = BitSet::new(rs.len());
+    // selection prability list
+    let mut sps = std::iter::repeat(1.0).take(rs.len()).collect::<Vec<_>>();
     let mut seq = Vec::new();
-
-    loop {
-        let index = rng.gen_range(0, rs.len());
-        set.set(index, true);
+    let mut i;
+    while !should_stop(seq.len(), &conf) {
+        let index = choose_call(&sps);
+        sps[index] *= conf.sp_delta;
         seq.push(index);
-        let i = seq.len() - 1;
-
-        push_deps(rs, &mut set, &mut seq, i, conf);
-
-        if seq.len() < conf.prog_min_len || seq.len() < conf.prog_max_len && rng.gen() {
-            continue;
-        } else {
-            break;
-        }
+        i = seq.len() -1;
+        push_deps(rs, &mut seq, i, &mut sps, conf);
     }
+
     seq.shrink_to_fit();
     seq.reverse();
     assert!(seq.len() >= conf.prog_min_len);
     seq
 }
 
-fn push_deps(rs: &RTable, set: &mut BitSet, seq: &mut Vec<usize>, i: usize, conf: &Config) {
-    if i >= seq.len() || seq.len() >= conf.prog_max_len {
-        return;
-    }
-    let index = seq[i];
-    let mut deps = Vec::new();
-    let mut dep_r = 0.8;
-    let mut unknown_r = 0.4;
-    let deta = 0.5;
+fn should_stop(prog_len: usize, conf: &Config) -> bool {
+    let crt_progress = (prog_len as f64) / (conf.prog_max_len as f64);
+    !(prog_len < conf.prog_min_len || (prog_len < conf.prog_max_len && random::<f64>() > crt_progress))
+}
 
-    for (j, r) in rs.index_axis(Axis(0), index).iter().enumerate() {
-        if r.eq(&Relation::Some) {
-            if !set[j] && random::<f64>() < dep_r {
-                deps.push(j);
-                set.set(j, true);
-                dep_r *= deta;
-            } else if set[j] && random::<f64>() < dep_r * deta {
-                deps.push(j);
-            }
-        } else if r.eq(&Relation::Unknown) {
-            if !set[j] && random::<f64>() < unknown_r {
-                deps.push(j);
-                set.set(j, true);
-                unknown_r *= deta;
-            } else if set[j] && random::<f64>() < unknown_r * deta {
-                deps.push(j);
-            }
-        } else if random::<f64>() < 0.005 {
-            deps.push(j);
+fn choose_call(sps: &[f64]) -> usize {
+    let mut rng = thread_rng();
+    let mut cum_sum = std::iter::repeat(0.0).take(sps.len()).collect::<Vec<_>>();
+    let mut pre =0.0;
+
+    for (i, sum) in cum_sum.iter_mut().enumerate() {
+        *sum += sps[i] + pre;
+        pre = *sum;
+    }
+
+    let p = rng.gen_range(0.0, *cum_sum.last().unwrap());
+    for (i, sum) in cum_sum.into_iter().enumerate() {
+        if p < sum {
+            return i;
         }
     }
-    seq.extend(deps);
-    push_deps(rs, set, seq, i + 1, conf);
+    unreachable!()
+}
+
+fn push_deps(rs: &RTable, seq: &mut Vec<usize>, mut i: usize, sps: &mut [f64], conf: &Config) {
+    let mut call_index;
+
+    while !should_stop(seq.len(), &conf) && i < seq.len() {
+        call_index = seq[i];
+        for (j, r) in rs.index_axis(Axis(0), call_index).iter().enumerate() {
+            if call_index != j && random::<f64>() < sps[j] {
+                if *r == Relation::Some || random::<f64>() < 0.05 {
+                    sps[j] *= conf.sp_delta;
+                    seq.push(j);
+                }
+            }
+        }
+        i += 1;
+    }
 }
