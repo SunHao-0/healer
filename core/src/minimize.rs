@@ -19,13 +19,16 @@ where
 }
 
 pub fn remove(p: &mut Prog, i: usize) -> bool {
+    assert!(i < p.len() - 1);
+
     let calls = find_calls(p, i);
     if calls.is_empty() {
         return false;
     }
     // adjust ref arg
+    let last_call = p.len() - 1;
     for (j, call) in p.calls.iter_mut().enumerate().skip(i + 1) {
-        if !calls.contains(&j) {
+        if !calls.contains(&j) && j != last_call {
             for arg in call.args.iter_mut() {
                 for_each_ref_mut(&mut arg.val, |(ref mut cid, _)| {
                     let count = calls
@@ -36,10 +39,8 @@ pub fn remove(p: &mut Prog, i: usize) -> bool {
             }
         }
     }
-    let mut removed = 0;
-    for c in calls.into_iter() {
-        p.calls.remove(c - removed);
-        removed += 1;
+    for (r, c) in calls.into_iter().enumerate() {
+        p.calls.remove(c - r);
     }
     true
 }
@@ -60,6 +61,7 @@ fn find_calls(p: &Prog, i: usize) -> Vec<usize> {
         }
     }
     result.sort();
+    result.dedup();
     result
 }
 
