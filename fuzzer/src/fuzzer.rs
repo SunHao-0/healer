@@ -7,7 +7,7 @@ use crate::utils::queue::CQueue;
 use core::analyze::RTable;
 use core::c::to_script;
 use core::gen::gen;
-use core::minimize::minimize;
+use core::minimize::remove;
 use core::prog::Prog;
 use core::target::Target;
 use executor::{ExecResult, Reason};
@@ -135,7 +135,7 @@ impl Fuzzer {
                             .collect();
 
                         if !new_block.is_empty() || !new_branches.is_empty() {
-                            let minimized_p = minimize(&p, |_| true);
+                            let minimized_p = self.minimize(&p, &new_block, executor).await;
                             let raw_branches = self.exec_no_fail(executor, &minimized_p).await;
 
                             let mut blocks = Vec::new();
@@ -165,6 +165,29 @@ impl Fuzzer {
                 }
             }
         }
+    }
+
+    async fn minimize(&self, p: &Prog, new_block: &HashSet<Block>,
+                      executor: &mut Executor) -> Prog {
+        let mut p = p.clone();
+        let mut p_orig;
+        let mut i = 0;
+        while i != p.len() - 1 {
+            p_orig = p.clone();
+            if !remove(&mut p, i) {
+                i += 1;
+                continue;
+            }
+            if let ExecResult::Ok(cover) = self.exec_no_crash(executor, &p).await {
+                let (new_blocks_1, _) = self.feedback_info_of(cover.last().unwrap()).await;
+                if !new_blocks_1.is_empty() && new_blocks_1.intersection(new_block).count() != 0 {
+                    continue;
+                }
+            }
+            i += 1;
+            p = p_orig;
+        }
+        p
     }
 
     async fn feedback_info_of(&self, raw_blocks: &[usize]) -> (HashSet<Block>, HashSet<Branch>) {
