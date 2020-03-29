@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: deps
-      run: sudo apt install llvm-dev libclang-dev clang gcc-multilib g++-multilib
+      run: sudo apt install gcc-multilib g++-multilib
     - name: bingden
       run: cargo install bindgen
     - name: Build
