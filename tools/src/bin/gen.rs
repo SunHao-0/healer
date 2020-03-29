@@ -1,9 +1,9 @@
+use core::{analyze, c, gen};
 use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
 use tools::load_target;
-use core::{c, gen, analyze};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "gen", about = "Generate progs standard output")]

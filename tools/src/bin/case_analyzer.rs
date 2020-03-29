@@ -14,8 +14,8 @@ fn main() {
         let r = case.reason.split(':').collect::<Vec<_>>();
         if !r.is_empty() {
             let reason = String::from(r.last().unwrap().trim());
-            if reason.contains("unknown type size"){
-                println!("{}",case.p);
+            if reason.contains("unknown type size") {
+                println!("{}", case.p);
             }
             if reason.contains("too many arguments to function") && !case.p.contains("setpgrp") {
                 println!("{}", case.p);
