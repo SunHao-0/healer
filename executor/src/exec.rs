@@ -19,6 +19,7 @@ use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 
+// TODO ADD exec config
 pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
     if random::<f64>() < 0.0025 {
         bg_run(&p, t);

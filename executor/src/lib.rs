@@ -44,9 +44,7 @@ fn prepare_env() {
     let varargs_h = include_str!("../tcc-0.9.27/include/varargs.h");
     let tcc_include = PathBuf::from("healer/runtime/tcc/include");
     if let Err(e) = create_dir_all(&tcc_include) {
-        if let ErrorKind::AlreadyExists = e.kind() {
-            ()
-        } else {
+        if ErrorKind::AlreadyExists != e.kind() {
             panic!("Fail to create: {} :{}", tcc_include.display(), e);
         }
     }
