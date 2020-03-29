@@ -9,9 +9,13 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
     - uses: actions/checkout@v2
+    - name: deps
+      run: apt install llvm-dev libclang-dev clang gcc-multilib g++-multilib
+    - name: bingden
+      run: cargo install bindgen
     - name: Build
       run: cargo build --verbose
