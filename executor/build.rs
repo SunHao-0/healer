@@ -35,7 +35,7 @@ fn main() {
             .current_dir(&build_dir)
             .arg(format!(
                 "-j{}",
-                env::var("NUM_JOBS").unwrap_or(String::from("1"))
+                env::var("NUM_JOBS").unwrap_or_else(|_| String::from("1"))
             ))
             .status()
             .unwrap();
