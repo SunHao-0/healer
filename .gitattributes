@@ -1,3 +1,5 @@
 *.c linguist-detectable=false
+*.h linguist-detectable=false
+*.S linguist-detectable=false
 *.fots linguist-detectable=false
 *.pest linguist-detectable=false
