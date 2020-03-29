@@ -1,5 +1,6 @@
 use crate::feedback::{Block, Branch};
 use crate::guest::Crash;
+use crate::mail;
 use chrono::prelude::*;
 use chrono::DateTime;
 use circular_queue::CircularQueue;
@@ -7,6 +8,7 @@ use core::c::to_script;
 use core::prog::Prog;
 use core::target::Target;
 use executor::Reason;
+use lettre_email::EmailBuilder;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -63,6 +65,7 @@ pub struct CrashedCase {
     pub repo: bool,
     pub crash: Crash,
 }
+
 #[allow(clippy::len_without_is_empty)]
 impl TestCaseRecord {
     pub fn new(t: Arc<Target>, work_dir: String) -> Self {
@@ -195,6 +198,7 @@ impl TestCaseRecord {
 
         let path = format!("{}/normal_case.json", self.work_dir);
         let report = serde_json::to_string_pretty(&cases).unwrap();
+
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
@@ -226,6 +230,10 @@ impl TestCaseRecord {
     async fn persist_crash_case(&self, case: &CrashedCase) {
         let path = format!("{}/crashes/{}", self.work_dir, &case.meta.title);
         let crash = serde_json::to_string_pretty(case).unwrap();
+        let crash_mail = EmailBuilder::new()
+            .subject("Healer-Reporter: CRASH REPORT")
+            .body(&crash);
+        mail::send(crash_mail).await;
         write(&path, crash).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,
