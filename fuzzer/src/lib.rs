@@ -10,8 +10,10 @@ use crate::exec::{Executor, ExecutorConf};
 use crate::feedback::FeedBack;
 use crate::fuzzer::Fuzzer;
 use crate::guest::{GuestConf, QemuConf, SSHConf};
+use crate::mail::MailConf;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
+
 use circular_queue::CircularQueue;
 use core::analyze::static_analyze;
 use core::prog::Prog;
@@ -23,7 +25,6 @@ use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, Barrier};
-use tokio::time::Duration;
 
 #[macro_use]
 pub mod utils;
@@ -33,9 +34,11 @@ pub mod exec;
 pub mod feedback;
 pub mod fuzzer;
 pub mod guest;
+pub mod mail;
 pub mod report;
 pub mod stats;
 
+use crate::stats::SamplerConf;
 use stats::StatSource;
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +52,9 @@ pub struct Config {
     pub ssh: Option<SSHConf>,
 
     pub executor: ExecutorConf,
+
+    pub mail: Option<MailConf>,
+    pub sampler: Option<SamplerConf>,
 }
 
 pub async fn fuzz(cfg: Config) {
@@ -56,6 +62,11 @@ pub async fn fuzz(cfg: Config) {
     let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or_else(|_| String::from("."));
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
     info!("Corpus: {}", candidates.len().await);
+
+    if let Some(mail_conf) = cfg.mail.as_ref() {
+        mail::init(mail_conf);
+        info!("Email report to: {:?}", mail_conf.receivers);
+    }
 
     // shared between multi tasks
     let target = Arc::new(target);
@@ -118,12 +129,11 @@ pub async fn fuzz(cfg: Config) {
             candidates,
             record,
         },
-        interval: Duration::new(15, 0),
         stats: CircularQueue::with_capacity(1024),
         shutdown: shutdown_rx,
         work_dir,
     };
-    sampler.sample().await;
+    sampler.sample(&cfg.sampler).await;
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
