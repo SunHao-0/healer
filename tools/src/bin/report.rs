@@ -42,7 +42,11 @@ fn main() {
     writeln!(summary, "- [Crashes](crash/crash.md)").unwrap();
 
     if let Some(crashes) = settings.crashes {
-        let len = if crashes.len() < 50 { crashes.len() } else { 50 };
+        let len = if crashes.len() < 50 {
+            crashes.len()
+        } else {
+            50
+        };
         for crash in crashes.into_iter().take(len) {
             let crash = read(&crash).unwrap_or_else(|e| {
                 eprintln!("Fail to read {:?}: {}", crash, e);
@@ -70,7 +74,11 @@ fn main() {
             eprintln!("Fail to deserialize: {}", e);
             exit(1);
         });
-        let len = if failed_cases.len() < 50 { failed_cases.len() } else { 50 };
+        let len = if failed_cases.len() < 50 {
+            failed_cases.len()
+        } else {
+            50
+        };
         for case in failed_cases.into_iter().take(len) {
             let failed_md = report_failed(&case);
             let path = format!("{}.md", case.meta.title);
@@ -91,7 +99,11 @@ fn main() {
                 eprintln!("Fail to deserialize: {}", e);
                 exit(1);
             });
-        let len = if normal_cases.len() < 50 { normal_cases.len() } else { 50 };
+        let len = if normal_cases.len() < 50 {
+            normal_cases.len()
+        } else {
+            50
+        };
         for case in normal_cases.into_iter().take(len) {
             let normal_case_md = report_normal(&case);
             let path = format!("{}.md", case.meta.title);
