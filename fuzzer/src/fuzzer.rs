@@ -118,7 +118,7 @@ impl Fuzzer {
         executor: &mut Executor,
     ) {
         for (call_index, raw_blocks) in raw_blocks.iter().enumerate() {
-            let (new_blocks_1, new_branches_1) = self.feedback_info_of(raw_blocks).await;
+            let (new_blocks_1, new_branches_1) = self.check_new_feedback(raw_blocks).await;
 
             if !new_blocks_1.is_empty() || !new_branches_1.is_empty() {
                 let p = p.sub_prog(call_index);
@@ -127,7 +127,7 @@ impl Fuzzer {
                 if let ExecResult::Ok(raw_blocks) = exec_result {
                     if raw_blocks.len() == call_index + 1 {
                         let (new_block_2, new_branches_2) =
-                            self.feedback_info_of(&raw_blocks[call_index]).await;
+                            self.check_new_feedback(&raw_blocks[call_index]).await;
 
                         let new_block: HashSet<_> =
                             new_blocks_1.intersection(&new_block_2).cloned().collect();
@@ -194,7 +194,7 @@ impl Fuzzer {
             if !remove(&mut p, i) {
                 i += 1;
             } else if let ExecResult::Ok(cover) = self.exec_no_crash(executor, &p).await {
-                let (new_blocks_1, _) = self.feedback_info_of(cover.last().unwrap()).await;
+                let (new_blocks_1, _) = self.check_new_feedback(cover.last().unwrap()).await;
                 if new_blocks_1.is_empty() || new_blocks_1.intersection(new_block).count() == 0 {
                     i += 1;
                     p = p_orig;
@@ -207,7 +207,7 @@ impl Fuzzer {
         p
     }
 
-    async fn feedback_info_of(&self, raw_blocks: &[usize]) -> (HashSet<Block>, HashSet<Branch>) {
+    async fn check_new_feedback(&self, raw_blocks: &[usize]) -> (HashSet<Block>, HashSet<Branch>) {
         let (blocks, branches) = self.cook_raw_block(raw_blocks);
         let new_blocks = self.feedback.diff_block(&blocks[..]).await;
         let new_branches = self.feedback.diff_branch(&branches[..]).await;
