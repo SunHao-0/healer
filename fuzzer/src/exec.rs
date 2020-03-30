@@ -16,6 +16,7 @@ use tokio::sync::oneshot;
 #[derive(Debug, Deserialize)]
 pub struct ExecutorConf {
     pub path: PathBuf,
+    pub host_ip: Option<String>,
 }
 
 pub struct Executor {
@@ -54,6 +55,7 @@ struct LinuxExecutor {
 
     executor_bin_path: PathBuf,
     target_path: PathBuf,
+    host_ip: String,
 }
 
 impl LinuxExecutor {
@@ -61,6 +63,12 @@ impl LinuxExecutor {
         let guest = Guest::new(cfg);
         let port = port_check::free_local_port()
             .unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port for executor driver"));
+        let host_ip = cfg
+            .executor
+            .host_ip
+            .as_ref()
+            .map(String::from)
+            .unwrap_or_else(|| String::from(guest::LINUX_QEMU_HOST_IP_ADDR));
 
         Self {
             guest,
@@ -70,6 +78,7 @@ impl LinuxExecutor {
 
             executor_bin_path: cfg.executor.path.clone(),
             target_path: PathBuf::from(&cfg.fots_bin),
+            host_ip,
         }
     }
 
@@ -86,7 +95,7 @@ impl LinuxExecutor {
         let target = self.guest.copy(&self.target_path).await;
 
         let (tx, rx) = oneshot::channel();
-        let host_addr = format!("{}:{}", guest::LINUX_QEMU_HOST_IP_ADDR, self.port);
+        let host_addr = format!("{}:{}", self.host_ip, self.port);
         tokio::spawn(async move {
             let mut listener = TcpListener::bind(&host_addr).await.unwrap_or_else(|e| {
                 exits!(exitcode::OSERR, "Fail to listen on {}: {}", host_addr, e)
