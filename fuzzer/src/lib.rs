@@ -154,7 +154,8 @@ async fn load_target(cfg: &Config) -> Target {
 }
 
 pub async fn prepare_env() {
-    pretty_env_logger::init_timed();
+    // pretty_env_logger::init_timed();
+    init_logger();
     let pid = process::id();
     std::env::set_var("HEALER_FUZZER_PID", format!("{}", pid));
     info!("Pid: {}", pid);
@@ -170,6 +171,60 @@ pub async fn prepare_env() {
             exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
         }
     }
+}
+
+fn init_logger() {
+    use log::LevelFilter;
+    use log4rs::append::console::ConsoleAppender;
+    use log4rs::append::file::FileAppender;
+    use log4rs::append::rolling_file::policy::compound::{roll, trigger, CompoundPolicy};
+    use log4rs::append::rolling_file::RollingFileAppender;
+    use log4rs::config::{Appender, Config, Logger, Root};
+    use log4rs::encode::pattern::PatternEncoder;
+
+    let stdout = ConsoleAppender::builder()
+        .encoder(Box::new(PatternEncoder::new(
+            "{d(%Y-%m-%d %H:%M:%S)} {h({l})} {t} - {m}{n}",
+        )))
+        .build();
+
+    let fuzzer_appender = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new(
+            "{d(%Y-%m-%d %H:%M:%S)} {h({l})} - {m}{n}",
+        )))
+        .build("log/fuzzer.log")
+        .unwrap();
+
+    let stats_trigger = trigger::size::SizeTrigger::new(1024 * 1024 * 100);
+    let stats_roll = roll::fixed_window::FixedWindowRoller::builder()
+        .build("stats.log.{}", 2)
+        .unwrap();
+    let stats_policy = CompoundPolicy::new(Box::new(stats_trigger), Box::new(stats_roll));
+    let stats_appender = RollingFileAppender::builder()
+        .append(false)
+        .encoder(Box::new(PatternEncoder::new(
+            "{d(%Y-%m-%d %H:%M:%S)} {h({l})} - {m}{n}",
+        )))
+        .build("log/stats.log", Box::new(stats_policy))
+        .unwrap();
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(Appender::builder().build("fuzzer_appender", Box::new(fuzzer_appender)))
+        .appender(Appender::builder().build("stats_appender", Box::new(stats_appender)))
+        .logger(
+            Logger::builder()
+                .appender("stats_appender")
+                .build("fuzzer::stats", LevelFilter::Info),
+        )
+        .logger(
+            Logger::builder()
+                .appender("fuzzer_appender")
+                .build("fuzzer::fuzzer", LevelFilter::Info),
+        )
+        .build(Root::builder().appender("stdout").build(LevelFilter::Info))
+        .unwrap();
+    log4rs::init_config(config).unwrap();
 }
 
 // fn split(items: &mut Items, n: usize) -> Vec<Target> {
