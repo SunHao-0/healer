@@ -1,6 +1,7 @@
 # Healer
 [![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) 
  [![Check](https://github.com/SunHao-0/healer/workflows/Check/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ACheck)
+  [![Rustc Version 1.39+](https://img.shields.io/badge/rustc-1.39%2B-green)](https://blog.rust-lang.org/2019/11/07/Rust-1.39.0.html)
 
 Healer is a kernel fuzzer inspired by [Syzkaller](https://github.com/google/syzkaller).
 As a system call fuzzer, its basic workflow is generating system calls sequence, executing
