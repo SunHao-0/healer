@@ -1,5 +1,6 @@
 # Healer
-[![Build](![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg))](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) [![Check](![Check](https://github.com/SunHao-0/healer/workflows/Check/badge.svg))](https://github.com/SunHao-0/healer/actions?query=workflow%3ACheck)
+[![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) 
+ [![Check](https://github.com/SunHao-0/healer/workflows/Check/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ACheck)
 
 Healer is a kernel fuzzer inspired by [Syzkaller](https://github.com/google/syzkaller).
 As a system call fuzzer, its basic workflow is generating system calls sequence, executing
