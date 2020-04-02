@@ -26,17 +26,6 @@ On linux, following command makes life easier:
 > rustc --version # check install
 ```
 
-### Install tcc-0.9.27
-1. Clone or download repo [tcc-0.9.27](https://github.com/TinyCC/tinycc/tree/release_0_9_27)
-2. Build and install tcc on both host, where you run healer,  and guest, kernel to be tested, using following commands:
-``` bash
-> cd tcc-0.9.21 && mkdir build
-> cd build && ../configure      # do not change prefix option
-> make -j8
-> sudo make install 
-> tcc --version  # check intall
-```
-
 ### Build Healer
 1. Clone or download healer.
 2. Build healer with following commands:
@@ -65,7 +54,7 @@ executable files we've built to a sub-directory called `bin` and copy fots files
 > mkdir descs && cp path/to/fots_file/*.fots ./descs
 ```
 ### Prepare Kernel
-Create a sub-directort `target` inside work-dir and build kernel bzImage and stretch.img there following this [guide](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). Then boot kernel and build tcc-0.9.27 inside of it following above guide.
+Create a sub-directort `target` inside work-dir and build kernel bzImage and stretch.img there following this [guide](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
 
 
 ### Prepare Config file 
@@ -87,16 +76,25 @@ platform = "qemu"
 
 [qemu]
 cpu_num = 1
-mem_size = 1024 
+mem_size = 1024
 image = "./target/stretch.img"
-kernel = "./target/bzImage"
-wait_boot_time = 5 
+kernel = "./target/bzImage-bug"
+wait_boot_time = 5
 
 [ssh]
 key_path = "./target/stretch.id_rsa"
 
 [executor]
-path = "./bin/executor" 
+path = "./bin/executor"
+host_ip="localhost" 
+
+[sampler]
+sample_interval=15
+report_interval=5
+
+[mail]
+sender="healer-stats@outlook.com"
+receivers=["xx@outlook.com"]
 ```
 Meaning of each option:
 - *fots_bin*: path to compiled fots file.
@@ -105,12 +103,14 @@ Meaning of each option:
 - *qemu* fragment defines arguments passed to qemu, *wait_boot_time* is duration in seconds for waiting kernel to boot up  
 - *ssh* fragment defines arguments passed ssh(internal used), key_path is path to secret key file generated during kernel building step.
 - *executor* define arguments passed to executor and path of executor, path is the only needed option for now.
-
+- *sampler* data samplers config options
+- *mail* healer support auto report via outlook email, config your sender and receivers list, transfer password of 
+sender via env var while starting healer. 
 
 ### Fuzzing
 After preparing everything we need, just run following command:
 ``` bash 
-> sudo RUST_LOG=info ./bin/fuzzer 
+> sudo HEALER_MAIL_PASSWD="..."  ./bin/fuzzer 
 ```
 If everything works ok, you'll see following msg:
 ``` bash
