@@ -17,7 +17,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: deps
-        run: sudo apt install gcc-multilib g++-multilib 
+        run: sudo apt update && sudo apt install gcc-multilib g++-multilib 
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
