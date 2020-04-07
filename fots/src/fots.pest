@@ -26,7 +26,7 @@ StrType = {(Str|Cstr|FileName) ~ (OBrace ~ StrVals ~ CBrace)?}
 StrVals = { StringLiteral ~ (Comma ~StringLiteral)*}
 ResCtr = { Res ~ "<" ~ TypeExp ~">"}
 LenCtr = { Len ~ "<" ~ NumType ~ Comma ~ LenPath ~">"}
-LenPath = { Ident~(Dot~Ident)*}
+LenPath = { Ident~("->"~Ident)*}
 NumType = { (I8|I16|I32|I64|U8|U16|U32|U64|Usize|Isize) ~ (OBrace ~ (Range | NumVals) ~ CBrace)?}
 NumVals = { NumLiteral ~(Comma ~ NumLiteral)*}
 Range = { OParen~NumLiteral ~ Comma ~ NumLiteral~CParen}
@@ -52,7 +52,7 @@ HexDigit = _{'0'..'9' | "A"|"B"|"C"|"D"|"F" | "a"| "b"|"c"|"d"|"e"|"f"}
 
 // Function def
 FuncDef = {AttrsDef?~ Fn ~ FuncIdent ~ OParen ~ (ParamsDec)? ~ CParen ~ (TypeExp)? }
-FuncIdent = @{ Ident ~ ("$" ~ Ident)?}
+FuncIdent = @{ Ident ~ ("@" ~ Ident)?}
 ParamsDec = { ParamDec~(Comma~ParamDec)*}
 ParamDec = {Ident ~ Colon? ~ TypeExp}
 
@@ -69,14 +69,15 @@ ParamInsts = { PlaceHolder | Ident | StringLiteral | NumLiteral }
 GroupDef = { AttrsDef?~Group ~ Ident ~ OBrace ~ (FuncDef)+ ~ CBrace}
 
 AttrsDef = {"#" ~ OBrack ~ Attr~(Comma~Attr)*~CBrack}
+// AttrsDef = {"|"  ~ Attr~(Comma~Attr)*~ "|"}
 Attr = {AttrName ~ (OParen ~ AttrArgs ~ CParen)?}
 AttrName = {Ident}
 AttrArgs = {AttrArg ~ (Comma~AttrArg)*}
 AttrArg = {Ident}
 
 // Identifier
-Alpha = _{'a'..'z' | 'A'..'Z'}
-Ident = ${ NotKeyword ~ (Alpha|UnderLine) ~ (Alpha | Digit | UnderLine)*}
+Alpha = _{'a'..'z' | 'A'..'Z' }
+Ident = ${ NotKeyword ~ (Alpha|UnderLine) ~ (Alpha | Digit | UnderLine | "/" | ".")*}
 NotKeyword = _{ !(Keyword~WHITESPACE)}
 
 // Key word

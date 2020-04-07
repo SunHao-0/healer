@@ -413,7 +413,7 @@ impl FnInfo {
         attrs: Option<Vec<Attr>>,
     ) -> Self {
         let dec_name: String = name.into();
-        let call_name = dec_name.split('$').next().unwrap().into();
+        let call_name = dec_name.split('@').next().unwrap().into();
         FnInfo {
             id,
             gid,
