@@ -475,7 +475,10 @@ impl Parser {
     where
         <T as num_traits::Num>::FromStrRadixErr: std::fmt::Debug,
     {
-        num::parse(p.as_str()).unwrap()
+        num::parse(p.as_str()).unwrap_or_else(|e| {
+            eprintln!("Error: {:?}: {}", e, p.as_str());
+            exit(1);
+        })
     }
     #[allow(dead_code)]
     fn report<E: Error>(_e: pest::error::Error<Rule>) -> E {
