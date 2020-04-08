@@ -38,14 +38,26 @@ pub fn to_script(p: &Prog, t: &Target) -> Script {
 pub fn to_prog(p: &Prog, t: &Target) -> String {
     use crate::c::cths::CTHS;
 
-    let mut includes = hashset! {  "stddef.h","stdint.h","stdlib.h",};
+    let mut includes =
+        hashset! {  "stddef.h".to_string(),"stdint.h".to_string(),"stdlib.h".to_string(),};
     let mut c_stmts = String::new();
 
     for (call_index, stmts) in iter_trans(p, t).enumerate() {
-        let call_name = t.fn_of(p.calls[call_index].fid).call_name.clone();
-        if let Some(header) = CTHS.get(&call_name as &str) {
-            includes.extend(header);
+        let fn_info = t.fn_of(p.calls[call_index].fid);
+        let call_name = fn_info.call_name.clone();
+        if let Some(inc_attr) = fn_info.get_attr("inc") {
+            if let Some(incs) = inc_attr.vals.as_ref() {
+                for header in incs {
+                    includes.insert(header.to_string());
+                }
+            }
         }
+        if let Some(headers) = CTHS.get(&call_name as &str) {
+            for header in headers {
+                includes.insert((*header).to_string());
+            }
+        }
+
         writeln!(c_stmts, "{}", stmts.to_string()).unwrap();
     }
 

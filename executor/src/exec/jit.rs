@@ -157,7 +157,7 @@ int sync_send(unsigned long *cover, uint32_t len){{
         let fn_info = t.fn_of(p.calls[i].fid);
         let call_name = fn_info.call_name.clone();
         let mut header = if let Some(h) = CTHS.get(&call_name as &str) {
-            h.iter().map(|h| h.to_string()).collect::<Vec<_>>()
+            h.iter().map(|h| (*h).to_string()).collect::<Vec<_>>()
         } else {
             Default::default()
         };
