@@ -89,24 +89,28 @@ impl Fuzzer {
 
     async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
         warn!("========== Crashed ========= \n{}", crash);
-        let stmts = to_script(&p, &self.target);
-        warn!("Caused by:\n{}", stmts.to_string());
-        warn!("Restarting to repro ...");
-        executor.start().await;
-        match executor.exec(&p).await {
-            Ok(exec_result) => {
-                match exec_result {
-                    ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
-                    ExecResult::Failed(reason) => warn!("Repo failed, executed failed: {}", reason),
-                };
-                self.record.insert_crash(p, crash, false).await
-            }
-            Err(repo_crash) => {
-                self.record
-                    .insert_crash(p, repo_crash.unwrap_or(crash), true)
-                    .await;
-                warn!("Repo successfully, restarting guest ...");
-                executor.start().await;
+        if !crash.inner.contains("CRASH-MEMLEAK") {
+            let stmts = to_script(&p, &self.target);
+            warn!("Caused by:\n{}", stmts.to_string());
+            warn!("Restarting to repro ...");
+            executor.start().await;
+            match executor.exec(&p).await {
+                Ok(exec_result) => {
+                    match exec_result {
+                        ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
+                        ExecResult::Failed(reason) => {
+                            warn!("Repo failed, executed failed: {}", reason)
+                        }
+                    };
+                    self.record.insert_crash(p, crash, false).await
+                }
+                Err(repo_crash) => {
+                    self.record
+                        .insert_crash(p, repo_crash.unwrap_or(crash), true)
+                        .await;
+                    warn!("Repo successfully, restarting guest ...");
+                    executor.start().await;
+                }
             }
         }
     }
@@ -236,11 +240,20 @@ impl Fuzzer {
     async fn exec_no_crash(&self, executor: &mut Executor, p: &Prog) -> ExecResult {
         match executor.exec(p).await {
             Ok(exec_result) => exec_result,
-            Err(crash) => exits!(
-                exitcode::SOFTWARE,
-                "Unexpected crash: {}",
-                crash.unwrap_or_default()
-            ),
+            Err(crash) => {
+                if let Some(ref crash) = crash {
+                    if crash.inner.contains("CRASH-MEMLEAK") {
+                        warn!("========== Crashed ========= \n{}", crash);
+                        return ExecResult::Failed(Reason(String::from("Mem leak detected")));
+                    }
+                }
+
+                exits!(
+                    exitcode::SOFTWARE,
+                    "Unexpected crash: {}",
+                    crash.unwrap_or_default()
+                )
+            }
         }
     }
 
@@ -248,15 +261,22 @@ impl Fuzzer {
         match executor.exec(p).await {
             Ok(exec_result) => match exec_result {
                 ExecResult::Ok(raw_branches) => raw_branches,
-                ExecResult::Failed(reason) => {
-                    exits!(exitcode::SOFTWARE, "Unexpected failed: {}", reason)
-                }
+                ExecResult::Failed(_) => Default::default(),
             },
-            Err(crash) => exits!(
-                exitcode::SOFTWARE,
-                "Unexpected crash: {}",
-                crash.unwrap_or_default()
-            ),
+            Err(crash) => {
+                if let Some(ref crash) = crash {
+                    if crash.inner.contains("CRASH-MEMLEAK") {
+                        warn!("========== Crashed ========= \n{}", crash);
+                        return Default::default();
+                    }
+                }
+
+                exits!(
+                    exitcode::SOFTWARE,
+                    "Unexpected crash: {}",
+                    crash.unwrap_or_default()
+                )
+            }
         }
     }
 

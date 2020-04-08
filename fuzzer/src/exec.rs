@@ -17,6 +17,8 @@ use tokio::sync::oneshot;
 pub struct ExecutorConf {
     pub path: PathBuf,
     pub host_ip: Option<String>,
+    pub concurrency: bool,
+    pub memleak_check: bool,
 }
 
 pub struct Executor {
@@ -52,7 +54,8 @@ struct LinuxExecutor {
     port: u16,
     exec_handle: Option<Child>,
     conn: Option<TcpStream>,
-
+    concurrency: bool,
+    memleak_check: bool,
     executor_bin_path: PathBuf,
     target_path: PathBuf,
     host_ip: String,
@@ -76,6 +79,8 @@ impl LinuxExecutor {
             exec_handle: None,
             conn: None,
 
+            concurrency: cfg.executor.concurrency,
+            memleak_check: cfg.executor.memleak_check,
             executor_bin_path: cfg.executor.path.clone(),
             target_path: PathBuf::from(&cfg.fots_bin),
             host_ip,
@@ -112,7 +117,7 @@ impl LinuxExecutor {
             }
         });
 
-        let executor = App::new(self.executor_bin_path.to_str().unwrap())
+        let mut executor = App::new(self.executor_bin_path.to_str().unwrap())
             .arg(Arg::new_opt("-t", OptVal::normal(target.to_str().unwrap())))
             .arg(Arg::new_opt(
                 "-a",
@@ -122,8 +127,16 @@ impl LinuxExecutor {
                     self.port
                 )),
             ));
+        if self.memleak_check {
+            executor = executor.arg(Arg::new_flag("-m"));
+        }
+        if self.concurrency {
+            executor = executor.arg(Arg::new_flag("-c"));
+        }
+
         self.exec_handle = Some(self.guest.run_cmd(&executor).await);
         self.conn = Some(rx.await.unwrap());
+        info!("executor started.");
     }
 
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
@@ -134,6 +147,12 @@ impl LinuxExecutor {
         match async_recv_result(self.conn.as_mut().unwrap()).await {
             Ok(result) => {
                 self.guest.clear().await;
+                if let ExecResult::Failed(ref reason) = result {
+                    let rea = reason.to_string();
+                    if rea.contains("CRASH-MEMLEAK") {
+                        return Err(Some(Crash { inner: rea }));
+                    }
+                }
                 return Ok(result);
             }
             Err(_) => {

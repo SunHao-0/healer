@@ -174,7 +174,7 @@ impl Guest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Crash {
-    inner: String,
+    pub inner: String,
 }
 
 impl Default for Crash {
