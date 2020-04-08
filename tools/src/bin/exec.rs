@@ -1,6 +1,7 @@
 use core::prog::Prog;
 use executor::exec::fork_exec;
 use executor::exec::ExecResult;
+use executor::Config;
 use std::fs::read;
 use std::path::PathBuf;
 use std::process::exit;
@@ -14,6 +15,10 @@ struct Settings {
     prog: PathBuf,
     #[structopt(short = "t", long)]
     items: PathBuf,
+    #[structopt(short = "m", long)]
+    memleak_check: bool,
+    #[structopt(short = "c", long)]
+    concurrency: bool,
 }
 
 fn main() {
@@ -30,7 +35,11 @@ fn main() {
     });
 
     let len = p.len();
-    match fork_exec(p, &target) {
+    let conf = Config {
+        memleak_check: settings.memleak_check,
+        concurrency: settings.concurrency,
+    };
+    match fork_exec(p, &target, &conf) {
         ExecResult::Ok(covs) => {
             let mut total = 0;
             let mut each = Vec::new();
