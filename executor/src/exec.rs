@@ -1,4 +1,5 @@
 use crate::utils::{event, Notifier, Waiter};
+use crate::Config;
 use byte_slice_cast::*;
 use byteorder::*;
 use core::prog::Prog;
@@ -12,16 +13,17 @@ use os_pipe::PipeWriter;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fs::{read_to_string, write};
 use std::io::Read;
 use std::mem;
 use std::os::unix::io::AsRawFd;
+use std::path::PathBuf;
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 
-// TODO ADD exec config
-pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
-    if random::<f64>() < 0.0025 {
+pub fn fork_exec(p: Prog, t: &Target, conf: &Config) -> ExecResult {
+    if conf.concurrency || random::<f64>() < 0.0025 {
         bg_run(&p, t);
     }
     // transfer usefull data
@@ -65,7 +67,7 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
                 )
             });
             drop(err_wp);
-            sync_exec(&p, t, &mut wp, waiter);
+            sync_exec(&p, t, &mut wp, waiter, conf);
             exit(exitcode::OK)
         }
         Ok(ForkResult::Parent { child }) => {
@@ -73,7 +75,7 @@ pub fn fork_exec(p: Prog, t: &Target) -> ExecResult {
             drop(err_wp);
             drop(waiter);
 
-            watch(child, &mut rp, &mut err_rp, notifer)
+            watch(child, &mut rp, &mut err_rp, notifer, conf)
         }
         Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
     }
@@ -136,15 +138,17 @@ fn watch<T: Read + AsRawFd>(
     data: &mut T,
     err: &mut T,
     notifer: Notifier,
+    conf: &Config,
 ) -> ExecResult {
     let mut fds = vec![
         PollFd::new(data.as_raw_fd(), PollFlags::POLLIN),
         PollFd::new(err.as_raw_fd(), PollFlags::POLLIN),
     ];
     let mut covs = Vec::new();
+    let wait_timeout = if conf.memleak_check { 3000 } else { 1000 };
 
     loop {
-        match poll(&mut fds, 1000) {
+        match poll(&mut fds, wait_timeout) {
             Ok(0) => {
                 // timeout
                 kill_and_wait(child);
@@ -166,6 +170,14 @@ fn watch<T: Read + AsRawFd>(
                             return ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()));
                         } else {
                             covs.shrink_to_fit();
+                            if conf.memleak_check {
+                                if let Some(leak) = check_leak(child.to_string()) {
+                                    return ExecResult::Failed(Reason(format!(
+                                        "CRASH-MEMLEAK:\n{}",
+                                        leak
+                                    )));
+                                }
+                            }
                             return ExecResult::Ok(covs);
                         }
                     }
@@ -198,6 +210,53 @@ fn watch<T: Read + AsRawFd>(
     }
 }
 
+const MEM_LEAK: &str = "/sys/kernel/debug/kmemleak";
+
+fn mem_leak_clear() {
+    write(MEM_LEAK, "clear").unwrap();
+}
+
+fn check_leak(_: String) -> Option<String> {
+    use std::fmt::Write;
+    let mut executor_leak = String::new();
+    write(MEM_LEAK, "scan").unwrap();
+    let leaks = read_to_string(MEM_LEAK).unwrap();
+    let p = PathBuf::from(std::env::args().next().unwrap());
+    let p_name = p.file_name().unwrap().to_str().unwrap();
+    if !leaks.is_empty() {
+        let leaks_all = parse_leak(&leaks);
+        for l in leaks_all.iter() {
+            if l.contains(p_name) {
+                writeln!(executor_leak, "{}", l).unwrap();
+            }
+        }
+    }
+    write(MEM_LEAK, "clear").unwrap();
+    if executor_leak.is_empty() {
+        None
+    } else {
+        Some(executor_leak)
+    }
+}
+
+fn parse_leak(leaks_src: &str) -> Vec<&str> {
+    assert!(!leaks_src.is_empty());
+    let mut ret = Vec::new();
+
+    let mut leaks = leaks_src.match_indices("unreferenced object");
+    let (mut prev, _) = leaks.next().unwrap();
+    loop {
+        if let Some((crt, _)) = leaks.next() {
+            ret.push(&leaks_src[prev..crt]);
+            prev = crt
+        } else {
+            ret.push(&leaks_src[prev..]);
+            break;
+        }
+    }
+    ret
+}
+
 fn kill_and_wait(child: Pid) {
     if let Err(e) = kill(child, Some(Signal::SIGKILL)) {
         eprintln!(
@@ -224,7 +283,7 @@ pub enum ExecResult {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Reason(String);
+pub struct Reason(pub String);
 
 impl fmt::Display for Reason {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -241,7 +300,11 @@ pub mod jit;
 #[cfg(feature = "syscall")]
 pub mod syscall;
 
-pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
+pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter, conf: &Config) {
+    if conf.memleak_check {
+        mem_leak_clear();
+    }
+
     #[cfg(feature = "interprete")]
     use interprete::exec;
     #[cfg(feature = "jit")]

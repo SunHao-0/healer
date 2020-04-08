@@ -56,9 +56,9 @@ pub fn bg_exec(p: &Prog, t: &Target) {
     let p = c::to_prog(p, t);
     if !p.is_empty() {
         let mut cc = tcc::Tcc::new();
-        cc.add_sysinclude_path("/usr/local/lib/tcc/include")
+        cc.add_sysinclude_path("./healer/runtime/tcc/include")
             .unwrap();
-        cc.add_library_path("/usr/local/lib/tcc").unwrap();
+        // cc.add_library_path("/usr/local/lib/tcc").unwrap();
         cc.set_output_type(tcc::OutputType::Memory).unwrap();
         cc.compile_string(&p).unwrap();
         cc.run(&["healer-executor-bg-exec"]).unwrap()
@@ -72,17 +72,17 @@ pub fn instrument_prog(
     sync_fd: RawFd,
 ) -> Result<String, String> {
     let mut includes = hashset! {
-        "stdio.h",
-         "stddef.h",
-        "stdint.h",
-        "stdlib.h",
-        "sys/types.h",
-        "sys/stat.h",
-        "sys/ioctl.h",
-        "sys/mman.h",
-        "unistd.h",
-        "fcntl.h",
-        "string.h"
+        "stdio.h".to_string(),
+         "stddef.h".to_string(),
+        "stdint.h".to_string(),
+        "stdlib.h".to_string(),
+        "sys/types.h".to_string(),
+        "sys/stat.h".to_string(),
+        "sys/ioctl.h".to_string(),
+        "sys/mman.h".to_string(),
+        "unistd.h".to_string(),
+        "fcntl.h".to_string(),
+        "string.h".to_string()
     };
 
     let macros = r#"
@@ -154,12 +154,21 @@ int sync_send(unsigned long *cover, uint32_t len){{
 
     let mut stmts = Vec::new();
     for (i, s) in iter_trans(p, t).enumerate() {
-        let call_name = t.fn_of(p.calls[i].fid).call_name.clone();
-        let header = if let Some(h) = CTHS.get(&call_name as &str) {
-            h
+        let fn_info = t.fn_of(p.calls[i].fid);
+        let call_name = fn_info.call_name.clone();
+        let mut header = if let Some(h) = CTHS.get(&call_name as &str) {
+            h.iter().map(|h| h.to_string()).collect::<Vec<_>>()
         } else {
-            return Err(format!("Fail to instrument: {}", call_name));
+            Default::default()
         };
+        if let Some(attr) = fn_info.get_attr("inc") {
+            if let Some(vals) = attr.vals.as_ref() {
+                for val in vals {
+                    header.push(val.to_string());
+                }
+            }
+        }
+
         includes.extend(header);
 
         let generated_call = s.to_string();

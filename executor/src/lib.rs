@@ -19,8 +19,13 @@ pub mod transfer;
 pub use exec::{ExecResult, Reason};
 use std::path::PathBuf;
 
+pub struct Config {
+    pub memleak_check: bool,
+    pub concurrency: bool,
+}
+
 /// Read prog from conn, translate by target, run the translated test program.
-pub fn exec_loop<T: Read + Write>(_t: Target, mut conn: T) {
+pub fn exec_loop<T: Read + Write>(t: Target, mut conn: T, conf: Config) {
     if cfg!(feature = "jit") {
         prepare_env();
     }
@@ -29,7 +34,7 @@ pub fn exec_loop<T: Read + Write>(_t: Target, mut conn: T) {
         let p = transfer::recv_prog(&mut conn)
             .unwrap_or_else(|e| exits!(exitcode::SOFTWARE, "Fail to recv:{}", e));
 
-        let result = exec::fork_exec(p, &_t);
+        let result = exec::fork_exec(p, &t, &conf);
 
         transfer::send(&result, &mut conn)
             .unwrap_or_else(|e| exits!(exitcode::SOFTWARE, "Fail to Send {:?}:{}", result, e));

@@ -1,7 +1,7 @@
 use core::target::Target;
-use executor::exec_loop;
+use executor::{exec_loop, Config};
 use fots::types::Items;
-use std::fs::read;
+use std::fs::{read, write};
 use std::net::TcpStream;
 use std::process::exit;
 use std::thread::sleep;
@@ -17,6 +17,12 @@ pub struct Settings {
     /// Path of fots file
     #[structopt(short = "t", long)]
     target: String,
+
+    #[structopt(short = "c", long)]
+    concurrency: bool,
+
+    #[structopt(short = "m", long = "memleak-check")]
+    memleak_check: bool,
 }
 
 fn main() {
@@ -31,6 +37,10 @@ fn main() {
         exit(exitcode::DATAERR);
     });
     let target = Target::from(items);
+    if settings.memleak_check {
+        write("/sys/kernel/debug/kmemleak", "clear").unwrap();
+    }
+
     let mut retry = 1;
     let conn = loop {
         match TcpStream::connect(&settings.addr) {
@@ -47,5 +57,10 @@ fn main() {
         }
     };
 
-    exec_loop(target, conn)
+    let conf = Config {
+        memleak_check: settings.memleak_check,
+        concurrency: settings.concurrency,
+    };
+
+    exec_loop(target, conn, conf)
 }
