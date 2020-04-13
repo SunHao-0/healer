@@ -1,24 +1,24 @@
 type ssize_t = isize
-type off_t = i64
-type size_t = usize
-type clock_t = u64
+type off_t = i32
+type size_t = u32
+type clock_t = u32
 type sa_family_t = u16
 type socklen_t = u32
 type id_t = u32
-type dev_t = u64
-type ino_t = u64
+type dev_t = u32
+type ino_t = u32
 type mode_t = u32
-type nlink_t = u64
-type blksize_t = i64
-type blkcnt_t = i64
-type sigset_t = u64
-type time_t = i64
-type __fsword_t = i64
-type fsblkcnt_t = u64
-type fsfilcnt_t = u64
+type nlink_t = u32
+type blksize_t = i32
+type blkcnt_t = i32
+type sigset_t = *[i8; 128]
+type time_t = i32
+type __fsword_t = i32
+type fsblkcnt_t = u32
+type fsfilcnt_t = u32
 type clockid_t = i32
 type key_t = i32
-type rlim_t = u64
+type rlim_t = u32
 type idtype_t = u32
 type signalno_t =  i32{(0,65)}
 type special_int_t = i32{0,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,1048576,2097152}
@@ -32,6 +32,8 @@ type uid_t = res<u32>
 type fanotifyfd_t = res<i32>
 type inotifyfd_t = res<i32>
 type pkey_t = res<i32>
+type mqfd_t = res<i32>
+type timeridfd_t = res<i32>
 type procfs_file_t = *cstr{"/proc/keys", "/proc/key-users", "/proc/crypto",
                             "/proc/consoles", "/proc/cgroups", "/proc/zoneinfo",
                             "/proc/vmstat", "/proc/vmallocinfo", "/proc/tty/drivers",
@@ -46,6 +48,7 @@ type pidfd_t = res<i32>
 type eventfd_t =res<i32>
 type ipc_sem_t = res<i32>
 type timerfd_t = res<i32>
+
 type special_file = *filename{"/dev/null","/dev/zero","/dev/full","/dev/vga_arbiter",
                           "/dev/qat_adf_ctl","/dev/irnet","/dev/hwrng","/dev/autofs","/dev/keychord",
                           "/dev/socket/zygote","/dev/sw_sync","/dev/pktcdvd/control","/dev/lightnvm/control",
@@ -82,13 +85,13 @@ struct iovec {
 struct sched_attr {
      size              u32
      sched_policy      u32
-     sched_flags       u64
+     sched_flags       u32
      sched_nice        i32
 
      sched_priority     u32
-     sched_runtime      u64
-     sched_deadline     u64
-     sched_period       u64
+     sched_runtime      u32
+     sched_deadline     u32
+     sched_period       u32
  }
 
 struct sched_param {
@@ -128,6 +131,11 @@ struct utsname {
        machine   *cstr
 }
 
+struct kexec_segment{
+        buf *[i8]
+        bufsz len<i32, buf>
+}
+
 struct sysinfo {
     uptime          u32             /* Seconds since boot */
     totalram        u32
@@ -164,20 +172,20 @@ struct f_owner_ex {
 struct rusage {
     ru_utime        timeval
     ru_stime        timeval
-    ru_maxrss        u64
-    ru_ixrss         u64
-    ru_idrss         u64
-    ru_isrss         u64
-    ru_minflt        u64
-    ru_majflt        u64
-    ru_nswap         u64
-    ru_inblock       u64
-    ru_oublock       u64
-    ru_msgsnd        u64
-    ru_msgrcv        u64
-    ru_nsignals      u64
-    ru_nvcsw         u64
-    ru_nivcsw        u64
+    ru_maxrss        u32
+    ru_ixrss         u32
+    ru_idrss         u32
+    ru_isrss         u32
+    ru_minflt        u32
+    ru_majflt        u32
+    ru_nswap         u32
+    ru_inblock       u32
+    ru_oublock       u32
+    ru_msgsnd        u32
+    ru_msgrcv        u32
+    ru_nsignals      u32
+    ru_nvcsw         u32
+    ru_nivcsw        u32
 }
 
 struct timezone {
@@ -196,22 +204,22 @@ struct itimerval {
 }
 
 struct statx_timestamp {
-               tv_sec     u64
+               tv_sec     u32
                tv_nsec    u32
 }
 
 struct statx {
                 stx_mask                u32
                 stx_blksize             u32
-                stx_attributes          u64
+                stx_attributes          u32
                 stx_nlink               u32
                 stx_uid                 u32
                 stx_gid                 u32
                 stx_mode                u16
-                stx_ino                 u64
-                stx_size                u64
-                stx_blocks              u64
-                stx_attributes_mask     u64
+                stx_ino                 u32
+                stx_size                u32
+                stx_blocks              u32
+                stx_attributes_mask     u32
                 stx_atime       statx_timestamp
                 stx_btime       statx_timestamp
                 stx_ctime       statx_timestamp
@@ -223,14 +231,14 @@ struct statx {
 }
 
 struct linux_dirent {
-     d_ino             u64
-     d_off             u64
+     d_ino             u32
+     d_off             u32
      d_reclen          u16
 }
 
 struct statvfs {
-      f_bsize           u64
-      f_frsize          u64
+      f_bsize           u32
+      f_frsize          u32
       f_blocks          fsblkcnt_t
       f_bfree           fsblkcnt_t
       f_bavail          fsblkcnt_t
@@ -239,9 +247,9 @@ struct statvfs {
       f_ffree           fsfilcnt_t
       f_favail          fsfilcnt_t
 
-      f_fsid            u64
-      f_flag            u64
-      f_namemax         u64
+      f_fsid            u32
+      f_flag            u32
+      f_namemax         u32
 }
 
 struct statfs {
@@ -289,46 +297,46 @@ struct sockaddr {
 }
 
 struct timeval{
-    tv_sec i64
+    tv_sec i32
     tv_usec i32
 }
 
 struct timex {
         modes i32      /* Mode selector */
-        offset i64     /* Time offset nanoseconds, if STA_NANO
+        offset i32     /* Time offset nanoseconds, if STA_NANO
                            status flag is set, otherwise
                            microseconds */
-        freq i64       /* Frequency offset see NOTES for units */
-       maxerror i64   /* Maximum error (microseconds) */
-       esterror i64   /* Estimated error (microseconds) */
+        freq i32       /* Frequency offset see NOTES for units */
+       maxerror i32   /* Maximum error (microseconds) */
+       esterror i32   /* Estimated error (microseconds) */
        status i32     /* Clock command/status */
-       constant i64   /* PLL (phase-locked loop) time constant */
-       precision i64  /* Clock precision
+       constant i32   /* PLL (phase-locked loop) time constant */
+       precision i32  /* Clock precision
                            (microseconds, read-only) */
-       tolerance i64  /* Clock frequency tolerance (read-only)
+       tolerance i32  /* Clock frequency tolerance (read-only)
                            see NOTES for units */
        time     timeval
                         /* Current time (read-only, except for
                            ADJ_SETOFFSET) upon return, time.tv_usec
                            contains nanoseconds, if STA_NANO status
                            flag is set, otherwise microseconds */
-       tick     i64       /* Microseconds between clock ticks */
-       ppsfreq  i64    /* PPS (pulse per second) frequency
+       tick     i32       /* Microseconds between clock ticks */
+       ppsfreq  i32    /* PPS (pulse per second) frequency
                            (read-only) see NOTES for units */
-       jitter   i64     /* PPS jitter (read-only) nanoseconds, if
+       jitter   i32     /* PPS jitter (read-only) nanoseconds, if
                            STA_NANO status flag is set, otherwise
                            microseconds */
        shift    i32      /* PPS interval duration
                            (seconds, read-only) */
-       stabil   i64     /* PPS stability (read-only)
+       stabil   i32     /* PPS stability (read-only)
                            see NOTES for units */
-       jitcnt   i64     /* PPS count of jitter limit exceeded
+       jitcnt   i32     /* PPS count of jitter limit exceeded
                            events (read-only) */
-       calcnt   i64     /* PPS count of calibration intervals
+       calcnt   i32     /* PPS count of calibration intervals
                            (read-only) */
-       errcnt   i64     /* PPS count of calibration errors
+       errcnt   i32     /* PPS count of calibration errors
                            (read-only) */
-       stbcnt   i64     /* PPS count of stability limit exceeded
+       stbcnt   i32     /* PPS count of stability limit exceeded
                            events (read-only) */
        tai      i32         /* TAI offset, as set by previous ADJ_TAI
                            operation (seconds, read-only,
@@ -368,7 +376,7 @@ struct epoll_event {
 
 struct timespec {
         tv_sec       time_t
-        tv_nsec      i64
+        tv_nsec      i32
 }
 
 struct itimerspec {
@@ -377,15 +385,23 @@ struct itimerspec {
 }
 
 struct old_linux_dirent {
-     d_ino         u64
-     d_offset      u64
+     d_ino         u32
+     d_offset      u32
      d_namlen      u16
      d_name         *cstr
 }
+
 struct pollfd {
           fd    fd_t         /* file descriptor */
           events    pollfd_events     /* requested events */
           revents   u16{0}    /* returned events */
+}
+
+struct mq_attr {
+        mq_flags        i32
+        mq_maxmsg       i32
+        mq_msgsize      i32
+        mq_curmsgs      i32
 }
 
 flag syslog_cmd {
@@ -397,8 +413,8 @@ flag syslog_cmd {
     SYSLOG_ACTION_SIZE_UNREAD = 9 ,
     SYSLOG_ACTION_SIZE_BUFFER = 10,
 }
-flag faccessat_flags{F1 = 0x100, F2= 0x200, F3 = 0x400, F4 = 0x800, F5 = 0x1000}
 
+flag faccessat_flags{F1 = 0x100, F2= 0x200, F3 = 0x400, F4 = 0x800, F5 = 0x1000}
 flag statx_flags{AT_STATX_FORCE_SYNC=8192,AT_STATX_SYNC_AS_STAT=0,AT_SYMLINK_NOFOLLOW=256,AT_EMPTY_PATH=4096,AT_STATX_SYNC_TYPE=24576,AT_SYMLINK_FOLLOW=1024,AT_NO_AUTOMOUNT=2048,AT_STATX_DONT_SYNC=16384}
 flag flock_type{F_UNLCK=2,F_WRLCK=1,F_RDLCK=0}
 flag fcntl_getown_ex{F_GETOWN_EX=16}
@@ -460,3 +476,28 @@ flag fcntl_rw_hint{RWH_WRITE_LIFE_MEDIUM=3,RWH_WRITE_LIFE_EXTREME=5,RWH_WRITE_LI
 flag wait_options{WNOWAIT=16777216,WSTOPPED=2,WEXITED=4,WNOHANG=1,__WNOTHREAD=536870912,WCONTINUED=8,__WCLONE=2147483648,__WALL=1073741824,WUNTRACED=2}
 flag fcntl_F_NOTIFY{F_NOTIFY=1026}
 flag fcntl_F_SETPIPE_SZ{F_SETPIPE_SZ=1031}
+flag membarrier_cmd{MEMBARRIER_CMD_GLOBAL_EXPEDITED=2,MEMBARRIER_CMD_GLOBAL=1,MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED=16,MEMBARRIER_CMD_QUERY=0,MEMBARRIER_CMD_SHARED=1,MEMBARRIER_CMD_PRIVATE_EXPEDITED=8,MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED=4,MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE=64,MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE=32}
+flag ptrace_PTRACE_SECCOMP_GET_FILTER{PTRACE_SECCOMP_GET_FILTER=16908}
+flag ptrace_PTRACE_POKEUSR{PTRACE_POKEUSER=6}
+flag rlimit_type{RLIMIT_CPU=0,RLIMIT_DATA=2,RLIMIT_RTTIME=15,RLIMIT_MEMLOCK=8,RLIMIT_NPROC=6,RLIMIT_RTPRIO=14,RLIMIT_STACK=3,RLIMIT_LOCKS=10,RLIMIT_MSGQUEUE=12,RLIMIT_NICE=13,RLIMIT_NOFILE=7,RLIMIT_RSS=5,RLIMIT_FSIZE=1,RLIMIT_SIGPENDING=11,RLIMIT_CORE=4,RLIMIT_AS=9}
+flag memfd_flags{MFD_CLOEXEC=1,MFD_ALLOW_SEALING=2,MFD_HUGETLB=4}
+flag madvise_flags{MADV_WILLNEED=3,MADV_REMOVE=9,MADV_MERGEABLE=12,MADV_HUGEPAGE=14,MADV_DODUMP=17,MADV_WIPEONFORK=18,MADV_KEEPONFORK=19,MADV_DONTNEED=4,MADV_DOFORK=11,MADV_SEQUENTIAL=2,MADV_RANDOM=1,MADV_NORMAL=0,MADV_DONTFORK=10,MADV_NOHUGEPAGE=15,MADV_DONTDUMP=16,MADV_UNMERGEABLE=13,MADV_HWPOISON=100}
+flag ptrace_PTRACE_GETREGSET{PTRACE_GETREGSET=16900}
+flag ptrace_PTRACE_GETSIGINFO{PTRACE_GETSIGINFO=16898}
+flag ptrace_req_setopts{PTRACE_SETOPTIONS=16896,PTRACE_SEIZE=16902}
+flag ptrace_options{PTRACE_O_EXITKILL=1048576,PTRACE_O_TRACESYSGOOD=1,PTRACE_O_TRACEEXEC=16,PTRACE_O_TRACECLONE=8,PTRACE_O_TRACEVFORKDONE=32,PTRACE_O_TRACEVFORK=4,PTRACE_O_TRACEEXIT=64,PTRACE_O_TRACEFORK=2}
+flag ptrace_req_cont{PTRACE_SINGLESTEP=9,PTRACE_SYSCALL=24,PTRACE_CONT=7,PTRACE_SYSEMU_SINGLESTEP=32,PTRACE_SYSEMU=31}
+flag ptrace_req_poke{PTRACE_POKETEXT=4,PTRACE_POKEDATA=5}
+flag ptrace_PTRACE_SETSIGINFO{PTRACE_SETSIGINFO=16899}
+flag ptrace_req{PTRACE_LISTEN=16904,PTRACE_DETACH=17,PTRACE_INTERRUPT=16903,PTRACE_KILL=8,PTRACE_ATTACH=16}
+flag ptrace_PTRACE_PEEKUSR{PTRACE_PEEKUSER=3}
+flag ptrace_req_setregs{PTRACE_SETREGS=13,PTRACE_SETFPREGS=15}
+flag sigprocmask_how{SIG_SETMASK=2,SIG_UNBLOCK=1,SIG_BLOCK=0}
+flag ptrace_PTRACE_SECCOMP_GET_METADATA{PTRACE_SECCOMP_GET_METADATA=16909}
+flag ptrace_PTRACE_SETREGSET{PTRACE_SETREGSET=16901}
+flag at_flags{AT_SYMLINK_FOLLOW=1024,AT_SYMLINK_NOFOLLOW=256,AT_EMPTY_PATH=4096,AT_NO_AUTOMOUNT=2048}
+flag kcmp_flags{KCMP_FS=3,KCMP_SIGHAND=4,KCMP_VM=1,KCMP_FILES=2,KCMP_FILE=0,KCMP_SYSVSEM=6,KCMP_IO=5}
+flag ptrace_PTRACE_GETEVENTMSG{PTRACE_GETEVENTMSG=16897}
+flag ptrace_req_getregs{PTRACE_GETREGS=12,PTRACE_GETFPREGS=14}
+flag ptrace_req_peek{PTRACE_PEEKTEXT=1,PTRACE_PEEKDATA=2}
+flag mknod_mode{S_IFSOCK=49152,S_IWUSR=128,S_IXGRP=8,S_ISGID=1024,S_IFBLK=24576,S_IRUSR=256,S_IFIFO=4096,S_IWOTH=2,S_IWGRP=16,S_IFCHR=8192,S_IXUSR=64,S_IRGRP=32,S_IXOTH=1,S_IFREG=32768,S_IROTH=4,S_ISUID=2048,S_ISVTX=512}

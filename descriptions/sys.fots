@@ -1,0 +1,363 @@
+group SYS{
+    fn open(pathname *filename,flags open_flags, mode open_mode)fd_t
+    fn open@special_file(file special_file, flags open_flags, mode i32{0}) fd_t
+    fn openat(dirfd u32, pathname *filename, flags open_flags, mode open_mode)fd_t
+    fn creat(pathname *filename , mode open_mode) fd_t
+    fn close(f  fd_t)
+    fn readahead(fd fd_t, offset off_t, count u32)
+    fn read(fd fd_t, buf *Out [i8], count len<i32, buf>)
+    fn readv(fd fd_t, iov *[iovec],   iovcnt len<i32, iov>)
+    fn pread(fd fd_t,  buf *[i8], count len<i32, buf>, offset off_t)
+    fn preadv(fd fd_t, iov *[iovec], iovcnt len<i32, iov>, offset off_t)
+    fn write(fd fd_t, buf *[i8], count len<i32, buf>)
+    fn writev(fd fd_t,iov *[iovec],   iovcnt len<i32, iov>)
+    fn pwrite(fd fd_t,  buf *[i8], count len<i32, buf>, offset off_t)
+    fn pwritev(fd fd_t, iov *[iovec], iovcnt len<i32, iov>, offset off_t)
+    fn lseek(fd fd_t, offset off_t, whence seek_whence)
+    fn process_vm_readv( pid pid_t,
+                             local_iov *[iovec],
+                             liovcnt len<u32, local_iov>,
+                             remote_iov *[iovec],
+                             riovcnt len<u32, remote_iov>,
+                             flags u32{0})
+
+    fn process_vm_writev(pid pid_t,local_iov *[iovec], liovcnt len<u32, local_iov>,
+                                                  remote_iov *[iovec],
+                                                  riovcnt len<u32, remote_iov>,
+                                                  flags u32{0})
+    fn dup(old fd_t) fd_t
+    fn dup2(oldfd fd_t, newfd u32) fd_t
+    fn dup3(oldfd fd_t, newfd u32 , flags dup_flags)fd_t
+
+    fn swapoff(path *filename)
+    fn swapon(path *filename, swapflags i32)
+
+    fn fanotify_init( flags u32, event_f_flags u32) fanotifyfd_t
+    fn fanotify_mark( fanotify_fd fanotifyfd_t,   flags u32, mask u64, dirfd fd_t,  pathname *filename)
+    fn inotify_init() inotifyfd_t
+    fn inotify_init1(flags i32)inotifyfd_t
+    fn inotify_add_watch(fd inotifyfd_t,pathname *filename, mask u32)
+    fn inotify_rm_watch(fd inotifyfd_t, wd i32)
+
+    fn sendfile(out_fd fd_t, in_fd fd_t, offset *off_t, count size_t)
+
+    /*
+    fn pipe(pipefd *Out [i32;2])
+    fn pipe2(pipefd *Out [i32;2], flags pipe_flags)
+    fn splice(fd_in fd_t, off_in *i64, fd_out fd_t, off_out *i64, l u32, flags splice_flags)
+    fn tee(fd_in fd_t, fd_out fd_t,l i32, flags splice_flags)
+    fn vmsplice(fd fd_t, iov *[iovec],  nr_segs len<u32, iov>, flags splice_flags)
+    */
+
+    fn stat(pathname *filename, statbuf *Out stat)
+    fn lstat(pathname *filename , statbuf *Out stat)
+    fn fstat(fd fd_t,  statbuf *Out stat)
+    fn fstatat(dirfd fd_t, pathname *filename , statbuf *Out stat, flags i32)
+    fn syscall@statx(nr i64{332}, dirfd fd_t, pathname *filename, flags i32, mask u32,  statxbuf *Out [i8;256])
+    fn fremovexattr( fd fd_t ,  name *cstr)
+    fn lremovexattr(path *filename, name *cstr)
+    fn removexattr(path *filename, name *cstr)
+    fn fsetxattr(fd  fd_t,  name *cstr, value *[i8], size len<usize, value>, flags i32)
+    fn setxattr(path *filename,  name *cstr, value *[i8],size len<usize, value>,flags i32)
+    fn lsetxattr(path *filename,  name *cstr, value *[i8],size len<usize, value>,flags i32 )
+    fn fgetxattr(fd fd_t, name *cstr, value *[i8], size len<i32, value>)
+    fn flistxattr( fd fd_t, list *[i8], size len<i32, list>)
+    fn getxattr( path  *filename,  name *cstr, value *[i8], size len<i32, value> )
+    fn lgetxattr(path  *filename,  name *cstr, value *[i8], size len<i32, value>)
+    fn listxattr(path  *filename ,  list *[i8], size len<i32, list>)
+    fn llistxattr(path  *filename, list *[i8], size len<i32, list> )
+    fn statvfs(path *filename, buf *Out statvfs)
+    fn fstatvfs(fd  fd_t,  buf *Out statvfs)
+    fn personality(persona personality_flags)
+    fn posix_fadvise(fd fd_t, offset off_t, l off_t,  advice fadvise_flags)
+
+    fn epoll_create(size u32)  epollfd_t
+    fn epoll_create1(flags epoll_flags)  epollfd_t
+    fn epoll_ctl@EPOLL_CTL_ADD(epfd epollfd_t, op epoll_EPOLL_CTL_ADD, fd fd_t, ev *epoll_event)
+    fn epoll_ctl@EPOLL_CTL_MOD(epfd epollfd_t, op epoll_EPOLL_CTL_MOD, fd fd_t, ev *epoll_event)
+    fn epoll_ctl@EPOLL_CTL_DEL(epfd epollfd_t, op epoll_EPOLL_CTL_DEL, fd fd_t, ev *epoll_event)
+    #[inc(sys/epoll.h)]
+    fn syscall@epoll_pwait(nr i64{281}, epfd epollfd_t, events *[epoll_event], maxevents len<i32, events>, timeout i32, sigmask sigset_t)
+    fn epoll_wait( epfd epollfd_t, events *[epoll_event], maxevents len<i32, events>, timeout i32 )
+    #[inc(poll.h, time.h)]
+    fn syscall@ppoll(nr i64{271}, fds *[pollfd], nfds len<u32, fds>, tmo_p *timespec, sigmask sigset_t)
+    fn poll(fds *[pollfd], nfds len<u32, fds>, timeout i32)
+
+    /* no signalfd*/
+
+    fn timerfd_create(clockid clock_type, flags timerfd_create_flags)timerfd_t
+    fn timerfd_gettime( fd timerfd_t, curr_value *Out itimerspec)
+    fn timerfd_settime(fd timerfd_t , flags timerfd_settime_flags, new_value *itimerspec, old_value *itimerspec)
+
+    fn eventfd(initval u32, flags eventfd_flags) eventfd_t
+    fn read@eventfd(fd eventfd_t, val *Out u64, l i32{8})
+    fn write@eventfd(fd eventfd_t, val *u64, l i32{8})
+
+    fn memfd_create(name *cstr, flags memfd_flags) fd_t
+
+    fn mmap(addr special_int_t, length special_int_t, prot mmap_prot, flags mmap_flags, fd fd_t, offset off_t)vm_t
+    fn munmap(addr vm_t, length special_int_t)
+    fn mremap(old_address vm_t, old_size special_int_t, new_size special_int_t, flags mremap_flags, new_addr special_int_t)vm_t
+    fn mprotect(addr vm_t,  l special_int_t, prot mmap_prot)
+    #[inc(sys/mman.h)]
+    fn syscall@madvise(nr i64{28}, addr vm_t, length special_int_t, advice madvise_flags)
+    fn msync(addr vm_t, length special_int_t, flags msync_flags)
+    fn mincore(addr special_int_t, size_t  special_int_t , vec *Out [i8; (1024,16384)])
+    fn mlock(addr vm_t,  l special_int_t )
+    /*fn mlock2(addr vm_t, l special_int_t, flags mlock_flags)*/
+    fn munlock(addr vm_t, l special_int_t)
+    fn mlockall(flags mlockall_flags)
+    fn munlockall()
+    fn syscall@kcmp(nr i64{312}, pid1 pid_t, pid2 pid_t, t kcmp_flags, fd1 fd_t, fd2 fd_t)
+
+    fn pkey_alloc(flags i32{0}, access_rights pkey_flags) pkey_t
+    fn pkey_free(pkey pkey_t)
+    fn pkey_mprotect(addr vm_t, l special_int_t, prot mmap_prot, key pkey_t)
+
+    fn syscall@restart_syscall(nr i64{219})
+
+    fn fcntl(fd fd_t, cmd i32, args *[i8])
+    fn ioctl(fd fd_t, cmd i32, args *[i8])
+
+    fn ioctl@void(fd fd_t, cmd ioctl_void)
+    fn ioctl@int_in(fd fd_t, cmd ioctl_int_in, v  *In i64)
+    fn ioctl@int_out(fd fd_t, cmd ioctl_int_out, v *Out i64)
+
+    fn fcntl@dupfd(fd fd_t, cmd fcntl_dupfd, arg u32) fd_t
+    fn fcntl@getflags(fd fd_t, cmd fcntl_getflags)
+    fn fcntl@setflags(fd fd_t, cmd fcntl_setfd, flags fcntl_flags)
+    fn fcntl@setstatus(fd fd_t, cmd fcntl_setfl, flags fcntl_status)
+    fn fcntl@lock(fd fd_t, cmd fcntl_lock, lock  *flock)
+    fn fcntl@getown(fd fd_t, cmd fcntl_getown) pid_t
+    fn fcntl@setown(fd fd_t, cmd fcntl_setown, pid pid_t)
+    fn fcntl@getownex(fd fd_t, cmd fcntl_getown_ex, arg *Out f_owner_ex)
+    fn fcntl@setownex(fd fd_t, cmd fcntl_setown_ex, arg *f_owner_ex)
+    fn fcntl@setsig(fd fd_t, cmd fcntl_setsig, sig signalno_t)
+    fn fcntl@setlease(fd fd_t, cmd fcntl_F_SETLEASE, typ flock_type)
+    fn fcntl@notify(fd fd_t, cmd fcntl_F_NOTIFY, typ fcntl_notify)
+    fn fcntl@setpipe(fd fd_t, cmd fcntl_F_SETPIPE_SZ, sz u32)
+    fn fcntl@addseals(fd fd_t, cmd fcntl_F_ADD_SEALS, seals seal_types)
+    fn fcntl@F_GET_RW_HINT(fd fd_t, cmd fcntl_F_GET_RW_HINT, hint *Out i64)
+    fn fcntl@F_GET_FILE_RW_HINT(fd fd_t, cmd fcntl_F_GET_FILE_RW_HINT, hint *i64)
+    fn fcntl@F_SET_RW_HINT(fd fd_t, cmd   fcntl_F_SET_RW_HINT, hint *fcntl_rw_hint)
+    fn fcntl@F_SET_FILE_RW_HINT(fd fd_t, cmd fcntl_F_SET_FILE_RW_HINT, hint *fcntl_rw_hint)
+
+    fn syscall@capget(nr i64{125}, hdrp *Out [u32;2], datap *Out [u32;3])
+    fn syscall@capset(nr i64{126}, hdrp *[u32; 2], datap *[u32;3])
+
+    #[inc(mqueue.h)]
+    fn syscall@mq_open(nr i64{240}, name *cstr, flags mq_open_flags, mode open_mode, attr *mq_attr)mqfd_t
+    fn syscall@mq_unlink(nr i64{241}, name *cstr)
+    #[inc(time.h)]
+    fn syscall@mq_timedsend(nr i64{242}, mqd mqfd_t, msg *[i8], msglen len<i32,msg>, prio i32, timeout *timespec)
+    #[inc(time.h)]
+    fn syscall@mq_timedreceive(nr i64{243}, mqd mqfd_t, msg *Out [i8], msglen len<i32,msg>, prio i32, timeout *timespec)
+    #[inc(signal.h)]
+    fn syscall@mq_notify(nr i64{244}, mqd mqfd_t, notif *sigevent)
+    #[inc(mqueue.h)]
+    fn syscall@mq_getsetattr(nr i64{245}, mqd mqfd_t, attr *mq_attr, oldattr *Out mq_attr)
+
+    fn mknod(pathname *filename, mode mknod_mode, dev i32)
+    fn mknodat(dirfd fd_t, pathname *filename, mode mknod_mode, dev i32)
+    fn chmod(pathname *filename, mode open_mode)
+    fn fchmod(fd fd_t, mode open_mode)
+    fn fchmodat(dirfd fd_t, pathname *filename, mode open_mode , flags i32)
+    fn chown(pathname *filename, owner uid_t,  g gid_t)
+    fn lchown(pathname *filename, owner uid_t,  g gid_t)
+    fn fchown(fd fd_t,owner uid_t,   g gid_t )
+    fn fchownat(dirfd fd_t, pathname *filename, owner uid_t,  g gid_t , flags at_flags)
+    fn utime(f *filename ,  times *utimbuf)
+    fn futimesat(dirfd fd_t,  pathname *filename,  times *[timespec; 2])
+    fn utimensat(dirfd fd_t,  pathname *filename,  times *[timespec; 2], flags  utimensat_flags)
+    fn utimes( f *filename , times *[timespec;2])
+
+    fn getdomainname(name *Out [i8], l len<usize, name>)
+    fn setdomainname(name *[i8], l len<usize, name>)
+    fn getgroups(size len<i32, list>,   list *Out [gid_t])
+    fn setgroups(size len<i32, list>,   list *[gid_t])
+    fn gethostname(name *Out [i8], l len<usize, name> )
+    fn sethostname(name *[i8], l len<usize, name> )
+    fn getegid() gid_t
+    fn setegid(egid gid_t)
+    fn getgid() gid_t
+    fn setgid(gid gid_t)
+    fn getpid()  pid_t
+    fn getppid() pid_t
+    fn setpgid(pid pid_t, pgid pid_t)
+    /* fn gettid()  pid_t */
+    fn geteuid() uid_t
+    fn seteuid(euid uid_t)
+    fn getuid()  uid_t
+    fn setuid(uid uid_t)
+    fn setsid()  pid_t
+    fn setfsgid(  fsgid uid_t)
+    fn setfsuid(  fsuid uid_t)
+    fn setns(  fd i32,  nstype i32)
+    fn setpgrp()
+    fn setpriority(  which i32,  who id_t, prio i32)
+    fn setregid(  rgid gid_t,   egid gid_t)
+    fn setresgid(  rgid gid_t,   egid gid_t,   sgid gid_t)
+    fn setresuid(  ruid uid_t,   euid uid_t,   suid uid_t)
+    fn setreuid(  ruid uid_t,   euid uid_t)
+    fn gethostid()
+    fn sethostid(hostid u32)
+    fn getpriority( which i32, who id_t )
+    fn getresgid( rgid *gid_t,  egid *gid_t,  sgid *gid_t)
+    fn getresuid(ruid *uid_t,  euid *uid_t,  suid *uid_t)
+    fn getcwd(buf *[i8], size len<usize, buf>)
+
+    fn link(oldpath *filename, newpath *filename)
+    fn linkat(olddirfd fd_t, oldpath *filename, newdirfd fd_t, newpath *filename, flags i32)
+    fn symlink(target *filename , linkpath *filename)
+    fn symlinkat(target *filename,  newdirfd fd_t, linkpath *filename)
+    fn unlink(pathname *filename)
+    fn unlinkat(dirfd fd_t, pathname *filename , flags i32)
+    fn readlink(pathname *filename, buf *Out [i8], bufsiz len<usize, buf>)
+    fn readlinkat(dirfd fd_t, pathname *filename, buf *[i8],  bufsiz len<usize, buf> )
+    fn rename(oldpath *filename, newpath *filename)
+    fn renameat(olddirfd fd_t, oldpath *filename, newdirfd fd_t ,  newpath *filename)
+    fn rmdir(pathname *filename)
+    fn mkdir(pathname *filename, mode open_mode)
+    fn mkdirat(dirfd fd_t, pathname *filename, mode open_mode)
+    fn truncate( path *filename, length off_t)
+    fn ftruncate( fd fd_t, length off_t)
+    fn flock(fd fd_t, operation flock_op)
+    fn fallocate(fd fd_t, mode i32, offset off_t,  l off_t)
+    fn sync()
+    fn syncfs(fd fd_t)
+    fn fsync(fd fd_t)
+    fn fdatasync(fd fd_t)
+    fn sync_file_range(fd fd_t, offset off_t, nbytes off_t, flags sync_file_flags)
+    fn syscall@lookup_dcookie(nr i64{212}, cookie i64, buf *[i8], l len<i32,buf>)
+    fn chroot(path *filename)
+    fn chdir( path *filename)
+    fn fchdir(fd fd_t)
+
+    fn syscall@quotactl(nr i64{179}, cmd i32, special *filename, id uid_t, addr *[i8])
+    fn syscall@pivot_root(nr i64{155}, new_root *filename, put_old *filename)
+
+    fn syscall@sysfs_arg1(nr i64{139}, option i32{0}, fsname *cstr)
+    fn syscall@sysfs_arg2(nr i64{139}, option i32{1}, fsindex u32, fsname *[i8])
+    fn syscall@sysfs_arg3(nr i64{139}, option i32{2})
+    fn statfs( path *filename, buf *Out statfs)
+    fn fstatfs(fd fd_t,  buf *Out statfs)
+
+    fn syscall@uselib(nr i64{134}, lib *filename)
+    fn syscall@init_module(nr i64{175}, mod *cstr, l len<i32,mod>, args *cstr)
+    fn syscall@finit_module(nr i64{313}, fd fd_t, args *cstr, flags i32)
+    fn syscall@delete_module(nr i64{176}, name *cstr, flags i32)
+    #[inc(linux/kexec.h)]
+    fn syscall@kexec_load(nr i64{246}, entry i32, nr_segments len<i32,segments>, segments *[kexec_segment], flags i32)
+
+
+    fn syscall@syslog(nr i64{103},cmd i32{0,1,2,3,4,9,10}, buf *Out [i8], l len<i32,buf>)
+    fn uname(buf *utsname)
+    fn sysinfo(info *Out sysinfo)
+    fn syscall@acct(nr i64{163}, f *filename)
+
+    fn getrlimit(resource rlimit_type, rlim *Out rlimit)
+    fn setrlimit(resource rlimit_type, rlim *rlimit)
+    fn prlimit(pid pid_t,  resource rlimit_type, new_limit *rlimit, old_limit *Out rlimit)
+    fn getrusage(who i32, usage *Out rusage)
+
+
+    fn syscall@ptrace(nr i64{101}, req ptrace_req, pid pid_t)
+    fn syscall@ptrace_peek(nr i64{101}, req ptrace_req_peek, pid pid_t, addr *Out isize)
+    fn syscall@ptrace_poke(nr i64{101}, req ptrace_req_poke, pid pid_t, addr *Out isize, data isize)
+    fn syscall@ptrace_peekuser(nr i64{101}, req ptrace_PTRACE_PEEKUSR, pid pid_t, addr isize)
+    fn syscall@ptrace_pokeuser(nr i64{101}, req ptrace_PTRACE_POKEUSR, pid pid_t, addr isize, data isize)
+    fn syscall@ptrace_getregs(nr i64{101}, req ptrace_req_getregs, pid pid_t, ignored isize, data *Out [i8])
+    fn syscall@ptrace_getregset(nr i64{101}, req ptrace_PTRACE_GETREGSET, pid pid_t, what i32, data *iovec)
+    fn syscall@ptrace_setregs(nr i64{101}, req ptrace_req_setregs, pid pid_t, ignored isize, data *[i8])
+    fn syscall@ptrace_setregset(nr i64{101}, req ptrace_PTRACE_SETREGSET, pid pid_t, what isize, data *iovec)
+    fn syscall@ptrace_getsig(nr i64{101}, req ptrace_PTRACE_GETSIGINFO, pid pid_t, ignored isize, data *[i8;128])
+    fn syscall@ptrace_setsig(nr i64{101}, req ptrace_PTRACE_SETSIGINFO, pid pid_t, ignored isize, data *[i8; 128])
+    fn syscall@ptrace_setopts(nr i64{101}, req ptrace_req_setopts, pid pid_t, ignored isize, flags ptrace_options)
+    fn syscall@ptrace_getenv(nr i64{101}, req ptrace_PTRACE_GETEVENTMSG, pid pid_t, ignored isize, data *Out isize)
+    fn syscall@ptrace_cont(nr i64{101}, req ptrace_req_cont, pid pid_t, ignored isize, data isize)
+    fn syscall@ptrace_PTRACE_SECCOMP_GET_FILTER(nr i64{101}, req ptrace_PTRACE_SECCOMP_GET_FILTER, pid pid_t, addr isize, data *Out [i8])
+
+    /*
+    fn syscall@ptrace_PTRACE_SECCOMP_GET_METADATA(nr i64{101},
+    req ptrace_PTRACE_SECCOMP_GET_METADATA, pid pid_t, addr len<i32,data>, data ptr[in, seccomp_metadata])
+    */
+
+    fn syscall@iopl(nr i64{172}, level i8)
+    fn syscall@ioperm(nr i64{173}, from i32, num i32, on i32)
+    fn syscall@ioprio_get_pid(nr i64{252}, which i32, who pid_t)
+    fn syscall@ioprio_get_uid(nr i64{252}, which i32, who uid_t)
+    fn syscall@ioprio_set_pid(nr i64{251}, which i32, who pid_t, prio i32)
+    fn syscall@ioprio_set_uid(nr i64{251}, which i32, who uid_t, prio i32)
+
+    #[inc(signal.h)]
+    fn syscall@timer_create(nr i64{222}, id i32, ev *sigevent, timerid *Out timeridfd_t)
+    #[inc(time.h)]
+    fn syscall@timer_gettime(nr i64{224}, timerid timeridfd_t, setting *Out itimerspec)
+    fn syscall@timer_getoverrun(nr i64{225}, timerid timeridfd_t)
+    #[inc(time.h)]
+    fn syscall@timer_settime(nr i64{223}, timerid timeridfd_t, flags i32, new *itimerspec, old *Out itimerspec)
+    fn syscall@timer_delete(nr i64{226}, timerid timeridfd_t)
+
+    fn time(tloc *time_t)
+    #[inc(time.h)]
+    fn syscall@clock_gettime(nr i64{228},id i32, tp *Out timespec)
+    #[inc(time.h)]
+    fn syscall@clock_settime(nr i64{227},id i32, tp *timespec)
+    #[inc(sys/timex.h)]
+    fn syscall@clock_adjtime(nr i64{305},id i32, tx *timex)
+    #[inc(time.h)]
+    fn syscall@clock_getres(nr i64{229}, id i32, tp *timespec)
+    #[inc(time.h)]
+    fn syscall@clock_nanosleep(nr i64{230}, id i32, flags i32, rqtp *timespec, rmtp *Out timespec)
+
+    /*  raw structure */
+    fn syscall@rt_sigaction(nr i64{13}, sig signalno_t, act *[i8;152], oldact *Out [i8; 152])
+    fn syscall@rt_sigprocmask(nr i64{14}, how sigprocmask_how, nset sigset_t, oset sigset_t, sigsetsize i32{128})
+    fn syscall@rt_sigreturn(nr i64{15})
+    fn syscall@rt_sigpending(nr i64{127}, set sigset_t, sigsetsize i32{128})
+    #[inc(time.h)]
+    fn syscall@rt_sigtimedwait(nr i64{128}, these sigset_t, info *Out [i8; 128], ts *timespec, sigsetsize i32{128})
+    fn syscall@rt_sigsuspend(nr i64{130}, new sigset_t, sigsetsize i32{128})
+
+    fn syscall@rt_sigqueueinfo(nr i64{129}, pid pid_t, sig signalno_t, info *[i8;128])
+    fn syscall@rt_tgsigqueueinfo(nr i64{297}, gid pid_t, tid pid_t, sig signalno_t, info *[i8;128])
+    fn syscall@sigaltstack(nr i64{131}, ss special_int_t, oss *Out isize)
+
+    fn alarm(seconds u32)
+    fn nanosleep(req *timespec,   rem *timespec)
+    fn getitimer( which i32 ,  curr_value * itimerval)
+    fn setitimer(which i32, new_value *itimerval, old_value *itimerval)
+    fn times(buf *Out tms) clock_t
+
+    fn syscall@set_thread_area(nr i64{205}, info *[i8;16])
+    fn syscall@get_thread_area(nr i64{211}, info *[i8;16])
+    fn syscall@modify_ldt_read(nr i64{154}, func i32{0}, buf *Out [i8], l len<i32,buf>)
+    fn syscall@modify_ldt_write(nr i64{154}, func i32{1}, buf *[i8;16], l i32{16})
+    fn syscall@modify_ldt_read_default(nr i64{154}, func i32{2}, buf *Out [i8], l len<i32,buf>)
+    fn syscall@modify_ldt_write2(nr i64{154}, func i32{17}, buf *[i8;16], l i32{8})
+
+    fn syscall@set_tid_address(nr i64{218}, tidptr *Out i32)
+    fn getpriority( which i32, who id_t )
+    fn setpriority(  which i32,  who id_t, prio i32)
+    fn nice(inc i32)
+    fn sched_getscheduler(pid pid_t)
+    fn sched_setscheduler(pid pid_t, policy sched_policy, prio *i32)
+    fn sched_rr_get_interval(pid pid_t, tp *timespec)
+    fn sched_getparam(pid pid_t, prio *Out sched_param)
+    fn sched_setparam(pid pid_t, prio *sched_param)
+    fn sched_getaffinity(pid pid_t, cpusetsize len<i32,mask>, mask *Out i64)
+    fn sched_setaffinity(pid pid_t, cpusetsize  len<i32,mask>, mask  *i64)
+    fn sched_getattr(pid pid_t, attr *Out sched_attr, size i32, flags i32{0})
+    fn sched_setattr(pid pid_t, attr *sched_attr, flags i32{0})
+    fn sched_get_priority_max(policy i32)
+    fn sched_get_priority_min(policy i32)
+    fn getrandom(buf *[i8], buflen len<i32, buf>, flags random_flags)
+
+    fn membarrier(cmd membarrier_cmd, flags i32{0})
+
+    fn open@pidfd(file *filename{"/proc/self"}, flags open_flags, mode i32{0}) pidfd_t
+    fn open@thread_pidfd(file *filename{"/proc/thread-self"}, flags open_flags, mode i32{0}) pidfd_t
+    fn syscall@pidfd_send_signal(nr i64{424}, fd pidfd_t, sig signalno_t, info *[i8;16], flags i32{0})
+    fn pidfd_open(pid pid_t, flags i32{0}) pidfd_t
+    fn syscall@pidfd_getfd(nr i64{438}, pidfd pidfd_t, fd fd_t, flags i32{0}) fd_t
+}
