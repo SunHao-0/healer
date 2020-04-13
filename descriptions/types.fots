@@ -116,8 +116,8 @@ struct sigevent {
     sigev_notify  i32
     sigev_signo   i32
     sigev_value   sigval
-    sigev_notify_thread_id  pid_t
     /*
+    sigev_notify_thread_id  pid_t
     void       (*sigev_notify_function) (union sigval)
     void        *sigev_notify_attributes
     */

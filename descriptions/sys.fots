@@ -93,7 +93,7 @@ group SYS{
     fn read@eventfd(fd eventfd_t, val *Out u64, l i32{8})
     fn write@eventfd(fd eventfd_t, val *u64, l i32{8})
 
-    fn memfd_create(name *cstr, flags memfd_flags) fd_t
+    fn syscall@memfd_create(nr i64{319}, name *cstr, flags memfd_flags) fd_t
 
     fn mmap(addr special_int_t, length special_int_t, prot mmap_prot, flags mmap_flags, fd fd_t, offset off_t)vm_t
     fn munmap(addr vm_t, length special_int_t)
@@ -110,9 +110,9 @@ group SYS{
     fn munlockall()
     fn syscall@kcmp(nr i64{312}, pid1 pid_t, pid2 pid_t, t kcmp_flags, fd1 fd_t, fd2 fd_t)
 
-    fn pkey_alloc(flags i32{0}, access_rights pkey_flags) pkey_t
-    fn pkey_free(pkey pkey_t)
-    fn pkey_mprotect(addr vm_t, l special_int_t, prot mmap_prot, key pkey_t)
+    fn syscall@pkey_alloc(nr i64{330}, flags i32{0}, access_rights pkey_flags) pkey_t
+    fn syscall@pkey_free(nr i64{331}, pkey pkey_t)
+    fn syscall@pkey_mprotect(nr i64{329}, addr vm_t, l special_int_t, prot mmap_prot, key pkey_t)
 
     fn syscall@restart_syscall(nr i64{219})
 
@@ -251,7 +251,7 @@ group SYS{
 
 
     fn syscall@syslog(nr i64{103},cmd i32{0,1,2,3,4,9,10}, buf *Out [i8], l len<i32,buf>)
-    fn uname(buf *utsname)
+    /* fn uname(buf *utsname) */
     fn sysinfo(info *Out sysinfo)
     fn syscall@acct(nr i64{163}, f *filename)
 
@@ -347,17 +347,17 @@ group SYS{
     fn sched_setparam(pid pid_t, prio *sched_param)
     fn sched_getaffinity(pid pid_t, cpusetsize len<i32,mask>, mask *Out i64)
     fn sched_setaffinity(pid pid_t, cpusetsize  len<i32,mask>, mask  *i64)
-    fn sched_getattr(pid pid_t, attr *Out sched_attr, size i32, flags i32{0})
-    fn sched_setattr(pid pid_t, attr *sched_attr, flags i32{0})
+    fn syscall@sched_getattr(nr i64{315}, pid pid_t, attr *[i8; 48], size i32, flags i32{0})
+    fn syscall@sched_setattr(nr i64{314}, pid pid_t, attr *[i8; 48], flags i32{0})
     fn sched_get_priority_max(policy i32)
     fn sched_get_priority_min(policy i32)
-    fn getrandom(buf *[i8], buflen len<i32, buf>, flags random_flags)
+    fn syscall@getrandom(nr i64{318}, buf *[i8], buflen len<i32, buf>, flags random_flags)
 
-    fn membarrier(cmd membarrier_cmd, flags i32{0})
+    fn syscall@membarrier(nr i32{324}, cmd membarrier_cmd, flags i32{0})
 
     fn open@pidfd(file *filename{"/proc/self"}, flags open_flags, mode i32{0}) pidfd_t
     fn open@thread_pidfd(file *filename{"/proc/thread-self"}, flags open_flags, mode i32{0}) pidfd_t
     fn syscall@pidfd_send_signal(nr i64{424}, fd pidfd_t, sig signalno_t, info *[i8;16], flags i32{0})
-    fn pidfd_open(pid pid_t, flags i32{0}) pidfd_t
+    fn syscall@pidfd_open(nr i64{434}, pid pid_t, flags i32{0}) pidfd_t
     fn syscall@pidfd_getfd(nr i64{438}, pidfd pidfd_t, fd fd_t, flags i32{0}) fd_t
 }
