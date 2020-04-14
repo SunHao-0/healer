@@ -1,0 +1,14 @@
+minApprovals:
+  COLLABORATOR: 1
+  OWNER: 1
+
+deleteBranchAfterMerge: true
+
+mergeMethod: merge
+
+mergeCommitMessage: |
+  {title} (#{number})
+  {body}
+
+requiredLabels:
+  - merge
