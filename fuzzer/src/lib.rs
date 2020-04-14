@@ -149,10 +149,11 @@ async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
 }
 
 async fn load_target(cfg: &Config) -> Target {
-    let items = Items::load(&read(&cfg.fots_bin).await.unwrap_or_else(|e|{
+    let items = Items::load(&read(&cfg.fots_bin).await.unwrap_or_else(|e| {
         error!("Fail to load fots file: {}", e);
         exit(exitcode::DATAERR);
-    })).unwrap();
+    }))
+    .unwrap();
     // split(&mut items, cfg.vm_num)
     Target::from(items)
 }
