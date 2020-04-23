@@ -24,6 +24,7 @@ fn main() {
 
         let conf_status = Command::new(tcc_src.join("configure"))
             .arg(format!("--prefix={}", out_dir.display()))
+            .arg("--extra-cflags=-O3 -fPIC -g -Wall")
             .current_dir(&build_dir)
             .status()
             .unwrap();
