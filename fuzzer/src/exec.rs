@@ -4,7 +4,7 @@ use crate::utils::cli::{App, Arg, OptVal};
 use crate::Config;
 use core::prog::Prog;
 use executor::transfer::{async_recv_result, async_send};
-use executor::ExecResult;
+use executor::{ExecResult, Reason};
 use std::path::PathBuf;
 use std::process::exit;
 use tokio::io::AsyncReadExt;
@@ -140,11 +140,36 @@ impl LinuxExecutor {
     }
 
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
+        use tokio::time::{timeout, Duration};
         // send must be success
         assert!(self.conn.is_some());
-        async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
-
-        match async_recv_result(self.conn.as_mut().unwrap()).await {
+        if let Err(e) = timeout(
+            Duration::new(15, 0),
+            async_send(p, self.conn.as_mut().unwrap()),
+        )
+            .await
+        {
+            info!("Prog send blocked: {}, restarting...", e);
+            self.start().await;
+            return Ok(ExecResult::Failed(Reason("Prog send blocked".into())));
+        }
+        // async_send(p, self.conn.as_mut().unwrap()).await.unwrap();
+        let ret = {
+            match timeout(
+                Duration::new(15, 0),
+                async_recv_result(self.conn.as_mut().unwrap()),
+            )
+                .await
+            {
+                Err(e) => {
+                    info!("Prog recv blocked: {}, restarting...", e);
+                    self.start().await;
+                    return Ok(ExecResult::Failed(Reason("Prog send blocked".into())));
+                }
+                Ok(ret) => ret,
+            }
+        };
+        match ret {
             Ok(result) => {
                 self.guest.clear().await;
                 if let ExecResult::Failed(ref reason) = result {
