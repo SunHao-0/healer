@@ -147,7 +147,7 @@ impl LinuxExecutor {
             Duration::new(15, 0),
             async_send(p, self.conn.as_mut().unwrap()),
         )
-            .await
+        .await
         {
             info!("Prog send blocked: {}, restarting...", e);
             self.start().await;
@@ -159,7 +159,7 @@ impl LinuxExecutor {
                 Duration::new(15, 0),
                 async_recv_result(self.conn.as_mut().unwrap()),
             )
-                .await
+            .await
             {
                 Err(e) => {
                     info!("Prog recv blocked: {}, restarting...", e);
