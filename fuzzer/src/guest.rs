@@ -275,10 +275,7 @@ impl LinuxQemu {
                 handle
                     .kill()
                     .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill failed guest:{}", e));
-                let mut buf = String::new();
-                rp.read_to_string(&mut buf).unwrap_or_else(|e| {
-                    exits!(exitcode::OSERR, "Fail to read to end of pipe:{}", e)
-                });
+                let buf = String::from_utf8(read_all_nonblock(&mut rp)).unwrap();
                 eprintln!("{}", buf);
                 eprintln!("===============================================");
                 exits!(exitcode::DATAERR, "Fail to boot :\n{:?}", self.vm);
