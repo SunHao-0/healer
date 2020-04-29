@@ -9,7 +9,7 @@ use std::fmt::Write;
 use std::os::raw::c_int;
 use std::os::unix::io::*;
 use std::process::exit;
-use tcc::Symbol;
+use tcc::{Symbol, Tcc};
 
 pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd()).unwrap_or_else(|e| {
@@ -17,19 +17,7 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
         exit(exitcode::SOFTWARE);
     });
 
-    let mut cc = tcc::Tcc::new();
-    cc.add_sysinclude_path("./healer/runtime/tcc/include")
-        .unwrap();
-    // cc.add_sysinclude_path("/usr/local/lib/tcc/include")
-    //     .unwrap();
-    // cc.add_library_path("/usr/local/lib/tcc").unwrap();
-    cc.set_output_type(tcc::OutputType::Memory)
-        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
-    cc.set_error_func(Some(Box::new(|e| {
-        if e.contains("error") {
-            eprintln!("{}", e);
-        }
-    })));
+    let mut cc = new_tcc();
     cc.compile_string(&p)
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to compile generated prog: {}", p));
     let mut p = cc
@@ -55,11 +43,7 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
 pub fn bg_exec(p: &Prog, t: &Target) {
     let p = c::to_prog(p, t);
     if !p.is_empty() {
-        let mut cc = tcc::Tcc::new();
-        cc.add_sysinclude_path("./healer/runtime/tcc/include")
-            .unwrap();
-        // cc.add_library_path("/usr/local/lib/tcc").unwrap();
-        cc.set_output_type(tcc::OutputType::Memory).unwrap();
+        let mut cc = new_tcc();
         cc.compile_string(&p).unwrap();
         cc.run(&["healer-executor-bg-exec"]).unwrap()
     }
@@ -254,4 +238,25 @@ impl From<i32> for StatusCode {
             _ => unreachable!(),
         }
     }
+}
+
+fn new_tcc() -> Tcc {
+    let mut cc = tcc::Tcc::new();
+    cc.add_sysinclude_path("./healer/runtime/tcc/include")
+        .unwrap();
+    if cfg!(target_os = "linux") {
+        cc.add_sysinclude_path("/usr/include").unwrap();
+        cc.add_sysinclude_path("/usr/local/include").unwrap();
+        cc.add_library_path("/usr/lib").unwrap();
+        cc.add_library_path("/usr/local/lib").unwrap();
+    }
+    cc.set_output_type(tcc::OutputType::Memory)
+        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
+    // ignore wraning
+    cc.set_error_func(Some(Box::new(|e| {
+        if e.contains("error") {
+            eprintln!("{}", e);
+        }
+    })));
+    cc
 }
