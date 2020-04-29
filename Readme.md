@@ -72,6 +72,7 @@ Modify config options in your `healer-fuzzer.toml` based on following template.
 ``` toml
 fots_bin = "./sys"
 vm_num = 2
+auto_reboot_duration = 90
 
 [guest]
 os = "linux"
@@ -80,10 +81,10 @@ platform = "qemu"
 
 [qemu]
 cpu_num = 1
-mem_size = 1024
+mem_size = 2048
 image = "./target/stretch.img"
 kernel = "./target/bzImage-bug"
-wait_boot_time = 5
+wait_boot_time = 25
 
 [ssh]
 key_path = "./target/stretch.id_rsa"
@@ -91,14 +92,16 @@ key_path = "./target/stretch.id_rsa"
 [executor]
 path = "./bin/executor"
 host_ip="localhost" 
+concurrency=true
+memleak_check=false
 
 [sampler]
 sample_interval=15
-report_interval=5
+report_interval=60
 
 [mail]
-sender="healer-stats@outlook.com"
-receivers=["xx@outlook.com"]
+sender="...@outlook.com"
+receivers=["...@outlook.com"]
 ```
 Meaning of each option:
 - *fots_bin*: path to compiled fots file.
