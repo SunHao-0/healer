@@ -1,14 +1,12 @@
 [package]
 name = "executor"
-version = "0.1.0"
+version = "0.2.1"
 authors = ["sam <sunhaoyl@outlook.com>"]
 edition = "2018"
-build = "build.rs"
 
 [features]
 default = ["jit"]
 jit = []
-interprete = []
 syscall = []
 
 [dependencies]
@@ -29,6 +27,3 @@ byte-slice-cast = "0.3.5"
 maplit = "1.0.2"
 tcc = "0.1.0"
 
-[build-dependencies]
-cc = "1.0"
-bindgen = "0.53.1"

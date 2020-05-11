@@ -291,9 +291,6 @@ impl fmt::Display for Reason {
     }
 }
 
-#[cfg(feature = "interprete")]
-pub mod interprete;
-
 #[cfg(feature = "jit")]
 pub mod jit;
 
@@ -305,8 +302,6 @@ pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter, con
         mem_leak_clear();
     }
 
-    #[cfg(feature = "interprete")]
-    use interprete::exec;
     #[cfg(feature = "jit")]
     use jit::exec;
     #[cfg(feature = "syscall")]
