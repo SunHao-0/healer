@@ -15,7 +15,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: deps
       run: sudo apt update && sudo apt install gcc-multilib g++-multilib
-    - name: bingden
-      run: cargo install bindgen
+    - name: tcc-0.9.27
+      run: git clone https://github.com/TinyCC/tinycc.git tcc  && cd tcc && ./configure && make && sudo make install && cd ../
     - name: Build
       run: cargo build --verbose
