@@ -6,12 +6,16 @@ use core::prog::Prog;
 use core::target::Target;
 use os_pipe::PipeWriter;
 use std::fmt::Write;
+use std::fs::{create_dir_all, write};
+use std::io::ErrorKind;
 use std::os::raw::c_int;
 use std::os::unix::io::*;
+use std::path::PathBuf;
 use std::process::exit;
 use tcc::{Symbol, Tcc};
 
 pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
+    prepare_env();
     let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd()).unwrap_or_else(|e| {
         eprintln!("{}", e);
         exit(exitcode::SOFTWARE);
@@ -240,10 +244,11 @@ impl From<i32> for StatusCode {
     }
 }
 
+const TCC_INCLUDE: &str = "/usr/local/include/healer/tcc";
+
 fn new_tcc() -> Tcc {
     let mut cc = tcc::Tcc::new();
-    cc.add_sysinclude_path("./healer/runtime/tcc/include")
-        .unwrap();
+    cc.add_sysinclude_path(TCC_INCLUDE).unwrap();
     if cfg!(target_os = "linux") {
         cc.add_sysinclude_path("/usr/include").unwrap();
         cc.add_sysinclude_path("/usr/local/include").unwrap();
@@ -259,4 +264,25 @@ fn new_tcc() -> Tcc {
         }
     })));
     cc
+}
+
+fn prepare_env() {
+    let float_h = include_str!("../../tcc-0.9.27/include/float.h");
+    let stdarg_h = include_str!("../../tcc-0.9.27/include/stdarg.h");
+    let stdbool_h = include_str!("../../tcc-0.9.27/include/stdbool.h");
+    let stddef_h = include_str!("../../tcc-0.9.27/include/stddef.h");
+    let varargs_h = include_str!("../../tcc-0.9.27/include/varargs.h");
+    let tcc_include = PathBuf::from(TCC_INCLUDE);
+    if let Err(e) = create_dir_all(&tcc_include) {
+        if ErrorKind::AlreadyExists != e.kind() {
+            panic!("Fail to create: {} :{}", tcc_include.display(), e);
+        } else {
+            return;
+        }
+    }
+    write(tcc_include.join("float.h"), float_h).unwrap();
+    write(tcc_include.join("stdarg.h"), stdarg_h).unwrap();
+    write(tcc_include.join("stdbool.h"), stdbool_h).unwrap();
+    write(tcc_include.join("stddef.h"), stddef_h).unwrap();
+    write(tcc_include.join("varargs.h"), varargs_h).unwrap();
 }
