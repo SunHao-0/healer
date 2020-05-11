@@ -1,5 +1,6 @@
 use crate::feedback::{Block, Branch};
 use crate::guest::Crash;
+#[cfg(feature = "mail")]
 use crate::mail;
 use chrono::prelude::*;
 use chrono::DateTime;
@@ -8,6 +9,7 @@ use core::c::to_script;
 use core::prog::Prog;
 use core::target::Target;
 use executor::Reason;
+#[cfg(feature = "mail")]
 use lettre_email::EmailBuilder;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -230,10 +232,15 @@ impl TestCaseRecord {
     async fn persist_crash_case(&self, case: &CrashedCase) {
         let path = format!("{}/crashes/{}", self.work_dir, &case.meta.title);
         let crash = serde_json::to_string_pretty(case).unwrap();
-        let crash_mail = EmailBuilder::new()
-            .subject("Healer-Reporter: CRASH REPORT")
-            .body(&crash);
-        mail::send(crash_mail).await;
+
+        #[cfg(feature = "mail")]
+        mail::send(
+            EmailBuilder::new()
+                .subject("Healer-Reporter: CRASH REPORT")
+                .body(&crash),
+        )
+        .await;
+
         write(&path, crash).await.unwrap_or_else(|e| {
             exits!(
                 exitcode::IOERR,

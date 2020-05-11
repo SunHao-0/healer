@@ -10,6 +10,7 @@ use crate::exec::{Executor, ExecutorConf};
 use crate::feedback::FeedBack;
 use crate::fuzzer::Fuzzer;
 use crate::guest::{GuestConf, QemuConf, SSHConf};
+#[cfg(feature = "mail")]
 use crate::mail::MailConf;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
@@ -30,10 +31,10 @@ use tokio::sync::{broadcast, Barrier};
 pub mod utils;
 pub mod corpus;
 pub mod exec;
-#[allow(dead_code)]
 pub mod feedback;
 pub mod fuzzer;
 pub mod guest;
+#[cfg(feature = "mail")]
 pub mod mail;
 pub mod report;
 pub mod stats;
@@ -53,7 +54,7 @@ pub struct Config {
     pub ssh: Option<SSHConf>,
 
     pub executor: ExecutorConf,
-
+    #[cfg(feature = "mail")]
     pub mail: Option<MailConf>,
     pub sampler: Option<SamplerConf>,
 }
@@ -64,10 +65,8 @@ pub async fn fuzz(cfg: Config) {
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
     info!("Corpus: {}", candidates.len().await);
 
-    if let Some(mail_conf) = cfg.mail.as_ref() {
-        mail::init(mail_conf);
-        info!("Email report to: {:?}", mail_conf.receivers);
-    }
+    #[cfg(feature = "mail")]
+    init_mail();
 
     // shared between multi tasks
     let target = Arc::new(target);
@@ -135,6 +134,14 @@ pub async fn fuzz(cfg: Config) {
         work_dir,
     };
     sampler.sample(&cfg.sampler).await;
+}
+
+#[cfg(feature = "mail")]
+fn init_mail(cfg: &Config) {
+    if let Some(mail_conf) = cfg.mail.as_ref() {
+        mail::init(mail_conf);
+        info!("Email report to: {:?}", mail_conf.receivers);
+    }
 }
 
 async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {

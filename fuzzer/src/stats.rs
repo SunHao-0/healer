@@ -1,8 +1,10 @@
 use crate::corpus::Corpus;
 use crate::feedback::FeedBack;
+#[cfg(feature = "mail")]
 use crate::mail;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
+#[cfg(feature = "mail")]
 use lettre_email::EmailBuilder;
 
 use circular_queue::CircularQueue;
@@ -99,6 +101,7 @@ impl Sampler {
             };
 
             if report_interval <= last_report {
+                #[cfg(feature = "mail")]
                 self.report(&stat).await;
                 last_report = Duration::new(0, 0);
             }
@@ -122,6 +125,7 @@ impl Sampler {
         })
     }
 
+    #[cfg(feature = "mail")]
     async fn report(&self, stat: &Stats) {
         let stat = serde_json::to_string_pretty(&stat).unwrap();
         let email = EmailBuilder::new()
