@@ -5,6 +5,7 @@ use core::c::iter_trans;
 use core::prog::Prog;
 use core::target::Target;
 use os_pipe::PipeWriter;
+use std::ffi::CString;
 use std::fmt::Write;
 use std::fs::{create_dir_all, write};
 use std::io::ErrorKind;
@@ -12,7 +13,7 @@ use std::os::raw::c_int;
 use std::os::unix::io::*;
 use std::path::PathBuf;
 use std::process::exit;
-use tcc::{Symbol, Tcc};
+use tcc::{Context, Guard};
 
 pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     prepare_env();
@@ -21,15 +22,24 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
         exit(exitcode::SOFTWARE);
     });
 
-    let mut cc = new_tcc();
-    cc.compile_string(&p)
-        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to compile generated prog: {}", p));
+    let p = CString::new(p.as_bytes()).unwrap();
+    let sym = CString::new("execute").unwrap();
+
+    let mut g = Guard::new().unwrap();
+    let mut cc = new_tcc(&mut g);
+    cc.compile_string(&p).unwrap_or_else(|_| {
+        exits!(
+            exitcode::SOFTWARE,
+            "Fail to compile generated prog: {:?}",
+            p
+        )
+    });
     let mut p = cc
         .relocate()
         .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to relocate compiled prog"));
-    let execute: fn() -> c_int = {
-        let symbol = p.get_symbol("execute").unwrap();
-        unsafe { std::mem::transmute(symbol.as_ptr()) }
+    let execute: fn() -> c_int = unsafe {
+        let symbol = p.get_symbol(&sym).unwrap();
+        std::mem::transmute(symbol)
     };
 
     let code = execute();
@@ -47,9 +57,19 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
 pub fn bg_exec(p: &Prog, t: &Target) {
     let p = c::to_prog(p, t);
     if !p.is_empty() {
-        let mut cc = new_tcc();
+        let p = CString::new(p.as_bytes()).unwrap();
+        let sym = CString::new("main").unwrap();
+        let mut g = Guard::new().unwrap();
+        let mut cc = new_tcc(&mut g);
         cc.compile_string(&p).unwrap();
-        cc.run(&["healer-executor-bg-exec"]).unwrap()
+        let mut p = cc
+            .relocate()
+            .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to relocate compiled prog"));
+        let execute: fn() -> c_int = unsafe {
+            let symbol = p.get_symbol(&sym).unwrap();
+            std::mem::transmute(symbol)
+        };
+        execute();
     }
 }
 
@@ -246,23 +266,23 @@ impl From<i32> for StatusCode {
 
 const TCC_INCLUDE: &str = "/usr/local/include/healer/tcc";
 
-fn new_tcc() -> Tcc {
-    let mut cc = tcc::Tcc::new();
-    cc.add_sysinclude_path(TCC_INCLUDE).unwrap();
+fn new_tcc<'a, 'b>(g: &'a mut Guard) -> Context<'a, 'b> {
+    let mut cc = tcc::Context::new(g).unwrap();
+    cc.add_sys_include_path(TCC_INCLUDE);
     if cfg!(target_os = "linux") {
-        cc.add_sysinclude_path("/usr/include").unwrap();
-        cc.add_sysinclude_path("/usr/local/include").unwrap();
-        cc.add_library_path("/usr/lib").unwrap();
-        cc.add_library_path("/usr/local/lib").unwrap();
+        cc.add_sys_include_path("/usr/include");
+        cc.add_sys_include_path("/usr/local/include");
+        cc.add_library_path("/usr/lib");
+        cc.add_library_path("/usr/local/lib");
     }
-    cc.set_output_type(tcc::OutputType::Memory)
-        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to set up jit"));
+    cc.set_output_type(tcc::OutputType::Memory);
     // ignore wraning
-    cc.set_error_func(Some(Box::new(|e| {
+    cc.set_call_back(|e| {
+        let e = e.to_str().unwrap();
         if e.contains("error") {
             eprintln!("{}", e);
         }
-    })));
+    });
     cc
 }
 

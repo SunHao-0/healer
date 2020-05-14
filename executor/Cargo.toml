@@ -25,5 +25,5 @@ nix = "0.17.0"
 os_pipe = "0.9.1"
 byte-slice-cast = "0.3.5"
 maplit = "1.0.2"
-tcc = "0.1.0"
+tcc = {package="libtcc", version="0.1.1"}
 
