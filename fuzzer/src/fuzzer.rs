@@ -6,7 +6,7 @@ use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
 use core::analyze::prog_analyze;
 use core::analyze::RTable;
-use core::c::to_script;
+use core::c::to_prog;
 use core::gen::gen;
 use core::minimize::remove;
 use core::prog::Prog;
@@ -89,9 +89,10 @@ impl Fuzzer {
 
     async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
         warn!("========== Crashed ========= \n{}", crash);
-        if !crash.inner.contains("CRASH-MEMLEAK") {
-            let stmts = to_script(&p, &self.target);
-            warn!("Caused by:\n{}", stmts.to_string());
+        let p_str = to_prog(&p, &self.target);
+        warn!("Caused by:\n{}", p_str);
+
+        if self.need_repo(&crash.inner) {
             warn!("Restarting to repro ...");
             executor.start().await;
             match executor.exec(&p).await {
@@ -112,7 +113,14 @@ impl Fuzzer {
                     executor.start().await;
                 }
             }
+        } else {
+            info!("Restarting, ignoring useless crash ...");
+            executor.start().await;
         }
+    }
+
+    fn need_repo(&self, crash: &str) -> bool {
+        !(crash.contains("CRASH-MEMLEAK") || crash == "$$")
     }
 
     async fn feedback_analyze(
@@ -241,18 +249,9 @@ impl Fuzzer {
         match executor.exec(p).await {
             Ok(exec_result) => exec_result,
             Err(crash) => {
-                if let Some(ref crash) = crash {
-                    if crash.inner.contains("CRASH-MEMLEAK") {
-                        warn!("========== Crashed ========= \n{}", crash);
-                        return ExecResult::Failed(Reason(String::from("Mem leak detected")));
-                    }
-                }
-
-                exits!(
-                    exitcode::SOFTWARE,
-                    "Unexpected crash: {}",
-                    crash.unwrap_or_default()
-                )
+                self.crash_analyze(p.clone(), crash.unwrap_or_default(), executor)
+                    .await;
+                ExecResult::Failed(Reason(String::from("Crashed")))
             }
         }
     }
@@ -264,18 +263,9 @@ impl Fuzzer {
                 ExecResult::Failed(_) => Default::default(),
             },
             Err(crash) => {
-                if let Some(ref crash) = crash {
-                    if crash.inner.contains("CRASH-MEMLEAK") {
-                        warn!("========== Crashed ========= \n{}", crash);
-                        return Default::default();
-                    }
-                }
-
-                exits!(
-                    exitcode::SOFTWARE,
-                    "Unexpected crash: {}",
-                    crash.unwrap_or_default()
-                )
+                self.crash_analyze(p.clone(), crash.unwrap_or_default(), executor)
+                    .await;
+                Default::default()
             }
         }
     }
