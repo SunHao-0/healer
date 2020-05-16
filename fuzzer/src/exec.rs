@@ -11,6 +11,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
 use tokio::sync::oneshot;
+use tokio::time::{timeout, Duration};
 
 // config for executor
 #[derive(Debug, Deserialize)]
@@ -32,6 +33,7 @@ impl ExecutorConf {
         }
 
         if let Some(ip) = &self.host_ip {
+            use std::net::ToSocketAddrs;
             let addr = format!("{}:8080", ip);
             if let Err(e) = addr.to_socket_addrs() {
                 eprintln!(
@@ -164,7 +166,6 @@ impl LinuxExecutor {
     }
 
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
-        use tokio::time::{timeout, Duration};
         // send must be success
         assert!(self.conn.is_some());
         if let Err(e) = timeout(

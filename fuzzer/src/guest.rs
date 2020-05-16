@@ -9,6 +9,7 @@ use std::fmt;
 use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 

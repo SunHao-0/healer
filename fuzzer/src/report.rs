@@ -24,7 +24,6 @@ pub struct TestCaseRecord {
 
     target: Arc<Target>,
     id_n: Mutex<usize>,
-    work_dir: String,
 
     normal_num: Mutex<usize>,
     failed_num: Mutex<usize>,
@@ -70,7 +69,7 @@ pub struct CrashedCase {
 
 #[allow(clippy::len_without_is_empty)]
 impl TestCaseRecord {
-    pub fn new(t: Arc<Target>, work_dir: String) -> Self {
+    pub fn new(t: Arc<Target>) -> Self {
         Self {
             normal: Mutex::new(CircularQueue::with_capacity(1024 * 64)),
             failed: Mutex::new(CircularQueue::with_capacity(1024 * 64)),
@@ -78,7 +77,6 @@ impl TestCaseRecord {
             target: t,
 
             id_n: Mutex::new(0),
-            work_dir,
             normal_num: Mutex::new(0),
             failed_num: Mutex::new(0),
             crashed_num: Mutex::new(0),
@@ -198,7 +196,7 @@ impl TestCaseRecord {
         }
         let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
 
-        let path = format!("{}/normal_case.json", self.work_dir);
+        let path = "./normal_case.json";
         let report = serde_json::to_string_pretty(&cases).unwrap();
 
         write(&path, report).await.unwrap_or_else(|e| {
@@ -217,7 +215,7 @@ impl TestCaseRecord {
             return;
         }
         let cases = cases.asc_iter().cloned().collect::<Vec<_>>();
-        let path = format!("{}/failed_case.json", self.work_dir);
+        let path = "./failed_case.json";
         let report = serde_json::to_string_pretty(&cases).unwrap();
         write(&path, report).await.unwrap_or_else(|e| {
             exits!(
@@ -230,7 +228,7 @@ impl TestCaseRecord {
     }
 
     async fn persist_crash_case(&self, case: &CrashedCase) {
-        let path = format!("{}/crashes/{}", self.work_dir, &case.meta.title);
+        let path = format!("./crashes/{}", &case.meta.title);
         let crash = serde_json::to_string_pretty(case).unwrap();
 
         #[cfg(feature = "mail")]
