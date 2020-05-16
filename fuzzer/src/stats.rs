@@ -9,6 +9,7 @@ use lettre_email::EmailBuilder;
 
 use circular_queue::CircularQueue;
 use core::prog::Prog;
+use std::process::exit;
 use std::sync::Arc;
 use tokio::fs::write;
 use tokio::sync::broadcast;
@@ -44,43 +45,60 @@ pub struct SamplerConf {
     pub report_interval: u64,
 }
 
+impl Default for SamplerConf {
+    fn default() -> Self {
+        Self {
+            sample_interval: 15,
+            report_interval: 60,
+        }
+    }
+}
+
+impl SamplerConf {
+    pub fn check(&self) {
+        if self.sample_interval < 10
+            || self.report_interval <= 10
+            || self.sample_interval * 60 < self.report_interval
+        {
+            eprintln!("Config Error: invalid sample conf: sample interval should longger than 10s, \
+                                    report internval should long than 10m and sample interval should \
+                                    not longger than report interval");
+            exit(exitcode::CONFIG)
+        }
+    }
+}
+
 pub struct Sampler {
     pub source: StatSource,
     pub stats: CircularQueue<Stats>,
-    pub shutdown: broadcast::Receiver<()>,
-    pub work_dir: String,
 }
 
 impl Sampler {
-    pub async fn sample(&mut self, conf: &Option<SamplerConf>) {
-        let (sample_interval, report_interval) = match conf {
+    pub async fn sample(
+        &mut self,
+        conf: &Option<SamplerConf>,
+        mut shutdown: broadcast::Receiver<()>,
+    ) {
+        let interval = match conf {
             Some(SamplerConf {
                 sample_interval,
                 report_interval,
-            }) => {
-                assert!(*sample_interval < *report_interval * 60);
-                (
-                    Duration::new(*sample_interval, 0),
-                    Duration::new(*report_interval * 60, 0),
-                )
-            }
+            }) => (
+                Duration::new(*sample_interval, 0),
+                Duration::new(report_interval * 60, 0),
+            ),
             None => (Duration::new(15, 0), Duration::new(60 * 60, 0)),
         };
+        tokio::select! {
+            _ = shutdown.recv() => (),
+            _ = self.do_sample(interval) => (),
+        }
+        self.persist().await;
+    }
 
-        use broadcast::TryRecvError::*;
+    async fn do_sample(&mut self, (sample_interval, report_interval): (Duration, Duration)) {
         let mut last_report = Duration::new(0, 0);
         loop {
-            match self.shutdown.try_recv() {
-                Ok(_) => {
-                    self.persist().await;
-                    return;
-                }
-                Err(e) => match e {
-                    Empty => (),
-                    Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
-                },
-            }
-
             time::delay_for(sample_interval).await;
             last_report += sample_interval;
 
@@ -107,8 +125,10 @@ impl Sampler {
             }
 
             self.stats.push(stat);
-            info!("corpus {},blocks {},branches {},candidates {},normal_case {},failed_case {},crashed_case {}",
-                  corpus, blocks, branches, candidates, normal_case, failed_case, crashed_case);
+            info!(
+                "corpus {},blocks {},branches {},normal_case {},failed_case {},crashed_case {}",
+                corpus, blocks, branches, normal_case, failed_case, crashed_case
+            );
         }
     }
 
@@ -118,7 +138,7 @@ impl Sampler {
         }
 
         let stats = self.stats.asc_iter().cloned().collect::<Vec<_>>();
-        let path = format!("{}/stats.json", self.work_dir);
+        let path = "./stats.json";
         let stats = serde_json::to_string_pretty(&stats).unwrap();
         write(&path, stats).await.unwrap_or_else(|e| {
             exits!(exitcode::IOERR, "Fail to persist stats to {} : {}", path, e)

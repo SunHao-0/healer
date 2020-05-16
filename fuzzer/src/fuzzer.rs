@@ -20,35 +20,27 @@ use tokio::fs::write;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 
+#[derive(Clone)]
 pub struct Fuzzer {
     pub target: Arc<Target>,
     pub rt: Arc<Mutex<HashMap<GroupId, RTable>>>,
     pub conf: core::gen::Config,
-    pub work_dir: String,
-
     pub corpus: Arc<Corpus>,
     pub feedback: Arc<FeedBack>,
     pub candidates: Arc<CQueue<Prog>>,
     pub record: Arc<TestCaseRecord>,
-    pub shutdown: broadcast::Receiver<()>,
 }
 
 impl Fuzzer {
-    pub async fn fuzz(mut self, mut executor: Executor) {
-        use broadcast::TryRecvError::*;
-        loop {
-            match self.shutdown.try_recv() {
-                Ok(_) => {
-                    self.peresist().await;
-                    drop(executor);
-                    return;
-                }
-                Err(e) => match e {
-                    Empty => (),
-                    Closed | Lagged(_) => panic!("Unexpected braodcast receiver state"),
-                },
-            }
+    pub async fn fuzz(self, executor: Executor, mut shutdown: broadcast::Receiver<()>) {
+        tokio::select! {
+            _ = shutdown.recv() => (),
+            _ = self.do_fuzz(executor) => ()
+        }
+    }
 
+    async fn do_fuzz(&self, mut executor: Executor) {
+        loop {
             let p = self.get_prog().await;
             match executor.exec(&p).await {
                 Ok(exec_result) => match exec_result {
@@ -65,8 +57,8 @@ impl Fuzzer {
         }
     }
 
-    async fn peresist(self) {
-        let corpus_path = format!("{}/corpus", self.work_dir);
+    pub async fn persist(self) {
+        let corpus_path = "./corpus";
         let corpus = self
             .corpus
             .dump()

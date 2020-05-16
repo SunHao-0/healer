@@ -15,17 +15,22 @@ use crate::mail::MailConf;
 use crate::report::TestCaseRecord;
 use crate::utils::queue::CQueue;
 
+use crate::stats::SamplerConf;
 use circular_queue::CircularQueue;
 use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
+use stats::StatSource;
+use std::path::PathBuf;
 use std::process;
+use std::process::exit;
 use std::sync::Arc;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, Barrier};
+use tokio::time::{delay_for, Duration, Instant};
 
 #[macro_use]
 pub mod utils;
@@ -39,14 +44,10 @@ pub mod mail;
 pub mod report;
 pub mod stats;
 
-use crate::stats::SamplerConf;
-use stats::StatSource;
-use std::process::exit;
-
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub fots_bin: String,
-    pub curpus: Option<String>,
+    pub fots_bin: PathBuf,
+    pub curpus: Option<PathBuf>,
     pub vm_num: usize,
 
     pub guest: GuestConf,
@@ -59,57 +60,111 @@ pub struct Config {
     pub sampler: Option<SamplerConf>,
 }
 
+impl Config {
+    pub fn check(&self) {
+        if !self.fots_bin.is_file() {
+            eprintln!(
+                "Config Error: fots file {} is invalid",
+                self.fots_bin.display()
+            );
+            exit(exitcode::CONFIG)
+        }
+
+        if let Some(corpus) = &self.curpus {
+            if !corpus.is_file() {
+                eprintln!("Config Error: corpus file {} is invalid", corpus.display());
+                exit(exitcode::CONFIG)
+            }
+        }
+
+        let cpu_num = num_cpus::get();
+        if self.vm_num == 0 || self.vm_num > cpu_num * 8 {
+            eprintln!(
+                "Config Error: invalid vm num {}, vm num must between (0,{}] on your system",
+                self.vm_num,
+                cpu_num * 8
+            );
+            exit(exitcode::CONFIG)
+        }
+
+        self.guest.check();
+        self.executor.check();
+
+        if let Some(qemu) = self.qemu.as_ref() {
+            qemu.check()
+        }
+
+        if let Some(ssh) = self.ssh.as_ref() {
+            ssh.check();
+        }
+
+        #[cfg(feature = "mail")]
+        mail_check(&self.mail);
+
+        if let Some(sampler) = self.sampler.as_ref() {
+            sampler.check()
+        }
+    }
+}
+
+#[cfg(feature = "mail")]
+fn mail_check(mail: &Option<MailConf>) {
+    if let Some(mail) = mail.as_ref() {
+        mail.check()
+    }
+}
+
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
-    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or_else(|_| String::from("."));
     let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
     info!("Corpus: {}", candidates.len().await);
+    info!(
+        "Syscalls: {}  Groups: {}",
+        target.fns.len(),
+        target.groups.len()
+    );
 
-    #[cfg(feature = "mail")]
-    init_mail();
-
-    // shared between multi tasks
+    // init system state, shared between multi tasks
     let target = Arc::new(target);
     let candidates = Arc::new(candidates);
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
-    let record = Arc::new(TestCaseRecord::new(target.clone(), work_dir.clone()));
-    let rt = Arc::new(Mutex::new(static_analyze(&target)));
+    let record = Arc::new(TestCaseRecord::new(target.clone()));
+    let rt = static_analyze(&target);
+    let fuzzer = Fuzzer {
+        target,
+        rt: Arc::new(Mutex::new(rt)),
+        conf: Default::default(),
+        candidates: candidates.clone(),
+        corpus: corpus.clone(),
+        feedback: feedback.clone(),
+        record: record.clone(),
+    };
+    let stats_source = StatSource {
+        corpus,
+        feedback,
+        candidates,
+        record,
+    };
 
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
-
     let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
-
     info!(
         "Booting {} {}/{} on {} ...",
         cfg.vm_num, cfg.guest.os, cfg.guest.arch, cfg.guest.platform
     );
     let now = std::time::Instant::now();
-
     for _ in 0..cfg.vm_num {
         let cfg = cfg.clone();
-
-        let fuzzer = Fuzzer {
-            rt: rt.clone(),
-            target: target.clone(),
-            conf: Default::default(),
-            candidates: candidates.clone(),
-
-            corpus: corpus.clone(),
-            feedback: feedback.clone(),
-            record: record.clone(),
-
-            shutdown: shutdown_tx.subscribe(),
-            work_dir: work_dir.clone(),
-        };
-
+        let fuzzer = fuzzer.clone();
         let barrier = barrier.clone();
+        let shutdown = shutdown_tx.subscribe();
 
         tokio::spawn(async move {
             let mut executor = Executor::new(&cfg);
             executor.start().await;
             barrier.wait().await;
-            fuzzer.fuzz(executor).await;
+            fuzzer.fuzz(executor, shutdown).await;
         });
     }
 
@@ -117,38 +172,57 @@ pub async fn fuzz(cfg: Config) {
     info!("Boot finished, cost {}s.", now.elapsed().as_secs());
 
     tokio::spawn(async move {
-        ctrl_c().await.expect("failed to listen for event");
-        shutdown_tx.send(()).unwrap();
-        warn!("Stopping, persisting data...");
-        while shutdown_tx.receiver_count() != 0 {}
+        let mut sampler = stats::Sampler {
+            source: stats_source,
+            stats: CircularQueue::with_capacity(1024),
+        };
+        sampler.sample(&cfg.sampler, shutdown_rx).await;
     });
-    let mut sampler = stats::Sampler {
-        source: StatSource {
-            corpus,
-            feedback,
-            candidates,
-            record,
-        },
-        stats: CircularQueue::with_capacity(1024),
-        shutdown: shutdown_rx,
-        work_dir,
-    };
-    sampler.sample(&cfg.sampler).await;
-}
 
-#[cfg(feature = "mail")]
-fn init_mail(cfg: &Config) {
-    if let Some(mail_conf) = cfg.mail.as_ref() {
-        mail::init(mail_conf);
-        info!("Email report to: {:?}", mail_conf.receivers);
+    if cfg!(unix) {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut sig_ir =
+            signal(SignalKind::interrupt()).expect("failed to set up SIGINT signal handler");
+        let mut sig_term =
+            signal(SignalKind::terminate()).expect("failed to set up SIGTERM signal handler");
+        info!("Send SIGINT or SIGTERM to stop fuzzer");
+        tokio::select! {
+            _ = sig_ir.recv() => {
+                  warn!("INTERUPTE signal recved");
+            }
+            _= sig_term.recv() => {
+                    warn!("TERM signal signal recved");
+            }
+        }
+    } else {
+        info!("Send SIGINT to stop fuzzer");
+        ctrl_c()
+            .await
+            .expect("failed to set up ctrl-c signal handler");
+        warn!("INTERUPTE signal recved");
     }
+
+    warn!("Stopping, persisting data...");
+    shutdown_tx.send(()).unwrap();
+    fuzzer.persist().await;
+
+    let now = Instant::now();
+    let wait_time = Duration::new(5, 0);
+    while shutdown_tx.receiver_count() != 0 {
+        delay_for(Duration::from_millis(200)).await;
+        if now.elapsed() >= wait_time {
+            warn!("Wait time out, force to exit...");
+            exit(exitcode::SOFTWARE);
+        }
+    }
+    info!("All done");
+    exit(exitcode::OK);
 }
 
-async fn load_candidates(path: &Option<String>) -> CQueue<Prog> {
+async fn load_candidates(path: &Option<PathBuf>) -> CQueue<Prog> {
     if let Some(path) = path.as_ref() {
         let data = read(path).await.unwrap();
         let progs: Vec<Prog> = bincode::deserialize(&data).unwrap();
-
         CQueue::from(progs)
     } else {
         CQueue::default()
@@ -161,24 +235,17 @@ async fn load_target(cfg: &Config) -> Target {
         exit(exitcode::DATAERR);
     }))
     .unwrap();
-    // split(&mut items, cfg.vm_num)
     Target::from(items)
 }
 
 pub async fn prepare_env() {
-    // pretty_env_logger::init_timed();
     init_logger();
     let pid = process::id();
     std::env::set_var("HEALER_FUZZER_PID", format!("{}", pid));
     info!("Pid: {}", pid);
 
-    let work_dir = std::env::var("HEALER_WORK_DIR").unwrap_or_else(|_| String::from("."));
-    std::env::set_var("HEALER_WORK_DIR", &work_dir);
-    info!("Work-dir: {}", work_dir);
-
     use tokio::io::ErrorKind::*;
-
-    if let Err(e) = create_dir_all(format!("{}/crashes", work_dir)).await {
+    if let Err(e) = create_dir_all("./crashes").await {
         if e.kind() != AlreadyExists {
             exits!(exitcode::IOERR, "Fail to create crash dir: {}", e);
         }
@@ -239,20 +306,16 @@ fn init_logger() {
     log4rs::init_config(config).unwrap();
 }
 
-// fn split(items: &mut Items, n: usize) -> Vec<Target> {
-//     assert!(items.groups.len() > n);
-//
-//     let mut result = Vec::new();
-//     let total = items.groups.len();
-//
-//     for n in Split::new(total, n) {
-//         let sub_groups = items.groups.drain(items.groups.len() - n..);
-//         let target = Target::from(Items {
-//             types: items.types.clone(),
-//             groups: sub_groups.collect(),
-//             rules: vec![],
-//         });
-//         result.push(target);
-//     }
-//     result
-// }
+const HEALER: &str = r"
+ ___   ___   ______   ________   __       ______   ______
+/__/\ /__/\ /_____/\ /_______/\ /_/\     /_____/\ /_____/\
+\::\ \\  \ \\::::_\/_\::: _  \ \\:\ \    \::::_\/_\:::_ \ \
+ \::\/_\ .\ \\:\/___/\\::(_)  \ \\:\ \    \:\/___/\\:(_) ) )_
+  \:: ___::\ \\::___\/_\:: __  \ \\:\ \____\::___\/_\: __ `\ \
+   \: \ \\::\ \\:\____/\\:.\ \  \ \\:\/___/\\:\____/\\ \ `\ \ \
+    \__\/ \::\/ \_____\/ \__\/\__\/ \_____\/ \_____\/ \_\/ \_\/
+";
+
+pub fn show_info() {
+    println!("{}", HEALER);
+}
