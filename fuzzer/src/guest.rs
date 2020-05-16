@@ -104,6 +104,25 @@ pub struct GuestConf {
     pub platform: String,
 }
 
+pub const PLATFORM: [&str; 1] = ["qemu"];
+pub const ARCH: [&str; 1] = ["amd64"];
+pub const OS: [&str; 1] = ["linux"];
+
+impl GuestConf {
+    pub fn check(&self) {
+        if !PLATFORM.contains(&self.platform.as_str())
+            || !ARCH.contains(&self.arch.as_str())
+            || !OS.contains(&self.os.as_str())
+        {
+            eprintln!(
+                "Config Error: unsupported guest: {:?}",
+                (&self.platform, &self.arch, &self.os)
+            );
+            exit(exitcode::CONFIG)
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct QemuConf {
     pub cpu_num: u32,
@@ -113,9 +132,52 @@ pub struct QemuConf {
     pub wait_boot_time: Option<u8>,
 }
 
+impl QemuConf {
+    pub fn check(&self) {
+        let cpu_num = num_cpus::get() as u32;
+        if self.cpu_num > cpu_num * 8 || self.cpu_num == 0 {
+            eprintln!(
+                "Config Error: invalid cpu num {}, cpu num must between (0, {}] on your system",
+                self.cpu_num,
+                cpu_num * 8
+            );
+            exit(exitcode::CONFIG)
+        }
+
+        if self.mem_size < 512 {
+            eprintln!(
+                "Config Error: invalid mem size {}, mem size must bigger than 512 bytes",
+                self.mem_size
+            );
+            exit(exitcode::CONFIG)
+        }
+        let image = PathBuf::from(&self.image);
+        let kernel = PathBuf::from(&self.kernel);
+        if !image.is_file() {
+            eprintln!("Config Error: image {} is invalid", self.image);
+            exit(exitcode::CONFIG)
+        }
+
+        if !kernel.is_file() {
+            eprintln!("Config Error: kernel {} is invalid", self.kernel);
+            exit(exitcode::CONFIG)
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SSHConf {
     pub key_path: String,
+}
+
+impl SSHConf {
+    pub fn check(&self) {
+        let key = PathBuf::from(&self.key_path);
+        if !key.is_file() {
+            eprintln!("Config Error: ssh key file {} is invalid", self.key_path);
+            exit(exitcode::CONFIG)
+        }
+    }
 }
 
 pub enum Guest {

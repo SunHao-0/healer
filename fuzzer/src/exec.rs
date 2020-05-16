@@ -21,6 +21,30 @@ pub struct ExecutorConf {
     pub memleak_check: bool,
 }
 
+impl ExecutorConf {
+    pub fn check(&self) {
+        if !self.path.is_file() {
+            eprintln!(
+                "Config Error: executor executable file {} is invalid",
+                self.path.display()
+            );
+            exit(exitcode::CONFIG)
+        }
+
+        if let Some(ip) = &self.host_ip {
+            let addr = format!("{}:8080", ip);
+            if let Err(e) = addr.to_socket_addrs() {
+                eprintln!(
+                    "Config Error: invalid host ip `{}`: {}",
+                    self.host_ip.as_ref().unwrap(),
+                    e
+                );
+                exit(exitcode::CONFIG)
+            }
+        }
+    }
+}
+
 pub struct Executor {
     inner: ExecutorImpl,
 }
