@@ -28,6 +28,7 @@ use crate::prog::{Arg, ArgIndex, ArgPos, Call, Prog};
 use crate::target::Target;
 use crate::value::{NumValue, Value};
 
+#[derive(Clone)]
 pub struct Config {
     pub prog_max_len: usize,
     pub prog_min_len: usize,
