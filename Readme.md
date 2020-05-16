@@ -13,12 +13,12 @@ quality test case and fuzzing more efficient.
 Core components in healer are:
 1. FOTS, a fuzzing oriented interface discription language. [see more](./fots/Readme.md)
 2. Core algorithm, including relation analyzing, call sequence generating, translating... [see more](./core/Readme.md)
-3. Executor, support `interprete` and `jit` executing, `direct` feature is on working
+3. Executor, support `jit` executing, `direct` execution feature is on working
 4. Related tools, such as reportor, translator, exec... 
 5. Fuzzer, built on top core and fots.
 
 ## Install 
-Currently, healer only intends to run on and fuzz linux. Therefore following guide only works for linux.
+Currently, healer only intends to fuzz linux. Therefore following guide only works for linux.
 
 ### Install Rust 
 Healer is written in pure rust, except for some ffi libraries. Go to official site of [rust](https://www.rust-lang.org/),
@@ -32,16 +32,17 @@ On linux, following command makes life easier:
 
 ### Build Healer
 1. Clone or download healer.
-2. Build healer with following commands:
+2. Build and install [tcc-0.9.27](https://github.com/TinyCC/tinycc) on host and target.
+3. Build healer with following commands:
 ``` bash
 > cd healer
 > cargo build --release
 ```
-3. After build finished, following executable files should be available in `target/release` directory.
-    - *fuzzer* and *executor*, most important tools.
-    - *fots*, compiler of FOTS.
-    - *kill*, current useful tool for stop fuzzer, don't use CTRL-C to terminate healer.
-    - other tools, such as *gen*, *trans*...
+
+After build finished, following executable files should be available in `target/release` directory.
+- *fuzzer* and *executor*, most important tools.
+- *fots*, compiler of FOTS.
+- other tools, such as *gen*, *trans*...
 
 
 ## Fuzz
@@ -60,7 +61,6 @@ executable files we've built to a sub-directory called `bin` and copy fots files
 ### Prepare Kernel
 Create a sub-directort `target` inside work-dir and build kernel bzImage and stretch.img there following this [guide](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
 
-
 ### Prepare Config file 
 Build fots files in `desc` directory using following commands:
 ``` bash
@@ -70,7 +70,7 @@ Build fots files in `desc` directory using following commands:
 
 Modify config options in your `healer-fuzzer.toml` based on following template.
 ``` toml
-fots_bin = "./sys"
+fots_bin = "./syscalls"     # file contains compiled FOTS
 vm_num = 2
 auto_reboot_duration = 90
 
@@ -84,24 +84,19 @@ cpu_num = 1
 mem_size = 2048
 image = "./target/stretch.img"
 kernel = "./target/bzImage-bug"
-wait_boot_time = 25
+wait_boot_time = 15
 
 [ssh]
 key_path = "./target/stretch.id_rsa"
 
 [executor]
 path = "./bin/executor"
-host_ip="localhost" 
+host_ip="127.0.0.1" 
 concurrency=true
-memleak_check=false
 
 [sampler]
-sample_interval=15
-report_interval=60
-
-[mail]
-sender="...@outlook.com"
-receivers=["...@outlook.com"]
+sample_interval=15  # seconds
+report_interval=60  # minutes
 ```
 Meaning of each option:
 - *fots_bin*: path to compiled fots file.
@@ -111,14 +106,13 @@ Meaning of each option:
 - *ssh* fragment defines arguments passed ssh(internal used), key_path is path to secret key file generated during kernel building step.
 - *executor* define arguments passed to executor and path of executor, path is the only needed option for now.
 - *sampler* data samplers config options
-- *mail* healer support auto report via outlook email, config your sender and receivers list, transfer password of 
-sender via env var while starting healer. 
 
 ### Fuzzing
 After preparing everything we need, just run following command:
 ``` bash 
-> sudo HEALER_MAIL_PASSWD="..."  ./bin/fuzzer 
+> ./bin/fuzzer 
 ```
+
 If everything works ok, you'll see following msg:
 ``` bash
  ___   ___   ______   ________   __       ______   ______
@@ -129,20 +123,16 @@ If everything works ok, you'll see following msg:
    \: \ \\::\ \\:\____/\\:.\ \  \ \\:\/___/\\:\____/\\ \ `\ \ \
     \__\/ \::\/ \_____\/ \__\/\__\/ \_____\/ \_____\/ \_\/ \_\/
 
+2020-05-16 18:40:10 INFO fuzzer - Pid: 15017
+2020-05-16 18:40:10 INFO fuzzer - Corpus: 0
+2020-05-16 18:40:10 INFO fuzzer - Syscalls: 279  Groups: 1
+2020-05-16 18:40:10 INFO fuzzer - Booting 1 linux/amd64 on qemu ...
+2020-05-16 18:40:27 INFO fuzzer::exec - connected from: 127.0.0.1:39150
+2020-05-16 18:40:27 INFO fuzzer::exec - executor started.
+2020-05-16 18:40:27 INFO fuzzer - Boot finished, cost 17s.
+2020-05-16 18:40:27 INFO fuzzer - Send SIGINT or SIGTERM to stop fuzzer
+2020-05-16 18:40:37 INFO fuzzer::stats - corpus 14,blocks 889,branches 962,normal_case 14,failed_case 0,crashed_case 0
 
- 2020-03-26T11:10:38.134 INFO  fuzzer > Pid: 20807
- 2020-03-26T11:10:38.134 INFO  fuzzer > Work-dir: .
- 2020-03-26T11:10:38.148 INFO  fuzzer > Corpus: 0
- 2020-03-26T11:10:38.148 INFO  fuzzer > Booting 2 linux/amd64 on qemu ...
- 2020-03-26T11:10:55.421 INFO  fuzzer::exec > connected from: 127.0.0.1:44098
- 2020-03-26T11:10:55.428 INFO  fuzzer::exec > connected from: 127.0.0.1:43476
- 2020-03-26T11:10:55.428 INFO  fuzzer       > Boot finished, cost 17s.
- 2020-03-26T11:11:10.429 INFO  fuzzer::stats > corpus 214,blocks 9865,branches 11604,candidates 0,normal_case 214,failed_case 0,crashed_case 0
-```
-Do not use CTRL-C to kill healer, use `bin/kill` instead.
-``` bash
-> # pass pid of healer to kill tool
-> ./bin/kill 20807
 ```
 
 After fuzzing finished, *report* tool can be used to generate readable fuzz result report with following command:
