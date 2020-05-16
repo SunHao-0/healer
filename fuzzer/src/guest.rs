@@ -16,7 +16,26 @@ use tokio::time::{delay_for, timeout, Duration};
 lazy_static! {
     static ref QEMUS: HashMap<String, App> = {
         let mut qemus = HashMap::new();
-        let linux_amd64_append_vals = vec![
+
+        let arg_common = vec![Arg::new_flag("-no-reboot"),
+                              Arg::new_opt("-display", OptVal::normal("none")),
+                              Arg::new_opt("-serial", OptVal::normal("stdio")),
+                              Arg::new_flag("-snapshot")];
+
+        let mut linux_amd64 = App::new("qemu-system-x86_64");
+        linux_amd64.arg(Arg::new_flag("-enable-kvm"))
+            .args(arg_common.iter())
+           .arg(Arg::new_opt(
+                "-cpu",
+                OptVal::multiple(vec!["host", "migratable=off"], Some(',')),
+            ))
+            .arg(Arg::new_opt(
+                "-net",
+                OptVal::multiple(vec!["nic", "model=e1000"], Some(',')),
+            ))
+            .arg(Arg::new_opt(
+                "-append",
+                OptVal::multiple(vec![
             "earlyprintk=serial",
             "oops=panic",
             "nmi_watchdog=panic",
@@ -41,32 +60,48 @@ lazy_static! {
             "kvm-intel.enable_shadow_vmcs=1",
             "kvm-intel.pml=1",
             "kvm-intel.enable_apicv=1",
-        ];
-        let linux_amd64 = App::new("qemu-system-x86_64")
-            .arg(Arg::new_flag("-enable-kvm"))
-            .arg(Arg::new_flag("-no-reboot"))
-            .arg(Arg::new_opt("-display", OptVal::normal("none")))
-            .arg(Arg::new_opt("-serial", OptVal::normal("stdio")))
-            .arg(Arg::new_flag("-snapshot"))
-            .arg(Arg::new_opt(
-                "-cpu",
-                OptVal::multiple(vec!["host", "migratable=off"], Some(',')),
-            ))
+        ], Some(' ')),
+            ));
+
+        let mut linux_arm = App::new("qemu-system-arm");
+        linux_arm.args(arg_common.iter())
             .arg(Arg::new_opt(
                 "-net",
-                OptVal::multiple(vec!["nic", "model=e1000"], Some(',')),
+                OptVal::normal("nic"),
             ))
             .arg(Arg::new_opt(
                 "-append",
-                OptVal::multiple(linux_amd64_append_vals, Some(' ')),
+                OptVal::multiple(vec!["root=/dev/vda", "console=ttyAMA0"], Some(' ')),
             ));
-        qemus.insert("linux/amd64".to_string(), linux_amd64);
 
+        let mut linux_arm64 = App::new("qemu-system-aarch64");
+        linux_arm64.args(arg_common.iter())
+            .arg(Arg::new_opt(
+                "-machine",
+                OptVal::multiple(vec!["virt", "virtualization=on"], Some(','))
+            ))
+            .arg(Arg::new_opt(
+                "-cpu",
+                OptVal::normal("cortex-a57"),
+            ))
+            .arg(Arg::new_opt(
+                "-net",
+                OptVal::normal("nic"),
+            ))
+            .arg(Arg::new_opt(
+                "-append",
+                OptVal::multiple(vec!["root=/dev/vda","console=ttyAMA0",], Some(' ')),
+            ));
+
+        qemus.insert("linux/amd64".to_string(), linux_amd64);
+        qemus.insert("linux/arm".to_string(), linux_arm);
+        qemus.insert("linux/arm64".to_string(), linux_arm64);
         qemus
     };
+
     pub static ref SSH: App = {
-        App::new("ssh")
-            .arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
+        let mut ssh = App::new("ssh");
+        ssh.arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
             .arg(Arg::new_opt(
                 "-o",
                 OptVal::normal("UserKnownHostsFile=/dev/null"),
@@ -77,11 +112,13 @@ lazy_static! {
                 "-o",
                 OptVal::normal("StrictHostKeyChecking=no"),
             ))
-            .arg(Arg::new_opt("-o", OptVal::normal("ConnectTimeout=10s")))
+            .arg(Arg::new_opt("-o", OptVal::normal("ConnectTimeout=10s")));
+        ssh
     };
+
     pub static ref SCP: App = {
-        App::new("scp")
-            .arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
+        let mut scp = App::new("scp");
+        scp.arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
             .arg(Arg::new_opt(
                 "-o",
                 OptVal::normal("UserKnownHostsFile=/dev/null"),
@@ -91,7 +128,8 @@ lazy_static! {
             .arg(Arg::new_opt(
                 "-o",
                 OptVal::normal("StrictHostKeyChecking=no"),
-            ))
+            ));
+        scp
     };
 }
 
@@ -400,8 +438,8 @@ impl LinuxQemu {
         let file_name = path.file_name().unwrap().to_str().unwrap();
         let guest_path = PathBuf::from(format!("~/{}", file_name));
 
-        let scp = SCP
-            .clone()
+        let mut scp = SCP.clone();
+        scp
             .arg(Arg::new_opt("-P", OptVal::normal(&self.port.to_string())))
             .arg(Arg::new_opt("-i", OptVal::normal(&self.key)))
             .arg(Arg::new_flag(path.to_str().unwrap()))
@@ -442,7 +480,7 @@ impl LinuxQemu {
 fn build_qemu_cli(cfg: &Config) -> (App, u16) {
     let target = format!("{}/{}", cfg.guest.os, cfg.guest.arch);
 
-    let default_qemu = QEMUS
+    let mut qemu = QEMUS
         .get(&target)
         .unwrap_or_else(|| exits!(exitcode::CONFIG, "Unsupported target:{}", &target))
         .clone();
@@ -453,7 +491,7 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
         .qemu
         .as_ref()
         .unwrap_or_else(|| exits!(exitcode::SOFTWARE, "Require qemu segment in config toml"));
-    let qemu = default_qemu
+    qemu
         .arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
         .arg(Arg::new_opt(
             "-smp",
@@ -477,13 +515,13 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
 
 fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
     let mut ssh = SSH
-        .clone()
-        .arg(Arg::new_opt("-p", OptVal::normal(&port.to_string())))
+        .clone();
+    ssh.arg(Arg::new_opt("-p", OptVal::normal(&port.to_string())))
         .arg(Arg::new_opt("-i", OptVal::normal(key)))
         .arg(Arg::Flag(format!("{}@{}", user, addr)))
         .arg(Arg::new_flag(&app.bin));
     for app_arg in app.iter_arg() {
-        ssh = ssh.arg(Arg::Flag(app_arg));
+        ssh.arg(Arg::Flag(app_arg));
     }
     ssh
 }

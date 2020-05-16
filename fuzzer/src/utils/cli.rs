@@ -14,8 +14,13 @@ impl App {
         }
     }
 
-    pub fn arg(mut self, a: Arg) -> Self {
+    pub fn arg(&mut self, a: Arg) -> &mut Self {
         self.args.push(a);
+        self
+    }
+
+    pub fn args<'a, T: IntoIterator<Item = &'a Arg>>(&mut self, a: T) -> &mut Self {
+        self.args.extend(a.into_iter().cloned());
         self
     }
 
