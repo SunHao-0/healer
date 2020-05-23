@@ -246,9 +246,11 @@ group SYS{
     fn syscall@init_module(nr i64{175}, mod *cstr, l len<i32,mod>, args *cstr)
     fn syscall@finit_module(nr i64{313}, fd fd_t, args *cstr, flags i32)
     fn syscall@delete_module(nr i64{176}, name *cstr, flags i32)
+
+    /*
     #[inc(linux/kexec.h)]
     fn syscall@kexec_load(nr i64{246}, entry i32, nr_segments len<i32,segments>, segments *[kexec_segment], flags i32)
-
+    */
 
     fn syscall@syslog(nr i64{103},cmd i32{0,1,2,3,4,9,10}, buf *Out [i8], l len<i32,buf>)
     /* fn uname(buf *utsname) */
