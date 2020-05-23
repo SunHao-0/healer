@@ -1,9 +1,9 @@
 /// Driver for kernel to be tested
 use crate::utils::cli::{App, Arg, OptVal};
+use crate::utils::free_ipv4_port;
 use crate::Config;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use os_pipe::{pipe, PipeReader, PipeWriter};
-use serde::export::Formatter;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::{ErrorKind, Read};
@@ -284,7 +284,7 @@ impl Default for Crash {
 }
 
 impl fmt::Display for Crash {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
@@ -481,8 +481,9 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
         .unwrap_or_else(|| exits!(exitcode::CONFIG, "Unsupported target:{}", &target))
         .clone();
 
-    let port = port_check::free_local_port()
-        .unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
+    // use low level port
+    let port =
+        free_ipv4_port().unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
     let cfg = &cfg
         .qemu
         .as_ref()

@@ -1,6 +1,7 @@
 use crate::guest;
 use crate::guest::{Crash, Guest};
 use crate::utils::cli::{App, Arg, OptVal};
+use crate::utils::free_ipv4_port;
 use crate::Config;
 use core::prog::Prog;
 use executor::transfer::{async_recv_result, async_send};
@@ -90,7 +91,7 @@ struct LinuxExecutor {
 impl LinuxExecutor {
     pub fn new(cfg: &Config) -> Self {
         let guest = Guest::new(cfg);
-        let port = port_check::free_local_port()
+        let port = free_ipv4_port()
             .unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port for executor driver"));
         let host_ip = cfg
             .executor
