@@ -144,7 +144,8 @@ impl LinuxExecutor {
         });
 
         let mut executor = App::new(self.executor_bin_path.to_str().unwrap());
-        executor.arg(Arg::new_opt("-t", OptVal::normal(target.to_str().unwrap())))
+        executor
+            .arg(Arg::new_opt("-t", OptVal::normal(target.to_str().unwrap())))
             .arg(Arg::new_opt(
                 "-a",
                 OptVal::normal(&format!(

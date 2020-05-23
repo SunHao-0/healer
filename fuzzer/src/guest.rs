@@ -17,15 +17,18 @@ lazy_static! {
     static ref QEMUS: HashMap<String, App> = {
         let mut qemus = HashMap::new();
 
-        let arg_common = vec![Arg::new_flag("-no-reboot"),
-                              Arg::new_opt("-display", OptVal::normal("none")),
-                              Arg::new_opt("-serial", OptVal::normal("stdio")),
-                              Arg::new_flag("-snapshot")];
+        let arg_common = vec![
+            Arg::new_flag("-no-reboot"),
+            Arg::new_opt("-display", OptVal::normal("none")),
+            Arg::new_opt("-serial", OptVal::normal("stdio")),
+            Arg::new_flag("-snapshot"),
+        ];
 
         let mut linux_amd64 = App::new("qemu-system-x86_64");
-        linux_amd64.arg(Arg::new_flag("-enable-kvm"))
+        linux_amd64
+            .arg(Arg::new_flag("-enable-kvm"))
             .args(arg_common.iter())
-           .arg(Arg::new_opt(
+            .arg(Arg::new_opt(
                 "-cpu",
                 OptVal::multiple(vec!["host", "migratable=off"], Some(',')),
             ))
@@ -35,62 +38,58 @@ lazy_static! {
             ))
             .arg(Arg::new_opt(
                 "-append",
-                OptVal::multiple(vec![
-            "earlyprintk=serial",
-            "oops=panic",
-            "nmi_watchdog=panic",
-            "panic_on_warn=1",
-            "panic=1",
-            "ftrace_dump_on_oops=orig_cpu",
-            "rodata=n",
-            "vsyscall=native",
-            "net.ifnames=0",
-            "biosdevname=0",
-            "root=/dev/sda",
-            "console=ttyS0",
-            "kvm-intel.nested=1",
-            "kvm-intel.unrestricted_guest=1",
-            "kvm-intel.vmm_exclusive=1",
-            "kvm-intel.fasteoi=1",
-            "kvm-intel.ept=1",
-            "kvm-intel.flexpriority=1",
-            "kvm-intel.vpid=1",
-            "kvm-intel.emulate_invalid_guest_state=1",
-            "kvm-intel.eptad=1",
-            "kvm-intel.enable_shadow_vmcs=1",
-            "kvm-intel.pml=1",
-            "kvm-intel.enable_apicv=1",
-        ], Some(' ')),
+                OptVal::multiple(
+                    vec![
+                        "earlyprintk=serial",
+                        "oops=panic",
+                        "nmi_watchdog=panic",
+                        "panic_on_warn=1",
+                        "panic=1",
+                        "ftrace_dump_on_oops=orig_cpu",
+                        "rodata=n",
+                        "vsyscall=native",
+                        "net.ifnames=0",
+                        "biosdevname=0",
+                        "root=/dev/sda",
+                        "console=ttyS0",
+                        "kvm-intel.nested=1",
+                        "kvm-intel.unrestricted_guest=1",
+                        "kvm-intel.vmm_exclusive=1",
+                        "kvm-intel.fasteoi=1",
+                        "kvm-intel.ept=1",
+                        "kvm-intel.flexpriority=1",
+                        "kvm-intel.vpid=1",
+                        "kvm-intel.emulate_invalid_guest_state=1",
+                        "kvm-intel.eptad=1",
+                        "kvm-intel.enable_shadow_vmcs=1",
+                        "kvm-intel.pml=1",
+                        "kvm-intel.enable_apicv=1",
+                    ],
+                    Some(' '),
+                ),
             ));
 
         let mut linux_arm = App::new("qemu-system-arm");
-        linux_arm.args(arg_common.iter())
-            .arg(Arg::new_opt(
-                "-net",
-                OptVal::normal("nic"),
-            ))
+        linux_arm
+            .args(arg_common.iter())
+            .arg(Arg::new_opt("-net", OptVal::normal("nic")))
             .arg(Arg::new_opt(
                 "-append",
                 OptVal::multiple(vec!["root=/dev/vda", "console=ttyAMA0"], Some(' ')),
             ));
 
         let mut linux_arm64 = App::new("qemu-system-aarch64");
-        linux_arm64.args(arg_common.iter())
+        linux_arm64
+            .args(arg_common.iter())
             .arg(Arg::new_opt(
                 "-machine",
-                OptVal::multiple(vec!["virt", "virtualization=on"], Some(','))
+                OptVal::multiple(vec!["virt", "virtualization=on"], Some(',')),
             ))
-            .arg(Arg::new_opt(
-                "-cpu",
-                OptVal::normal("cortex-a57"),
-            ))
-            .arg(Arg::new_opt(
-                "-net",
-                OptVal::normal("nic"),
-            ))
+            .arg(Arg::new_opt("-cpu", OptVal::normal("cortex-a57")))
+            .arg(Arg::new_opt("-net", OptVal::normal("nic")))
             .arg(Arg::new_opt(
                 "-append",
-                OptVal::multiple(vec!["root=/dev/vda","console=ttyAMA0",], Some(' ')),
+                OptVal::multiple(vec!["root=/dev/vda", "console=ttyAMA0"], Some(' ')),
             ));
 
         qemus.insert("linux/amd64".to_string(), linux_amd64);
@@ -98,7 +97,6 @@ lazy_static! {
         qemus.insert("linux/arm64".to_string(), linux_arm64);
         qemus
     };
-
     pub static ref SSH: App = {
         let mut ssh = App::new("ssh");
         ssh.arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
@@ -115,7 +113,6 @@ lazy_static! {
             .arg(Arg::new_opt("-o", OptVal::normal("ConnectTimeout=10s")));
         ssh
     };
-
     pub static ref SCP: App = {
         let mut scp = App::new("scp");
         scp.arg(Arg::new_opt("-F", OptVal::normal("/dev/null")))
@@ -439,8 +436,7 @@ impl LinuxQemu {
         let guest_path = PathBuf::from(format!("~/{}", file_name));
 
         let mut scp = SCP.clone();
-        scp
-            .arg(Arg::new_opt("-P", OptVal::normal(&self.port.to_string())))
+        scp.arg(Arg::new_opt("-P", OptVal::normal(&self.port.to_string())))
             .arg(Arg::new_opt("-i", OptVal::normal(&self.key)))
             .arg(Arg::new_flag(path.to_str().unwrap()))
             .arg(Arg::Flag(format!(
@@ -491,8 +487,7 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
         .qemu
         .as_ref()
         .unwrap_or_else(|| exits!(exitcode::SOFTWARE, "Require qemu segment in config toml"));
-    qemu
-        .arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
+    qemu.arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
         .arg(Arg::new_opt(
             "-smp",
             OptVal::Normal(cfg.cpu_num.to_string()),
@@ -514,8 +509,7 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
 }
 
 fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
-    let mut ssh = SSH
-        .clone();
+    let mut ssh = SSH.clone();
     ssh.arg(Arg::new_opt("-p", OptVal::normal(&port.to_string())))
         .arg(Arg::new_opt("-i", OptVal::normal(key)))
         .arg(Arg::Flag(format!("{}@{}", user, addr)))
