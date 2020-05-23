@@ -11,7 +11,6 @@ fots={path="../fots"}
 serde ={ version= "1.0.110" ,features = ["derive"]}
 bincode = "1.2.1"
 lazy_static = "1.4.0"
-port_check = "0.1.5"
 tokio = {version="0.2.21",features=["full"]}
 bytes = "0.5.4"
 toml = "0.5.6"
