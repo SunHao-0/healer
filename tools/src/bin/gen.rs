@@ -6,12 +6,17 @@ use structopt::StructOpt;
 use tools::load_target;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "gen", about = "Generate progs standard output")]
+#[structopt(
+    name = "gen",
+    about = "Generate progs standard output",
+    version = "0.2.0"
+)]
 struct Settings {
     /// Fots target
-    #[structopt(long, short = "i")]
+    #[structopt(long, short = "i", default_value = "syscalls")]
     items: PathBuf,
 
+    /// Enable to translate generated program to stdout
     #[structopt(long, short = "t")]
     translate: bool,
 }
