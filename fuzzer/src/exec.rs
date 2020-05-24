@@ -133,8 +133,7 @@ impl LinuxExecutor {
                 exits!(exitcode::OSERR, "Fail to listen on {}: {}", host_addr, e)
             });
             match listener.accept().await {
-                Ok((conn, addr)) => {
-                    info!("connected from: {}", addr);
+                Ok((conn, _addr)) => {
                     tx.send(conn).unwrap();
                 }
                 Err(e) => {
@@ -164,7 +163,6 @@ impl LinuxExecutor {
 
         self.exec_handle = Some(self.guest.run_cmd(&executor).await);
         self.conn = Some(rx.await.unwrap());
-        info!("executor started.");
     }
 
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {

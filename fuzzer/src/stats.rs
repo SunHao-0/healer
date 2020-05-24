@@ -126,8 +126,8 @@ impl Sampler {
 
             self.stats.push(stat);
             info!(
-                "corpus {},blocks {},branches {},normal_case {},failed_case {},crashed_case {}",
-                corpus, blocks, branches, normal_case, failed_case, crashed_case
+                "corpus {}, blocks {}, branches {}, failed {}, crashed {}",
+                corpus, blocks, branches, failed_case, crashed_case
             );
         }
     }
