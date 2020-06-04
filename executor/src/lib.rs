@@ -9,8 +9,10 @@ use core::target::Target;
 use std::io::{Read, Write};
 
 #[macro_use]
+#[allow(dead_code)]
 mod utils;
 pub mod cover;
+#[allow(unused_imports, unused_mut, dead_code)]
 pub mod exec;
 pub mod transfer;
 

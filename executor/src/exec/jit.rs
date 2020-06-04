@@ -15,12 +15,15 @@ use std::path::PathBuf;
 use std::process::exit;
 use tcc::{Context, Guard};
 
+#[cfg(feature = "kcov")]
 pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     prepare_env();
-    let p = instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd()).unwrap_or_else(|e| {
-        eprintln!("{}", e);
-        exit(exitcode::SOFTWARE);
-    });
+    let p = {
+        instrument_prog(p, t, out.as_raw_fd(), waiter.as_raw_fd()).unwrap_or_else(|e| {
+            eprintln!("{}", e);
+            exit(exitcode::SOFTWARE);
+        })
+    };
 
     let p = CString::new(p.as_bytes()).unwrap();
     let sym = CString::new("execute").unwrap();
@@ -43,15 +46,39 @@ pub fn exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter) {
     };
 
     let code = execute();
-    if code == 0 {
-        exit(exitcode::OK)
-    } else {
+    if code != 0 {
         exits!(
             exitcode::SOFTWARE,
             "Fail to execute: {:?}",
             StatusCode::from(code)
         )
     }
+}
+
+#[cfg(not(feature = "kcov"))]
+pub fn exec(p: &Prog, t: &Target) {
+    prepare_env();
+    let p = c::to_prog(p, t);
+    let p = CString::new(p.as_bytes()).unwrap();
+    let sym = CString::new("main").unwrap();
+
+    let mut g = Guard::new().unwrap();
+    let mut cc = new_tcc(&mut g);
+    cc.compile_string(&p).unwrap_or_else(|_| {
+        exits!(
+            exitcode::SOFTWARE,
+            "Fail to compile generated prog: {:?}",
+            p
+        )
+    });
+    let mut p = cc
+        .relocate()
+        .unwrap_or_else(|_| exits!(exitcode::SOFTWARE, "Fail to relocate compiled prog"));
+    let execute: fn() -> c_int = unsafe {
+        let symbol = p.get_symbol(&sym).unwrap();
+        std::mem::transmute(symbol)
+    };
+    execute();
 }
 
 pub fn bg_exec(p: &Prog, t: &Target) {

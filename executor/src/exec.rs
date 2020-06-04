@@ -1,4 +1,3 @@
-use crate::utils::{event, Notifier, Waiter};
 use crate::Config;
 use byte_slice_cast::*;
 use byteorder::*;
@@ -42,12 +41,14 @@ pub fn fork_exec(p: Prog, t: &Target, conf: &Config) -> ExecResult {
     let (mut err_rp, err_wp) = os_pipe::pipe()
         .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to create err pipe : {}", e));
     // sync data transfer
-    let (notifer, waiter) = event();
+    #[cfg(feature = "kcov")]
+    let (notifer, waiter) = crate::utils::event();
 
     match fork() {
         Ok(ForkResult::Child) => {
             drop(rp);
             drop(err_rp);
+            #[cfg(feature = "kcov")]
             drop(notifer);
 
             dup2(err_wp.as_raw_fd(), 2).unwrap_or_else(|e| {
@@ -67,15 +68,26 @@ pub fn fork_exec(p: Prog, t: &Target, conf: &Config) -> ExecResult {
                 )
             });
             drop(err_wp);
+            #[cfg(feature = "kcov")]
             sync_exec(&p, t, &mut wp, waiter, conf);
+            #[cfg(not(feature = "kcov"))]
+            sync_exec(&p, t);
+            // subprocess exits here
             exit(exitcode::OK)
         }
         Ok(ForkResult::Parent { child }) => {
             drop(wp);
             drop(err_wp);
+            #[cfg(feature = "kcov")]
             drop(waiter);
 
-            watch(child, &mut rp, &mut err_rp, notifer, conf)
+            #[cfg(feature = "kcov")]
+            let ret = watch(child, &mut rp, &mut err_rp, notifer, conf);
+
+            #[cfg(not(feature = "kcov"))]
+            let ret = watch(child, &mut err_rp);
+
+            ret
         }
         Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
     }
@@ -133,11 +145,36 @@ fn bg_run(p: &Prog, t: &Target) {
     }
 }
 
+#[cfg(not(feature = "kcov"))]
+fn watch<T: Read + AsRawFd>(child: Pid, err: &mut T) -> ExecResult {
+    let mut fds = vec![PollFd::new(err.as_raw_fd(), PollFlags::POLLIN)];
+
+    match poll(&mut fds, 5_000) {
+        Ok(0) => {
+            kill_and_wait(child);
+            ExecResult::Failed(Reason(String::from("Time out")))
+        }
+        Ok(_) => {
+            assert!(fds[0].revents().is_some() && !fds[0].revents().unwrap().is_empty());
+            kill_and_wait(child);
+            let mut err_msg = Vec::new();
+            err.read_to_end(&mut err_msg).unwrap();
+            if err_msg.is_empty() {
+                ExecResult::Ok(Default::default())
+            } else {
+                ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()))
+            }
+        }
+        Err(e) => exits!(exitcode::SOFTWARE, "Fail to poll: {}", e),
+    }
+}
+
+#[cfg(feature = "kcov")]
 fn watch<T: Read + AsRawFd>(
     child: Pid,
     data: &mut T,
     err: &mut T,
-    notifer: Notifier,
+    notifer: crate::utils::Notifier,
     conf: &Config,
 ) -> ExecResult {
     let mut fds = vec![
@@ -297,7 +334,14 @@ pub mod jit;
 #[cfg(feature = "syscall")]
 pub mod syscall;
 
-pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter, conf: &Config) {
+#[cfg(feature = "kcov")]
+pub fn sync_exec(
+    p: &Prog,
+    t: &Target,
+    out: &mut PipeWriter,
+    waiter: crate::utils::Waiter,
+    conf: &Config,
+) {
     if conf.memleak_check {
         mem_leak_clear();
     }
@@ -307,4 +351,14 @@ pub fn sync_exec(p: &Prog, t: &Target, out: &mut PipeWriter, waiter: Waiter, con
     #[cfg(feature = "syscall")]
     use syscall::exec;
     exec(p, t, out, waiter);
+}
+
+#[cfg(not(feature = "kcov"))]
+fn sync_exec(p: &Prog, t: &Target) {
+    #[cfg(feature = "jit")]
+    use jit::exec;
+    #[cfg(feature = "syscall")]
+    use syscall::exec;
+
+    exec(p, t);
 }
