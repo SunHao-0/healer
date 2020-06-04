@@ -15,6 +15,7 @@ use executor::{ExecResult, Reason};
 use fots::types::GroupId;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::fs::write;
 use tokio::sync::broadcast;
@@ -29,6 +30,7 @@ pub struct Fuzzer {
     pub feedback: Arc<FeedBack>,
     pub candidates: Arc<CQueue<Prog>>,
     pub record: Arc<TestCaseRecord>,
+    pub exec_cnt: Arc<AtomicUsize>,
 }
 
 impl Fuzzer {
@@ -53,7 +55,8 @@ impl Fuzzer {
                     self.crash_analyze(p, crash.unwrap_or_default(), &mut executor)
                         .await
                 }
-            }
+            };
+            self.exec_cnt.fetch_add(1, Ordering::SeqCst);
         }
     }
 
@@ -87,6 +90,8 @@ impl Fuzzer {
         if self.need_repo(&crash.inner) {
             warn!("Restarting to repro ...");
             executor.start().await;
+
+            self.exec_cnt.fetch_add(1, Ordering::SeqCst);
             match executor.exec(&p).await {
                 Ok(exec_result) => {
                     match exec_result {
@@ -238,6 +243,7 @@ impl Fuzzer {
     }
 
     async fn exec_no_crash(&self, executor: &mut Executor, p: &Prog) -> ExecResult {
+        self.exec_cnt.fetch_add(1, Ordering::SeqCst);
         match executor.exec(p).await {
             Ok(exec_result) => exec_result,
             Err(crash) => {
@@ -249,6 +255,7 @@ impl Fuzzer {
     }
 
     async fn exec_no_fail(&self, executor: &mut Executor, p: &Prog) -> Vec<Vec<usize>> {
+        self.exec_cnt.fetch_add(1, Ordering::SeqCst);
         match executor.exec(p).await {
             Ok(exec_result) => match exec_result {
                 ExecResult::Ok(raw_branches) => raw_branches,

@@ -10,6 +10,7 @@ use lettre_email::EmailBuilder;
 use circular_queue::CircularQueue;
 use core::prog::Prog;
 use std::process::exit;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::fs::write;
 use tokio::sync::broadcast;
@@ -21,6 +22,7 @@ pub struct StatSource {
     pub feedback: Arc<FeedBack>,
     pub candidates: Arc<CQueue<Prog>>,
     pub record: Arc<TestCaseRecord>,
+    pub exec: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,7 +30,7 @@ pub struct Stats {
     pub corpus: usize,
     pub blocks: usize,
     pub branches: usize,
-    // pub exec:usize,
+    pub exec: usize,
     // pub gen:usize,
     // pub minimized:usize,
     pub candidates: usize,
@@ -108,7 +110,10 @@ impl Sampler {
                 self.source.candidates.len(),
                 self.source.record.len()
             );
+            let exec = self.source.exec.load(Ordering::SeqCst);
+
             let stat = Stats {
+                exec,
                 corpus,
                 blocks,
                 branches,
@@ -126,8 +131,8 @@ impl Sampler {
 
             self.stats.push(stat);
             info!(
-                "corpus {}, blocks {}, branches {}, failed {}, crashed {}",
-                corpus, blocks, branches, failed_case, crashed_case
+                "exec {}, blocks {}, branches {}, failed {}, crashed {}",
+                exec, blocks, branches, failed_case, crashed_case
             );
         }
     }

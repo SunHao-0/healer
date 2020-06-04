@@ -25,6 +25,7 @@ use stats::StatSource;
 use std::path::PathBuf;
 use std::process;
 use std::process::exit;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
@@ -131,8 +132,10 @@ pub async fn fuzz(cfg: Config) {
     let feedback = Arc::new(FeedBack::default());
     let record = Arc::new(TestCaseRecord::new(target.clone()));
     let rt = static_analyze(&target);
+    let exec_cnt = Arc::new(AtomicUsize::new(0));
     let fuzzer = Fuzzer {
         target,
+        exec_cnt: exec_cnt.clone(),
         rt: Arc::new(Mutex::new(rt)),
         conf: Default::default(),
         candidates: candidates.clone(),
@@ -141,6 +144,7 @@ pub async fn fuzz(cfg: Config) {
         record: record.clone(),
     };
     let stats_source = StatSource {
+        exec: exec_cnt,
         corpus,
         feedback,
         candidates,
