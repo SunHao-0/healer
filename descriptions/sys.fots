@@ -362,4 +362,135 @@ group SYS{
     fn syscall@pidfd_send_signal(nr i64{424}, fd pidfd_t, sig signalno_t, info *[i8;16], flags i32{0})
     fn syscall@pidfd_open(nr i64{434}, pid pid_t, flags i32{0}) pidfd_t
     fn syscall@pidfd_getfd(nr i64{438}, pidfd pidfd_t, fd fd_t, flags i32{0}) fd_t
+
+    fn openat@fb0(path *filename{"/dev/fb0"}, flags i32{0x0}, mode i32{0x0}) fd_t
+    fn ioctl@FBIOPUT_VSCREENINFO(fd fd_t, cmd i32{0x4601}, arg *fb_var_screeninfo)
+
+    fn open@kvm(path *filename{"/dev/kvm"}, flags  open_flags, mode open_mode) kvmfd_t
+    fn ioctl@KVM_CREATE_VM(f kvmfd_t, cmd i32{0xae01}, arg i32)kvmvmfd_t
+    fn ioctl@KVM_CREATE_IRQCHIP(fd kvmvmfd_t, cmd i32{0xae60})
+    fn ioctl@KVM_CREATE_VCPU(fd kvmvmfd_t, cmd i32{0xae41}, arg i32{0,1,2,3})vcpu_t
+    #[inc(linux/kvm.h)]
+    fn ioctl@KVM_SET_VAPIC_ADDR(fd vcpu_t, cmd i32{0x4008ae93}, arg *kvm_vapic_addr)
+    #[inc(linux/kvm.h)]
+    fn ioctl@KVM_SET_USER_MEMORY_REGION(fd kvmvmfd_t, cmd i32{0x4020ae46}, arg *kvm_userspace_memory_region)
+    fn ioctl@KVM_RUN(fd vcpu_t,cmd i64{0xae80}, arg i32{0x0})
+    fn ioctl@KVM_SET_REGS(fd vcpu_t, cmd i64{0x4090ae82}, arg *kvm_regs)
+
+    fn open@ttyprintk(path *filename{"/dev/ttyprintk","/dev/ptmx"}, flags i32{0x0}, mode i32{0x0})fd_t
+    fn ioctl@TIOCVHANGUP(fd fd_t, cmd i32{0x5437}, arg i32{0x0, 0x3})
+
+    fn open@ion(file *filename{"/dev/ion"}, flags open_flags, mode i32{0}) fd_t
+    fn ioctl@ION_IOC_ALLOC(fd fd_t, cmd i64{3223341312}, arg *[i64;8])
+    fn ioctl@DMA_BUF_IOCTL_SYNC(fd fd_t, cmd i64{0x40086201}, arg *i64)
+
+    fn open@vnet(file *filename{"/dev/vhost-net"}, flags open_flags, mode i32{0}) fd_t
+    fn ioctl@VHOST_SET_MEM_TABLE(fd fd_t, cmd i64{0x4008af03}, arg *[i8])
+    fn ioctl@VHOST_NET_SET_BACKEND(fd fd_t, cmd i64{0x4008af30}, arg *[i32;4])
+    fn socket@ax25(domain i32{3}, t i32{3}, p i32{0})fd_t
+    fn open@md(path *filename{"/dev/md0"}, flags i32{0x0}, mode i32{0x0})fd_t
+
+    fn open@audio(file *filename{"/dev/audio"}, flags open_flags, mode i32{0}) fd_t
+
+    fn mkdir@dir1(pathname *filename{"dir1"}, mode i32{0})
+    fn mount@afs(source *[i8], target *filename{"dir1"}, fstype: *cstr{"afs"}, mountflags u32{0}, data *cstr)
+
+    fn syscall@perf_event_open(nr i64{298}, attr: *[u8;112], pid pid_t, cpu u8, group_fd u32, flags u32)
+
+    fn mkdir(pathname *filename{"gfs_dir"}, mode i32{0})
+    fn mount@gfs2(source *filename{"gfs_dir"}, target *filename{"gfs_dir"}, fstype *cstr{"gfs2meta"}, mountflags u32{0}, data i32{0})
+
+    fn socket@inet_udplite(domain i32{0x2}, t i32{0x2}, protocol i32{0x88}) udplitefd_t
+    fn ioctl@ifreq_SIOCGIFINDEX_wireguard(fd udplitefd_t, cmd i32{0x8922}, arg *cstr)
+
+    fn open@rdma_cm(path *filename{"/dev/infiniband/rdma_cm"}, flags open_flags, mode i32{0x0})fd_t
+    fn open@smackfs_cipso(path *filename{"/dev/uhid"}, flags open_flags, mode i32{0}) fd_t
+    fn open@uhid(path *filename{"/dev/uhid"}, flags open_flags, mode i32{0}) fd_t
+    fn open@smackfs_cipsonum(path *filename{"/sys/fs/smackfs/doi"}, flags open_flags, mode i32{0}) fd_t
+
+    fn open@fuse(pathname *filename{"/dev/fuse"},flags open_flags, mode open_mode)fusefd_t
+    fn mount@fuse(source *filename, target *filename{"./dir"}, filesystemtype *cstr{"fuse"}, mountflags i32{0x0}, 
+    data *[i8])
+    fn mkdir@dir(pathname *filename{"./dir"}, mode open_mode)
+    fn umount2@dir(path *filename{"./dir"}, flags umount_flags)
+    fn read@fuse(fd fusefd_t, buf  *Out [i8;4096], l i32{4096})
+    fn open@adsp1(path *filename{"/dev/adsp1"}, flags open_flags, mode i32{0}) fd_t
+
+    fn socket@kcm(domain i32{0x2b}, t i32, protocol i32{0x0})sockfd_t
+    fn ioctl@sock_kcm_SIOCKCMUNATTACH(fd sockfd_t, cmd i32{0x5452}, arg *sockfd_t)
+    fn sendmsg(fd sockfd_t, msg *msghdr, flags send_flags)
+
+        fn open@mixer(file *filename{"/dev/mixer"}, flags open_flags, mode i32{0}) mixerfd_t
+    fn open@dsp(file *filename{"/dev/dsp"}, flags open_flags, mode i32{0}) dspfd_t
+    fn open@dsp1(file *filename{"/dev/dsp1"}, flags open_flags, mode i32{0}) dspfd_t
+    fn open@adsp1(file *filename{"/dev/adsp1"}, flags open_flags, mode i32{0}) dspfd_t
+    fn open@audio(file *filename{"/dev/audio"}, flags open_flags, mode i32{0}) dspfd_t
+    fn open@audio1(file *filename{"/dev/audio1"}, flags open_flags, mode i32{0}) dspfd_t
+
+    fn write@dsp(fd dspfd_t, data *[i8], l len<i32,data>)
+    fn read@dsp(fd dspfd_t, data *Out [i8], l len<i32,data>)
+    fn mmap@dsp(addr special_int_t, length special_int_t, prot mmap_prot, flags mmap_flags, fd dspfd_t, offset i32{0})vm_t
+    fn readv(fd dspfd_t, iov *iovec,   iovcnt i32{1})
+    fn writev(fd dspfd_t,iov *iovec,   iovcnt i32{1})
+
+    fn ioctl@void(fd dspfd_t, cmd ioctl_void)
+    fn ioctl@int_in(fd dspfd_t, cmd ioctl_int_in, v  *In i64)
+    fn ioctl@int_out(fd dspfd_t, cmd ioctl_int_out, v *Out i64)
+
+    fn fcntl@dupfd(fd dspfd_t, cmd fcntl_dupfd, arg u32) dspfd_t
+    fn fcntl@getflags(fd dspfd_t, cmd fcntl_getflags)
+    fn fcntl@setflags(fd dspfd_t, cmd fcntl_setfd, flags fcntl_flags)
+    fn fcntl@setstatus(fd dspfd_t, cmd fcntl_setfl, flags fcntl_status)
+    fn fcntl@lock(fd dspfd_t, cmd fcntl_lock, lock  *flock)
+    fn fcntl@getown(fd dspfd_t, cmd fcntl_getown) pid_t
+    fn fcntl@setown(fd dspfd_t, cmd fcntl_setown, pid pid_t)
+    fn fcntl@getownex(fd dspfd_t, cmd fcntl_getown_ex, arg *Out f_owner_ex)
+    fn fcntl@setownex(fd dspfd_t, cmd fcntl_setown_ex, arg *f_owner_ex)
+    fn fcntl@setsig(fd dspfd_t, cmd fcntl_setsig, sig signalno_t)
+    fn fcntl@setlease(fd dspfd_t, cmd fcntl_F_SETLEASE, typ flock_type)
+    fn fcntl@notify(fd dspfd_t, cmd fcntl_F_NOTIFY, typ fcntl_notify)
+    fn fcntl@setpipe(fd dspfd_t, cmd fcntl_F_SETPIPE_SZ, sz u32)
+    fn fcntl@addseals(fd dspfd_t, cmd fcntl_F_ADD_SEALS, seals seal_types)
+    fn fcntl@F_GET_RW_HINT(fd dspfd_t, cmd fcntl_F_GET_RW_HINT, hint *Out i64)
+    fn fcntl@F_GET_FILE_RW_HINT(fd dspfd_t, cmd fcntl_F_GET_FILE_RW_HINT, hint *i64)
+    fn fcntl@F_SET_RW_HINT(fd dspfd_t, cmd   fcntl_F_SET_RW_HINT, hint *fcntl_rw_hint)
+    fn fcntl@F_SET_FILE_RW_HINT(fd dspfd_t, cmd fcntl_F_SET_FILE_RW_HINT, hint *fcntl_rw_hint)
+
+
+    fn ioctl@SNDCTL_DSP_RESET(fd dspfd_t, cmd i64{20480}, arg i32{0})
+    fn ioctl@SNDCTL_DSP_SYNC(fd dspfd_t, cmd i64{20481}, arg i32{0})
+    fn ioctl@SNDCTL_DSP_SPEED(fd dspfd_t, cmd i64{3221508098}, arg  *i32)
+    fn ioctl@SNDCTL_DSP_STEREO(fd dspfd_t, cmd i64{3221508099}, arg *i32{0,1})
+    fn ioctl@SNDCTL_DSP_GETBLKSIZE(fd dspfd_t, cmd i64{3221508100}, arg  *Out i32)
+    fn ioctl@SNDCTL_DSP_CHANNELS(fd dspfd_t, cmd i64{3221508102}, arg *i32)
+    fn ioctl@SNDCTL_DSP_POST(fd dspfd_t, cmd i64{20488}, arg i32{0})
+    fn ioctl@SNDCTL_DSP_SUBDIVIDE(fd dspfd_t, cmd i64{3221508105}, arg *i32)
+    fn ioctl@SNDCTL_DSP_SETFRAGMENT(fd dspfd_t, cmd i64{3221508106}, arg *i32)
+    fn ioctl@SNDCTL_DSP_GETFMTS(fd dspfd_t, cmd i64{2147766283}, arg *i32)
+    fn ioctl@SNDCTL_DSP_SETFMT(fd dspfd_t, cmd i64{3221508101}, arg *i32)
+    fn ioctl@SNDCTL_DSP_GETOSPACE(fd dspfd_t, cmd i64{2148552716}, arg *Out [i8;16])
+    fn ioctl@SNDCTL_DSP_GETISPACE(fd dspfd_t, cmd i64{2148552717}, arg *Out [i8;16])
+    fn ioctl@SNDCTL_DSP_NONBLOCK(fd dspfd_t, cmd i64{20494}, arg i32{0})
+    fn ioctl@SNDCTL_DSP_GETCAPS(fd dspfd_t, cmd i64{2147766287}, arg *Out i32)
+    fn ioctl@SNDCTL_DSP_GETTRIGGER(fd dspfd_t, cmd i64{2147766288}, arg *Out i32)
+    fn ioctl@SNDCTL_DSP_SETTRIGGER(fd dspfd_t, cmd i64{1074024464}, arg *i32)
+    fn ioctl@SNDCTL_DSP_GETIPTR(fd dspfd_t, cmd i64{2148290577}, arg *Out [i8; 12])
+    fn ioctl@SNDCTL_DSP_GETOPTR(fd dspfd_t, cmd i64{2148290578}, arg *Out [i8; 12])
+    fn ioctl@SNDCTL_DSP_SETDUPLEX(fd dspfd_t, cmd i64{20502}, arg i32{0})
+    fn ioctl@SNDCTL_DSP_GETODELAY(fd dspfd_t, cmd i64{2147766295}, arg *Out i32)
+    fn ioctl@SOUND_PCM_READ_RATE(fd dspfd_t, cmd i64{2147766274}, arg *Out i32)
+    fn ioctl@SOUND_PCM_READ_CHANNELS(fd dspfd_t, cmd i64{2147766278}, arg *Out i32)
+    fn ioctl@SOUND_PCM_READ_BITS(fd dspfd_t, cmd i64{2147766277}, arg *Out i32)
+    fn ioctl@SOUND_OLD_MIXER_INFO(fd mixerfd_t, cmd i64{2150649189}, arg  *Out [i8; 48])
+    fn ioctl@SOUND_MIXER_INFO(fd mixerfd_t, cmd i64{2153532773}, arg *Out [i8;92])
+
+    fn ioctl@SOUND_MIXER_WRITE_RECSRC(fd mixerfd_t, cmd i64{3221507583}, arg *i32)
+    fn ioctl@SOUND_MIXER_READ_DEVMASK(fd mixerfd_t, cmd i64{2147765758}, arg *Out i32)
+
+    fn ioctl@SOUND_MIXER_READ_STEREODEVS(fd mixerfd_t, cmd i64{2147765755}, arg *Out i32)
+    fn ioctl@SOUND_MIXER_READ_RECMASK(fd mixerfd_t, cmd i64{2147765757}, arg *Out i32)
+    fn ioctl@SOUND_MIXER_READ_CAPS(fd mixerfd_t, cmd i64{2147765756}, arg *Out i32)
+    fn ioctl@SOUND_MIXER_READ_RECSRC(fd mixerfd_t, cmd i64{2147765759}, arg *Out i32)
+    fn ioctl@SOUND_MIXER_WRITE_VOLUME(fd mixerfd_t, cmd i64{(3221507328,3221507358)}, arg  *i32{(0,100)})
+    fn ioctl@SOUND_MIXER_READ_VOLUME(fd mixerfd_t, cmd i64{(2147765504, 2147765534)}, arg *Out i32)
 }

@@ -33,6 +33,8 @@ type fanotifyfd_t = res<i32>
 type inotifyfd_t = res<i32>
 type pkey_t = res<i32>
 type mqfd_t = res<i32>
+type dspfd_t = res<i32>
+type mixerfd_t = res<i32>
 type timeridfd_t = res<i32>
 type procfs_file_t = *cstr{"/proc/keys", "/proc/key-users", "/proc/crypto",
                             "/proc/consoles", "/proc/cgroups", "/proc/zoneinfo",
@@ -48,6 +50,19 @@ type pidfd_t = res<i32>
 type eventfd_t =res<i32>
 type ipc_sem_t = res<i32>
 type timerfd_t = res<i32>
+type udplitefd_t = res<i32>
+type fusefd_t =res<i32>
+type sockfd_t = res<i32>
+
+struct msghdr {
+    msg_name *i8       /* Optional address */
+    msg_namelen len<i32, msg_name>
+    msg_iov *[iovec]        /* Scatter/gather array */
+    msg_iovlen len<i32, msg_iov>     /* # elements in msg_iov */
+    msg_control *[i8]    /* Ancillary data, see below */
+    msg_controllen  len<i32, msg_control>     /* Ancillary data buffer len */
+    msg_flags      i32                           /* Flags (unused) */
+}
 
 type special_file = *filename{"/dev/null","/dev/zero","/dev/full","/dev/vga_arbiter",
                           "/dev/qat_adf_ctl","/dev/irnet","/dev/hwrng","/dev/autofs","/dev/keychord",
@@ -59,6 +74,39 @@ type special_file = *filename{"/dev/null","/dev/zero","/dev/full","/dev/vga_arbi
 type fstype_t = *cstr{"btrfs", "ext4", "jfs", "xfs","vfat",
                       "fuse", "tmpfs", "cgroup", "proc",
                       "mqueue", "nfs", "cifs","iso9660"}
+type kvmfd_t = res<i32>
+type kvmvmfd_t = res<i32>
+type vcpu_t = res<i32>
+struct kvm_vapic_addr {
+	 vapic_addr u64{ 0, 1, 2, 4, 0x1000, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000, 0xd000, 0xf000, 0x10000,0x100000}
+}
+struct kvm_userspace_memory_region {
+        slot            u32  
+        flags           u32  
+        guest_phys_addr u64
+        memory_size     u64
+        userspace_addr  u64
+}
+struct kvm_regs { 
+        rax     u32             
+        rbx     u32
+        rcx     u32
+        rdx     u32
+        rsi     u32
+        rdi     u32
+        rsp     u32
+        rbp     u32
+        r8      u32
+        r9      u32
+        r10     u32
+        r11     u32
+        r12     u32
+        r13     u32
+        r14     u32
+        r15     u32
+        rip     u32
+        rflags  u32
+}
 
 struct utimbuf {
     actime       time_t
@@ -397,6 +445,46 @@ struct pollfd {
           revents   u16{0}    /* returned events */
 }
 
+struct fb_var_screeninfo {
+         xres                      u32
+         yres                      u32
+         xres_virtual              u32
+         yres_virtual              u32 
+         xoffset                   u32
+         yoffset                   u32
+
+         bits_per_pixel            u32
+         grayscale                 u32
+                                       
+         red                 fb_bitfield
+         green               fb_bitfield
+         blue                fb_bitfield
+         transp              fb_bitfield 
+        nonstd              u32       
+        activate            u32       
+        height              u32       
+        width               u32       
+        accel_flags         u32       
+        pixclock            u32       
+        left_margin         u32       
+        right_margin        u32       
+        upper_margin        u32       
+        lower_margin    u32
+        hsync_len           u32       
+        vsync_len           u32       
+        sync                u32       
+        vmode               u32       
+        rotate              u32       
+        colorspace          u32                   
+}
+
+struct fb_bitfield {
+         offset         u32         /* beginning of bitfield        */
+         length         u32         /* length of bitfield           */
+         msb_right      u32         /* != 0 : Most significant bit is */
+                                        /* right */
+}
+
 struct mq_attr {
         mq_flags        i32
         mq_maxmsg       i32
@@ -501,3 +589,5 @@ flag ptrace_PTRACE_GETEVENTMSG{PTRACE_GETEVENTMSG=16897}
 flag ptrace_req_getregs{PTRACE_GETREGS=12,PTRACE_GETFPREGS=14}
 flag ptrace_req_peek{PTRACE_PEEKTEXT=1,PTRACE_PEEKDATA=2}
 flag mknod_mode{S_IFSOCK=49152,S_IWUSR=128,S_IXGRP=8,S_ISGID=1024,S_IFBLK=24576,S_IRUSR=256,S_IFIFO=4096,S_IWOTH=2,S_IWGRP=16,S_IFCHR=8192,S_IXUSR=64,S_IRGRP=32,S_IXOTH=1,S_IFREG=32768,S_IROTH=4,S_ISUID=2048,S_ISVTX=512}
+flag umount_flags{UMOUNT_NOFOLLOW=8,MNT_EXPIRE=4,MNT_FORCE=1,MNT_DETACH=2}
+flag send_flags{MSG_CONFIRM=2048,MSG_MORE=32768,MSG_DONTROUTE=4,MSG_DONTWAIT=64,MSG_BATCH=262144,MSG_FASTOPEN=536870912,MSG_EOR=128,MSG_ZEROCOPY=67108864,MSG_NOSIGNAL=16384,MSG_OOB=1}
