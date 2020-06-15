@@ -27,16 +27,17 @@ pub struct Settings {
 
 fn main() {
     let settings = Settings::from_args();
+
     let items = read(&settings.target).unwrap_or_else(|e| {
         eprintln!("Fail to read target:{}", e);
         exit(exitcode::NOINPUT);
     });
-
     let items: Items = bincode::deserialize(&items).unwrap_or_else(|e| {
         eprintln!("Fail to deserialize given target {}:{}", settings.target, e);
         exit(exitcode::DATAERR);
     });
     let target = Target::from(items);
+
     if settings.memleak_check {
         write("/sys/kernel/debug/kmemleak", "clear").unwrap();
     }
