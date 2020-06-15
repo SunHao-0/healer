@@ -294,23 +294,11 @@ fn parse_leak(leaks_src: &str) -> Vec<&str> {
     ret
 }
 
+// Following result is ignored because we know that we are killing correct sub process.
+#[allow(unused_must_use)]
 fn kill_and_wait(child: Pid) {
-    if let Err(e) = kill(child, Some(Signal::SIGKILL)) {
-        eprintln!(
-            // exitcode::OSERR,
-            "Fail to kill subprocess(pid {}): {}",
-            child,
-            e
-        );
-    }
-    if let Err(e) = waitpid(child, None) {
-        eprintln!(
-            // exitcode::OSERR,
-            "Fail to wait subprocess(pid {}): {}",
-            child,
-            e
-        );
-    }
+    kill(child, Some(Signal::SIGKILL));
+    waitpid(child, None);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
