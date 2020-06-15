@@ -1,7 +1,7 @@
 # Healer
   [![Rustc Version 1.39+](https://img.shields.io/badge/rustc-1.39%2B-green)](https://blog.rust-lang.org/2019/11/07/Rust-1.39.0.html)
 
-**Note** *Build status is removed because current account has used 100% of included free github action services*
+**Note**: *Build status is removed because current account has used 100% of included free github action services*
 <!--
 [![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) 
  [![Check](https://github.com/SunHao-0/healer/workflows/Check/badge.svg)](https://github.com/SunHao-0/healer/actions?query=workflow%3ACheck)
