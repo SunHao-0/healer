@@ -31,6 +31,7 @@ pub struct Fuzzer {
     pub candidates: Arc<CQueue<Prog>>,
     pub record: Arc<TestCaseRecord>,
     pub exec_cnt: Arc<AtomicUsize>,
+    pub crash_digests: Arc<Mutex<HashSet<md5::Digest>>>,
 }
 
 impl Fuzzer {
@@ -87,7 +88,7 @@ impl Fuzzer {
         let p_str = to_prog(&p, &self.target);
         warn!("Caused by:\n{}", p_str);
 
-        if self.need_repo(&crash.inner) {
+        if self.need_repo(&crash.inner).await {
             warn!("Restarting to repro ...");
             executor.start().await;
 
@@ -116,8 +117,13 @@ impl Fuzzer {
         }
     }
 
-    fn need_repo(&self, crash: &str) -> bool {
-        !(crash.contains("CRASH-MEMLEAK") || crash == "$$")
+    async fn need_repo(&self, crash: &str) -> bool {
+        if crash.contains("CRASH-MEMLEAK") || crash == "$$" || crash.is_empty() {
+            return false;
+        }
+        let digest = md5::compute(crash);
+        let mut g = self.crash_digests.lock().await;
+        g.insert(digest)
     }
 
     async fn feedback_analyze(

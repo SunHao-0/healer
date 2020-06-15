@@ -36,6 +36,7 @@ lettre = { version = "0.9", optional = true }
 lettre_email = { version = "0.9", optional = true }
 native-tls = { version = "0.2.4", optional = true }
 num_cpus = "1.0"
+md5 = "0.7.0"
 
 [features]
 default = []

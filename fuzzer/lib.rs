@@ -22,6 +22,7 @@ use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
 use stats::StatSource;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process;
 use std::process::exit;
@@ -131,10 +132,12 @@ pub async fn fuzz(cfg: Config) {
     let corpus = Arc::new(Corpus::default());
     let feedback = Arc::new(FeedBack::default());
     let record = Arc::new(TestCaseRecord::new(target.clone()));
+    let crash_digests = Arc::new(Mutex::new(HashSet::new()));
     let rt = static_analyze(&target);
     let exec_cnt = Arc::new(AtomicUsize::new(0));
     let fuzzer = Fuzzer {
         target,
+        crash_digests,
         exec_cnt: exec_cnt.clone(),
         rt: Arc::new(Mutex::new(rt)),
         conf: Default::default(),
