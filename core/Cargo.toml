@@ -6,6 +6,11 @@ edition = "2018"
 description = "Program generation, mutation, minimiation of healer"
 license = "Apache-2.0"
 
+
+[lib]
+path = "lib.rs"
+name = "core"
+
 [dependencies]
 fots={path="../fots"}
 ndarray = "0.13.0"

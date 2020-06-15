@@ -4,6 +4,14 @@ version = "0.2.2"
 authors = ["sam <sunhaoyl@outlook.com>"]
 edition = "2018"
 
+[lib]
+path = "lib.rs"
+name = "executor"
+
+[[bin]]
+name = "executor"
+path = "executor.rs"
+
 [features]
 default = ["jit", "kcov"]
 jit = []

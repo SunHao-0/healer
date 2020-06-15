@@ -314,11 +314,11 @@ fn new_tcc<'a, 'b>(g: &'a mut Guard) -> Context<'a, 'b> {
 }
 
 fn prepare_env() {
-    let float_h = include_str!("../../tcc-0.9.27/include/float.h");
-    let stdarg_h = include_str!("../../tcc-0.9.27/include/stdarg.h");
-    let stdbool_h = include_str!("../../tcc-0.9.27/include/stdbool.h");
-    let stddef_h = include_str!("../../tcc-0.9.27/include/stddef.h");
-    let varargs_h = include_str!("../../tcc-0.9.27/include/varargs.h");
+    let float_h = include_str!("../tcc-0.9.27/include/float.h");
+    let stdarg_h = include_str!("../tcc-0.9.27/include/stdarg.h");
+    let stdbool_h = include_str!("../tcc-0.9.27/include/stdbool.h");
+    let stddef_h = include_str!("../tcc-0.9.27/include/stddef.h");
+    let varargs_h = include_str!("../tcc-0.9.27/include/varargs.h");
     let tcc_include = PathBuf::from(TCC_INCLUDE);
     if let Err(e) = create_dir_all(&tcc_include) {
         if ErrorKind::AlreadyExists != e.kind() {
