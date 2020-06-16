@@ -34,14 +34,17 @@ pub async fn transaction_loop<T, F, Z>(
 }
 
 lazy_static! {
-    static ref SCAN_RANGE: Mutex<(u16, u16)> = Mutex::new((1 << 12, 32768));
+    static ref SCAN_RANGE: Mutex<(u16, u16)> = Mutex::new((1 << 12, 0xFFFF));
 }
 
 pub fn free_ipv4_port() -> Option<u16> {
     let mut r = SCAN_RANGE.lock().unwrap();
+
     if r.0 >= r.1 {
-        return None;
+        r.0 = 1 << 12;
+        r.1 = 0xFFFF;
     }
+
     let mut addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, r.0);
     for p in r.0..r.1 {
         addr.set_port(p);
@@ -50,6 +53,5 @@ pub fn free_ipv4_port() -> Option<u16> {
             return Some(p);
         }
     }
-    r.0 = r.1;
     None
 }
