@@ -215,6 +215,7 @@ fn watch<T: Read + AsRawFd>(
     ];
     let mut covs = Vec::new();
     let wait_timeout = if conf.memleak_check { 3000 } else { 1000 };
+    let mut wait_time = Duration::from_secs(0);
 
     loop {
         match poll(&mut fds, wait_timeout) {
@@ -229,14 +230,16 @@ fn watch<T: Read + AsRawFd>(
                 };
             }
             Ok(_) => {
+                wait_time += Duration::from_millis(wait_timeout as u64);
+
                 if let Some(revents) = fds[1].revents() {
                     if !revents.is_empty() {
                         kill_and_wait(child);
 
                         let mut err_msg = Vec::new();
                         err.read_to_end(&mut err_msg).unwrap();
-                        if covs.is_empty() {
-                            return ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()));
+                        return if covs.is_empty() {
+                            ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()))
                         } else {
                             covs.shrink_to_fit();
                             if conf.memleak_check {
@@ -247,7 +250,7 @@ fn watch<T: Read + AsRawFd>(
                                     )));
                                 }
                             }
-                            return ExecResult::Ok(covs);
+                            ExecResult::Ok(covs)
                         }
                     }
                 }
@@ -274,7 +277,12 @@ fn watch<T: Read + AsRawFd>(
                     }
                 }
             }
-            Err(e) => exits!(exitcode::SOFTWARE, "Fail to poll: {}", e),
+            Err(_) => {
+                wait_time += Duration::from_millis(wait_timeout as u64);
+                if wait_time > Duration::from_secs(10){
+                    return ExecResult::Failed(Reason("Time out".to_string()));
+                }
+            },
         }
     }
 }
