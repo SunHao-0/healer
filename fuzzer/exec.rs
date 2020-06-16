@@ -123,15 +123,33 @@ impl LinuxExecutor {
     }
 
     pub async fn start_executer(&mut self) {
+        use tokio::io::ErrorKind::*;
+
         self.exec_handle = None;
         let target = self.guest.copy(&self.target_path).await;
 
         let (tx, rx) = oneshot::channel();
-        let host_addr = format!("{}:{}", self.host_ip, self.port);
+        let mut retry = 0;
+        let mut listener;
+        loop {
+            let host_addr = format!("{}:{}", self.host_ip, self.port);
+            listener = match TcpListener::bind(&host_addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    if e.kind() == AddrInUse && retry != 5 {
+                        self.port = free_ipv4_port().unwrap();
+                        retry += 1;
+                        continue;
+                    } else {
+                        eprintln!("Fail to listen on {}: {}", host_addr, e);
+                        exit(1);
+                    }
+                }
+            };
+            break;
+        }
+
         tokio::spawn(async move {
-            let mut listener = TcpListener::bind(&host_addr).await.unwrap_or_else(|e| {
-                exits!(exitcode::OSERR, "Fail to listen on {}: {}", host_addr, e)
-            });
             match listener.accept().await {
                 Ok((conn, _addr)) => {
                     tx.send(conn).unwrap();
