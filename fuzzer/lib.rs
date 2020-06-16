@@ -46,20 +46,19 @@ pub mod mail;
 pub mod report;
 pub mod stats;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub fots_bin: PathBuf,
     pub curpus: Option<PathBuf>,
     pub vm_num: usize,
-
     pub guest: GuestConf,
-    pub qemu: Option<QemuConf>,
-    pub ssh: Option<SSHConf>,
-
+    pub qemu: QemuConf,
+    pub ssh: SSHConf,
     pub executor: ExecutorConf,
+    pub sampler: Option<SamplerConf>,
+
     #[cfg(feature = "mail")]
     pub mail: Option<MailConf>,
-    pub sampler: Option<SamplerConf>,
 }
 
 impl Config {
@@ -91,30 +90,26 @@ impl Config {
 
         self.guest.check();
         self.executor.check();
-
-        if let Some(qemu) = self.qemu.as_ref() {
-            qemu.check()
-        }
-
-        if let Some(ssh) = self.ssh.as_ref() {
-            ssh.check();
-        }
-
-        #[cfg(feature = "mail")]
-        mail_check(&self.mail);
+        self.qemu.check();
+        self.ssh.check();
 
         if let Some(sampler) = self.sampler.as_ref() {
             sampler.check()
         }
+
+        #[cfg(feature = "mail")]
+        if let Some(mail) = mail.as_ref() {
+            mail.check()
+        }
     }
 }
 
-#[cfg(feature = "mail")]
-fn mail_check(mail: &Option<MailConf>) {
-    if let Some(mail) = mail.as_ref() {
-        mail.check()
-    }
-}
+// #[cfg(feature = "mail")]
+// fn mail_check(mail: &Option<MailConf>) {
+//     if let Some(mail) = mail.as_ref() {
+//         mail.check()
+//     }
+// }
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);

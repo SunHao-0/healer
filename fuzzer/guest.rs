@@ -10,6 +10,7 @@ use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::sync::Arc;
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 
@@ -130,7 +131,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GuestConf {
     /// Kernel to be tested
     pub os: String,
@@ -159,7 +160,7 @@ impl GuestConf {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct QemuConf {
     pub cpu_num: u32,
     pub mem_size: u32,
@@ -201,7 +202,7 @@ impl QemuConf {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct SSHConf {
     pub key_path: String,
 }
@@ -304,6 +305,7 @@ pub struct LinuxQemu {
     port: u16,
     key: String,
     user: String,
+    _cfg: Arc<Config>,
 }
 
 impl LinuxQemu {
@@ -313,20 +315,21 @@ impl LinuxQemu {
         assert_eq!(cfg.guest.arch, "amd64");
 
         let (qemu, port) = build_qemu_cli(&cfg);
-        let ssh_conf = cfg
-            .ssh
-            .as_ref()
-            .unwrap_or_else(|| exits!(exitcode::CONFIG, "Require ssh segment in config toml"));
+        // let ssh_conf = cfg
+        //     .ssh
+        //     .as_ref()
+        //     .unwrap_or_else(|| exits!(exitcode::CONFIG, "Require ssh segment in config toml"));
 
         Self {
+            _cfg: Arc::new(cfg.clone()),
             vm: qemu,
             handle: None,
             rp: None,
 
-            wait_boot_time: cfg.qemu.as_ref().unwrap().wait_boot_time.unwrap_or(5),
+            wait_boot_time: cfg.qemu.wait_boot_time.unwrap_or(5),
             addr: LINUX_QEMU_HOST_IP_ADDR.to_string(),
             port,
-            key: ssh_conf.key_path.clone(),
+            key: cfg.ssh.key_path.clone(),
             user: LINUX_QEMU_HOST_USER.to_string(),
         }
     }
@@ -484,10 +487,8 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
     // use low level port
     let port =
         free_ipv4_port().unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
-    let cfg = &cfg
-        .qemu
-        .as_ref()
-        .unwrap_or_else(|| exits!(exitcode::SOFTWARE, "Require qemu segment in config toml"));
+    let cfg = &cfg.qemu;
+
     qemu.arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
         .arg(Arg::new_opt(
             "-smp",

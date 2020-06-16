@@ -39,7 +39,7 @@ pub struct Stats {
     pub crashed_case: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct SamplerConf {
     /// Duration for sampling, per second
     pub sample_interval: u64,

@@ -15,7 +15,7 @@ use tokio::sync::oneshot;
 use tokio::time::{timeout, Duration};
 
 // config for executor
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ExecutorConf {
     pub path: PathBuf,
     pub host_ip: Option<String>,

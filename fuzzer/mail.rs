@@ -12,7 +12,7 @@ static mut MAILER: Option<Mutex<SmtpTransport>> = None;
 static mut ENVELOPE: Option<Envelope> = None;
 static ONCE: Once = Once::new();
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MailConf {
     pub sender: String,
     pub receivers: Vec<String>,
