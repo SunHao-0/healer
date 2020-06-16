@@ -6,15 +6,17 @@ use core::target::Target;
 use nix::fcntl::{fcntl, FcntlArg};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::signal::{kill, Signal};
-use nix::sys::wait::{waitpid, WaitPidFlag};
+use nix::sys::wait::{wait, waitpid, WaitPidFlag};
 use nix::unistd::{dup2, fork, ForkResult, Pid};
 use os_pipe::PipeWriter;
 use rand::random;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 use std::fs::{read_to_string, write};
 use std::io::Read;
 use std::mem;
+use std::ops::Index;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process::exit;
@@ -94,45 +96,39 @@ pub fn fork_exec(p: Prog, t: &Target, conf: &Config) -> ExecResult {
 }
 
 fn bg_run(p: &Prog, t: &Target) {
-    #[cfg(feature = "interprete")]
-    use interprete::bg_exec;
-    #[cfg(feature = "jit")]
-    use jit::bg_exec;
-    #[cfg(feature = "syscall")]
-    use syscall::bg_exec;
-
     match fork() {
         Ok(ForkResult::Child) => match fork() {
             Ok(ForkResult::Child) => {
-                for _ in 0..3 {
-                    let mut wait_call = p.calls.len();
+                let mut childs = HashSet::new();
+                for _ in 0..16 {
                     match fork() {
-                        Ok(ForkResult::Child) => {
-                            bg_exec(p, t);
-                            exit(0);
+                        Ok(ForkResult::Parent { child }) => {
+                            childs.insert(child);
                         }
-                        Ok(ForkResult::Parent { child }) => loop {
-                            sleep(Duration::from_millis(100));
-                            match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
-                                Ok(status) => {
-                                    if status.pid().is_some() {
-                                        kill_and_wait(child);
-                                        break;
-                                    }
-                                }
-                                Err(_) => {
-                                    kill_and_wait(child);
-                                    break;
-                                }
-                            }
-                            wait_call -= 1;
-                            if wait_call == 0 {
-                                kill_and_wait(child);
-                                break;
-                            }
-                        },
-                        Err(_) => exit(0),
+                        Ok(ForkResult::Child) => bg_fork_run(p, t),
+                        Err(_) => break,
                     }
+                }
+
+                const SLEEP_DURATION: Duration = Duration::from_millis(100);
+                const WAIT_TIME: Duration = Duration::from_secs(30);
+
+                let mut wait_time = Duration::new(0, 0);
+                while !childs.is_empty() && wait_time < WAIT_TIME {
+                    sleep(SLEEP_DURATION);
+                    wait_time += SLEEP_DURATION;
+
+                    if let Ok(status) = waitpid(None, Some(WaitPidFlag::WNOHANG)) {
+                        if let Some(pid) = status.pid() {
+                            childs.remove(&pid);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                for pid in childs.iter() {
+                    kill_and_wait(*pid)
                 }
                 exit(0);
             }
@@ -142,6 +138,42 @@ fn bg_run(p: &Prog, t: &Target) {
             waitpid(child, None).unwrap();
         }
         Err(e) => exits!(exitcode::OSERR, "Fail to fork: {}", e),
+    }
+}
+
+fn bg_fork_run(p: &Prog, t: &Target) {
+    #[cfg(feature = "jit")]
+    use jit::bg_exec;
+    #[cfg(feature = "syscall")]
+    use syscall::bg_exec;
+
+    match fork() {
+        Ok(ForkResult::Parent { child }) => {
+            const SLEEP_DURATION: Duration = Duration::from_millis(100);
+            const WAIT_TIME: Duration = Duration::from_secs(10);
+
+            let mut waited_time = Duration::new(0, 0);
+            while waited_time < WAIT_TIME {
+                sleep(SLEEP_DURATION);
+                waited_time += SLEEP_DURATION;
+
+                match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                    Ok(status) => {
+                        if status.pid().is_some() {
+                            exit(0)
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            kill_and_wait(child);
+            exit(0)
+        }
+        Ok(ForkResult::Child) => {
+            bg_exec(p, t);
+            exit(0)
+        }
+        Err(_) => exit(1),
     }
 }
 
@@ -183,6 +215,7 @@ fn watch<T: Read + AsRawFd>(
     ];
     let mut covs = Vec::new();
     let wait_timeout = if conf.memleak_check { 3000 } else { 1000 };
+    let mut wait_time = Duration::from_secs(0);
 
     loop {
         match poll(&mut fds, wait_timeout) {
@@ -197,14 +230,16 @@ fn watch<T: Read + AsRawFd>(
                 };
             }
             Ok(_) => {
+                wait_time += Duration::from_millis(wait_timeout as u64);
+
                 if let Some(revents) = fds[1].revents() {
                     if !revents.is_empty() {
                         kill_and_wait(child);
 
                         let mut err_msg = Vec::new();
                         err.read_to_end(&mut err_msg).unwrap();
-                        if covs.is_empty() {
-                            return ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()));
+                        return if covs.is_empty() {
+                            ExecResult::Failed(Reason(String::from_utf8(err_msg).unwrap()))
                         } else {
                             covs.shrink_to_fit();
                             if conf.memleak_check {
@@ -215,8 +250,8 @@ fn watch<T: Read + AsRawFd>(
                                     )));
                                 }
                             }
-                            return ExecResult::Ok(covs);
-                        }
+                            ExecResult::Ok(covs)
+                        };
                     }
                 }
 
@@ -242,7 +277,12 @@ fn watch<T: Read + AsRawFd>(
                     }
                 }
             }
-            Err(e) => exits!(exitcode::SOFTWARE, "Fail to poll: {}", e),
+            Err(_) => {
+                wait_time += Duration::from_millis(wait_timeout as u64);
+                if wait_time > Duration::from_secs(10) {
+                    return ExecResult::Failed(Reason("Time out".to_string()));
+                }
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-name: Check
+name: Build
 on:
   push:
     branches: [ master ]
@@ -6,29 +6,38 @@ on:
     branches: [ master ]
 
 jobs:
-  clippy:
+  build:
     runs-on: ubuntu-latest
     
     steps:
       - uses: actions/checkout@v2
+
       - name: Install clippy
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: clippy
+          components: clippy, rustfmt
+      
       - name: deps
         run: sudo apt update && sudo apt install gcc-multilib g++-multilib 
       
       - name: tcc-0.9.27
         run: git clone https://github.com/TinyCC/tinycc.git tcc  && cd tcc && ./configure && make && sudo make install && cd ../
       
-      - uses: actions-rs/clippy-check@v1
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all 
-  fmt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - name: Run fmt check
-        run: cargo fmt --all -- --check
+          args: --all
+
+      - name: Fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      
+      - name: Release build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
