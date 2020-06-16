@@ -10,7 +10,6 @@ use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::sync::Arc;
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 
@@ -296,97 +295,113 @@ pub const LINUX_QEMU_HOST_USER: &str = "root";
 pub const LINUX_QEMU_PIPE_LEN: i32 = 1024 * 1024;
 
 pub struct LinuxQemu {
-    vm: App,
-    wait_boot_time: u8,
     handle: Option<Child>,
     rp: Option<PipeReader>,
 
+    wait_boot_time: u8,
     addr: String,
     port: u16,
     key: String,
     user: String,
-    _cfg: Arc<Config>,
+    guest: GuestConf,
+    qemu: QemuConf,
 }
 
 impl LinuxQemu {
     pub fn new(cfg: &Config) -> Self {
-        assert_eq!(cfg.guest.platform.trim(), "qemu");
         assert_eq!(cfg.guest.os, "linux");
-        assert_eq!(cfg.guest.arch, "amd64");
-
-        let (qemu, port) = build_qemu_cli(&cfg);
-        // let ssh_conf = cfg
-        //     .ssh
-        //     .as_ref()
-        //     .unwrap_or_else(|| exits!(exitcode::CONFIG, "Require ssh segment in config toml"));
 
         Self {
-            _cfg: Arc::new(cfg.clone()),
-            vm: qemu,
-            handle: None,
-            rp: None,
-
-            wait_boot_time: cfg.qemu.wait_boot_time.unwrap_or(5),
+            handle: Option::None,
+            rp: Option::None,
+            wait_boot_time: cfg.qemu.wait_boot_time.unwrap_or(15),
             addr: LINUX_QEMU_HOST_IP_ADDR.to_string(),
-            port,
+            port: 0,
             key: cfg.ssh.key_path.clone(),
             user: LINUX_QEMU_HOST_USER.to_string(),
+            guest: cfg.guest.clone(),
+            qemu: cfg.qemu.clone(),
         }
     }
 }
 
 impl LinuxQemu {
     async fn boot(&mut self) {
-        const MAX_RETRY: u8 = 5;
-
         if let Some(ref mut h) = self.handle {
             h.kill()
                 .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill running guest:{}", e));
             self.rp = None;
         }
 
-        let (mut handle, mut rp) = {
-            let mut cmd = self.vm.clone().into_cmd();
-            let (rp, wp) = long_pipe();
-            fcntl(rp.as_raw_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to set flag on pipe:{}", e));
-            let wp2 = wp
-                .try_clone()
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to clone pipe:{}", e));
-            let handle = cmd
-                .stdin(std::process::Stdio::piped())
-                .stdout(wp)
-                .stderr(wp2)
-                .kill_on_drop(true)
-                .spawn()
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn qemu:{}", e));
-
-            (handle, rp)
-        };
-
-        let mut retry = 1;
+        const MAX_RETRY: u8 = 5;
+        let mut retry = 0;
         loop {
-            delay_for(Duration::new(self.wait_boot_time as u64, 0)).await;
+            let (qemu, port) = build_qemu_cli(&self.guest, &self.qemu);
+            self.port = port;
 
-            if self.is_alive().await {
+            let (mut handle, mut rp) = {
+                let mut cmd = qemu.clone().into_cmd();
+                let (rp, wp) = long_pipe();
+                fcntl(rp.as_raw_fd(), FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
+                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to set flag on pipe:{}", e));
+                let wp2 = wp
+                    .try_clone()
+                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to clone pipe:{}", e));
+
+                let handle = cmd
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(wp)
+                    .stderr(wp2)
+                    .kill_on_drop(true)
+                    .spawn()
+                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn qemu:{}", e));
+
+                (handle, rp)
+            };
+
+            let mut wait = 1;
+            let mut started = false;
+            let mut failed_reason = String::new();
+            loop {
+                delay_for(Duration::new(self.wait_boot_time as u64, 0)).await;
+
+                if self.is_alive().await {
+                    started = true;
+                    break;
+                }
+
+                if wait == MAX_RETRY {
+                    handle.kill().unwrap_or_else(|e| {
+                        exits!(exitcode::OSERR, "Fail to kill failed guest:{}", e)
+                    });
+                    failed_reason = String::from_utf8_lossy(&read_all_nonblock(&mut rp))
+                        .to_owned()
+                        .to_string();
+                    break;
+                }
+                wait += 1;
+            }
+
+            if !started {
+                if !failed_reason.contains("ould not set up host forwarding rule")
+                    || retry == MAX_RETRY
+                {
+                    eprintln!("Fail to boot kernel:");
+                    eprintln!("{}", failed_reason);
+                    eprintln!("======================= Command ===========================");
+                    eprintln!("{:?}", qemu);
+                    exit(1)
+                } else {
+                    retry += 1
+                }
+            } else {
+                // clear useless data in pipe
+                read_all_nonblock(&mut rp);
+                self.handle = Some(handle);
+                self.rp = Some(rp);
                 break;
             }
-
-            if retry == MAX_RETRY {
-                handle
-                    .kill()
-                    .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill failed guest:{}", e));
-                let buf = String::from_utf8(read_all_nonblock(&mut rp)).unwrap();
-                eprintln!("{}", buf);
-                eprintln!("===============================================");
-                exits!(exitcode::DATAERR, "Fail to boot :\n{:?}", self.vm);
-            }
-            retry += 1;
         }
-        // clear useless data in pipe
-        read_all_nonblock(&mut rp);
-        self.handle = Some(handle);
-        self.rp = Some(rp);
     }
 
     async fn is_alive(&self) -> bool {
@@ -476,8 +491,8 @@ impl LinuxQemu {
     }
 }
 
-fn build_qemu_cli(cfg: &Config) -> (App, u16) {
-    let target = format!("{}/{}", cfg.guest.os, cfg.guest.arch);
+fn build_qemu_cli(g: &GuestConf, q: &QemuConf) -> (App, u16) {
+    let target = format!("{}/{}", g.os, g.arch);
 
     let mut qemu = QEMUS
         .get(&target)
@@ -487,7 +502,7 @@ fn build_qemu_cli(cfg: &Config) -> (App, u16) {
     // use low level port
     let port =
         free_ipv4_port().unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
-    let cfg = &cfg.qemu;
+    let cfg = q;
 
     qemu.arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
         .arg(Arg::new_opt(
