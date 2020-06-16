@@ -251,7 +251,7 @@ fn watch<T: Read + AsRawFd>(
                                 }
                             }
                             ExecResult::Ok(covs)
-                        }
+                        };
                     }
                 }
 
@@ -279,10 +279,10 @@ fn watch<T: Read + AsRawFd>(
             }
             Err(_) => {
                 wait_time += Duration::from_millis(wait_timeout as u64);
-                if wait_time > Duration::from_secs(10){
+                if wait_time > Duration::from_secs(10) {
                     return ExecResult::Failed(Reason("Time out".to_string()));
                 }
-            },
+            }
         }
     }
 }
