@@ -278,7 +278,7 @@ pub struct Crash {
 impl Default for Crash {
     fn default() -> Self {
         Crash {
-            inner: String::from("$$"),
+            inner: String::new(),
         }
     }
 }
