@@ -3,15 +3,20 @@ use crate::gen::{gen_seq, Config};
 use crate::minimize::remove;
 use crate::prog::Prog;
 use crate::target::Target;
-use rand::prelude::*;
-use std::collections::{HashSet, HashMap};
 use fots::types::GroupId;
+use rand::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 #[allow(clippy::type_complexity)]
 const MUTATE_METHOD: [fn(&Prog, &Target, &RTable, &HashSet<Prog>, &Config) -> Prog; 3] =
     [seq_reuse, merge_seq, remove_call];
 
-pub fn mutate( corpus: &HashSet<Prog>, t: &Target, rt: &HashMap<GroupId, RTable>, conf: &Config) -> Prog {
+pub fn mutate(
+    corpus: &HashSet<Prog>,
+    t: &Target,
+    rt: &HashMap<GroupId, RTable>,
+    conf: &Config,
+) -> Prog {
     let mut rng = thread_rng();
     let p = corpus.iter().choose(&mut rng).unwrap();
     let rt = &rt[&p.gid];
