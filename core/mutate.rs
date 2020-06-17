@@ -1,6 +1,5 @@
 use crate::analyze::RTable;
 use crate::gen::{gen_seq, Config};
-use crate::minimize::remove;
 use crate::prog::Prog;
 use crate::target::Target;
 use fots::types::GroupId;
@@ -8,8 +7,8 @@ use rand::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 #[allow(clippy::type_complexity)]
-const MUTATE_METHOD: [fn(&Prog, &Target, &RTable, &HashSet<Prog>, &Config) -> Prog; 3] =
-    [seq_reuse, merge_seq, remove_call];
+const MUTATE_METHOD: [fn(&Prog, &Target, &RTable, &HashSet<Prog>, &Config) -> Prog; 2] =
+    [seq_reuse, merge_seq /*remove_call*/];
 
 pub fn mutate(
     corpus: &HashSet<Prog>,
@@ -57,27 +56,27 @@ fn merge_seq(p0: &Prog, t: &Target, _rt: &RTable, corpus: &HashSet<Prog>, conf: 
 //     todo!()
 // }
 
-fn remove_call(p: &Prog, t: &Target, rt: &RTable, corpus: &HashSet<Prog>, conf: &Config) -> Prog {
-    let mut rng = thread_rng();
-    if p.len() <= 3 {
-        let (_, methods) = MUTATE_METHOD.split_last().unwrap();
-        let method = methods.choose(&mut rng).unwrap();
-        return method(&p, t, rt, corpus, conf);
-    }
-
-    let mut p = p.clone();
-    let mut retry = 0;
-    loop {
-        let c = rng.gen_range(0, p.len());
-        if remove(&mut p, c) {
-            return p;
-        } else if retry != p.len() {
-            retry += 1;
-            continue;
-        } else {
-            let (_, methods) = MUTATE_METHOD.split_last().unwrap();
-            let method = methods.choose(&mut rng).unwrap();
-            return method(&p, t, rt, corpus, conf);
-        }
-    }
-}
+// fn remove_call(p: &Prog, t: &Target, rt: &RTable, corpus: &HashSet<Prog>, conf: &Config) -> Prog {
+//     let mut rng = thread_rng();
+//     if p.len() <= 3 {
+//         let (_, methods) = MUTATE_METHOD.split_last().unwrap();
+//         let method = methods.choose(&mut rng).unwrap();
+//         return method(&p, t, rt, corpus, conf);
+//     }
+//
+//     let mut p = p.clone();
+//     let mut retry = 0;
+//     loop {
+//         let c = rng.gen_range(0, p.len());
+//         if remove(&mut p, c) {
+//             return p;
+//         } else if retry != p.len() {
+//             retry += 1;
+//             continue;
+//         } else {
+//             let (_, methods) = MUTATE_METHOD.split_last().unwrap();
+//             let method = methods.choose(&mut rng).unwrap();
+//             return method(&p, t, rt, corpus, conf);
+//         }
+//     }
+// }
