@@ -478,7 +478,7 @@ impl LinuxQemu {
 
     async fn try_collect_crash(&mut self) -> Option<Crash> {
         assert!(self.rp.is_some());
-        match timeout(Duration::new(10, 0), self.handle.as_mut().unwrap()).await {
+        match timeout(Duration::new(30, 0), self.handle.as_mut().unwrap()).await {
             Err(_e) => None,
             Ok(_) => {
                 self.handle = None;

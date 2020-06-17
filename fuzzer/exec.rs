@@ -12,7 +12,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
 use tokio::sync::oneshot;
-use tokio::time::{timeout, Duration};
+use tokio::time::{delay_for, timeout, Duration};
 
 // config for executor
 #[derive(Debug, Clone, Deserialize)]
@@ -224,7 +224,19 @@ impl LinuxExecutor {
                 return Ok(result);
             }
             Err(_) => {
-                if !self.guest.is_alive().await {
+                let mut crashed: bool;
+                let mut retry: u8 = 0;
+                loop {
+                    crashed = self.guest.is_alive().await;
+                    if crashed || retry == 10 {
+                        break;
+                    } else {
+                        retry += 1;
+                        delay_for(Duration::from_millis(500)).await;
+                    }
+                }
+
+                if crashed {
                     return Err(self.guest.try_collect_crash().await);
                 } else {
                     let mut handle = self.exec_handle.take().unwrap();
