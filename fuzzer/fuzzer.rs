@@ -9,6 +9,7 @@ use core::analyze::RTable;
 use core::c::to_prog;
 use core::gen::gen;
 use core::minimize::remove;
+use core::mutate::mutate;
 use core::prog::Prog;
 use core::target::Target;
 use executor::{ExecResult, Reason};
@@ -43,8 +44,9 @@ impl Fuzzer {
     }
 
     async fn do_fuzz(&self, mut executor: Executor) {
+        let mut gen_cnt = 0;
         loop {
-            let p = self.get_prog().await;
+            let p = self.get_prog(&mut gen_cnt).await;
             match executor.exec(&p).await {
                 Ok(exec_result) => match exec_result {
                     ExecResult::Ok(raw_branches) => {
@@ -275,14 +277,20 @@ impl Fuzzer {
         }
     }
 
-    async fn get_prog(&self) -> Prog {
+    async fn get_prog(&self, gen_cnt: &mut usize) -> Prog {
         if let Some(p) = self.candidates.pop().await {
             p
+        } else if self.corpus.is_empty().await || *gen_cnt % 100 != 0 {
+            *gen_cnt += 1;
+            let rt = self.rt.lock().await;
+            gen(&self.target, &rt, &self.conf)
         } else {
-            {
+            let rt = {
                 let rt = self.rt.lock().await;
-                gen(&self.target, &rt, &self.conf)
-            }
+                rt.clone()
+            };
+            let corpus = self.corpus.inner.lock().await;
+            mutate(&corpus, &self.target, &rt, &self.conf)
         }
     }
 }

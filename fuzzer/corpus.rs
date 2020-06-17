@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
 pub struct Corpus {
-    inner: Mutex<HashSet<Prog>>,
+    pub inner: Mutex<HashSet<Prog>>,
 }
 
 impl Corpus {
