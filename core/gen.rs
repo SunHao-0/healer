@@ -20,7 +20,7 @@ use rand::prelude::*;
 use rand::{random, thread_rng, Rng};
 
 use fots::types::{
-    Field, Flag, FnInfo, Group, GroupId, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo,
+    Field, Flag, FnInfo, GroupId, NumInfo, NumLimit, PtrDir, StrType, TypeId, TypeInfo,
 };
 
 use crate::analyze::{RTable, Relation};
@@ -62,18 +62,20 @@ pub fn gen<S: std::hash::BuildHasher>(
     let mut rng = thread_rng();
     // choose group
     let gid = rs.keys().choose(&mut rng).unwrap();
-    let g = &t.groups[gid];
-
-    gen_prog(g, &rs[gid], t, conf)
+    gen_prog(*gid, &rs[gid], t, conf)
 }
 
-pub fn gen_prog(g: &Group, r: &RTable, t: &Target, conf: &Config) -> Prog {
-    assert!(!g.fns.is_empty());
-    assert_eq!(g.fns.len(), r.len());
-
+pub fn gen_prog(gid: GroupId, r: &RTable, t: &Target, conf: &Config) -> Prog {
     // choose sequence
     let seq = choose_seq(r, conf);
     assert!(!seq.is_empty());
+
+    gen_seq(&seq, gid, t, conf)
+}
+
+pub fn gen_seq(seq: &[usize], gid: GroupId, t: &Target, conf: &Config) -> Prog {
+    let g = &t.groups[&gid];
+    assert!(!g.fns.is_empty());
 
     // gen value
     let mut s = State::new(Prog::new(g.id), conf);
