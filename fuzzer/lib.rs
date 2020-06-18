@@ -52,8 +52,8 @@ pub struct Config {
     pub fots_bin: PathBuf,
     pub curpus: Option<PathBuf>,
     pub vm_num: usize,
-    pub suppressions: Option<String>,
-    pub ignores: Option<String>,
+    pub suppressions: Option<Vec<String>>,
+    pub ignores: Option<Vec<String>>,
     pub guest: GuestConf,
     pub qemu: QemuConf,
     pub ssh: SSHConf,
@@ -74,18 +74,22 @@ impl Config {
             exit(exitcode::CONFIG)
         }
 
-        if let Some(s) = &self.suppressions {
-            Regex::new(&s).unwrap_or_else(|e| {
-                eprintln!("Suppressions regex \"{}\" compile failed: {}", s, e);
-                exit(exitcode::CONFIG)
-            });
+        if let Some(suppressions) = &self.suppressions {
+            for s in suppressions {
+                Regex::new(&s).unwrap_or_else(|e| {
+                    eprintln!("Suppressions regex \"{}\" compile failed: {}", s, e);
+                    exit(exitcode::CONFIG)
+                });
+            }
         }
 
-        if let Some(i) = &self.ignores {
-            Regex::new(&i).unwrap_or_else(|e| {
-                eprintln!("Ignores regex \"{}\" compile failed: {}", i, e);
-                exit(exitcode::CONFIG)
-            });
+        if let Some(ignores) = &self.ignores {
+            for i in ignores {
+                Regex::new(&i).unwrap_or_else(|e| {
+                    eprintln!("Ignores regex \"{}\" compile failed: {}", i, e);
+                    exit(exitcode::CONFIG)
+                });
+            }
         }
 
         if let Some(corpus) = &self.curpus {
@@ -157,8 +161,20 @@ pub async fn fuzz(cfg: Config) {
         corpus: corpus.clone(),
         feedback: feedback.clone(),
         record: record.clone(),
-        suppressions: cfg.suppressions.as_ref().map(|s| Regex::new(s).unwrap()),
-        ignores: cfg.ignores.as_ref().map(|i| Regex::new(i).unwrap()),
+        suppressions: cfg
+            .suppressions
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|s| Regex::new(s).unwrap())
+            .collect(),
+        ignores: cfg
+            .ignores
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|i| Regex::new(i).unwrap())
+            .collect(),
     };
     let stats_source = StatSource {
         exec: exec_cnt,

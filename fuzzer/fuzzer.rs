@@ -35,8 +35,8 @@ pub struct Fuzzer {
     pub exec_cnt: Arc<AtomicUsize>,
     pub crash_digests: Arc<Mutex<HashSet<md5::Digest>>>,
 
-    pub suppressions: Option<Regex>,
-    pub ignores: Option<Regex>,
+    pub suppressions: Vec<Regex>,
+    pub ignores: Vec<Regex>,
 }
 
 impl Fuzzer {
@@ -131,8 +131,8 @@ impl Fuzzer {
     fn should_ignore(&self, reason: &str) -> bool {
         if reason.is_empty() {
             true
-        } else if let Some(ignores) = &self.ignores {
-            ignores.is_match(reason)
+        } else if !self.ignores.is_empty() {
+            self.ignores.iter().any(|i| i.is_match(reason))
         } else {
             false
         }
@@ -143,10 +143,8 @@ impl Fuzzer {
             return true;
         }
 
-        if let Some(suppress) = &self.suppressions {
-            if suppress.is_match(reason) {
-                return true;
-            }
+        if self.suppressions.iter().any(|s| s.is_match(reason)) {
+            return true;
         }
 
         let digest = md5::compute(reason);
