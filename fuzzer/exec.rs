@@ -227,7 +227,7 @@ impl LinuxExecutor {
                 let mut crashed: bool;
                 let mut retry: u8 = 0;
                 loop {
-                    crashed = self.guest.is_alive().await;
+                    crashed = !self.guest.is_alive().await;
                     if crashed || retry == 10 {
                         break;
                     } else {
