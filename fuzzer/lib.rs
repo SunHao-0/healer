@@ -21,6 +21,7 @@ use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
+use regex::Regex;
 use stats::StatSource;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -51,6 +52,8 @@ pub struct Config {
     pub fots_bin: PathBuf,
     pub curpus: Option<PathBuf>,
     pub vm_num: usize,
+    pub suppressions: Option<String>,
+    pub ignores: Option<String>,
     pub guest: GuestConf,
     pub qemu: QemuConf,
     pub ssh: SSHConf,
@@ -69,6 +72,20 @@ impl Config {
                 self.fots_bin.display()
             );
             exit(exitcode::CONFIG)
+        }
+
+        if let Some(s) = &self.suppressions {
+            Regex::new(&s).unwrap_or_else(|e| {
+                eprintln!("Suppressions regex \"{}\" compile failed: {}", s, e);
+                exit(exitcode::CONFIG)
+            });
+        }
+
+        if let Some(i) = &self.ignores {
+            Regex::new(&i).unwrap_or_else(|e| {
+                eprintln!("Ignores regex \"{}\" compile failed: {}", i, e);
+                exit(exitcode::CONFIG)
+            });
         }
 
         if let Some(corpus) = &self.curpus {
@@ -140,6 +157,8 @@ pub async fn fuzz(cfg: Config) {
         corpus: corpus.clone(),
         feedback: feedback.clone(),
         record: record.clone(),
+        suppressions: cfg.suppressions.as_ref().map(|s| Regex::new(s).unwrap()),
+        ignores: cfg.ignores.as_ref().map(|i| Regex::new(i).unwrap()),
     };
     let stats_source = StatSource {
         exec: exec_cnt,

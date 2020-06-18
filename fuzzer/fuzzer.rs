@@ -15,6 +15,7 @@ use core::target::Target;
 use executor::{ExecResult, Reason};
 use fots::types::GroupId;
 use itertools::Itertools;
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -33,6 +34,9 @@ pub struct Fuzzer {
     pub record: Arc<TestCaseRecord>,
     pub exec_cnt: Arc<AtomicUsize>,
     pub crash_digests: Arc<Mutex<HashSet<md5::Digest>>>,
+
+    pub suppressions: Option<Regex>,
+    pub ignores: Option<Regex>,
 }
 
 impl Fuzzer {
@@ -86,44 +90,66 @@ impl Fuzzer {
     }
 
     async fn crash_analyze(&self, p: Prog, crash: Crash, executor: &mut Executor) {
+        if self.should_ignore(&crash.inner) {
+            warn!("Crashed, match ignores, restarting ...");
+            executor.start().await;
+            return;
+        }
+
+        if self.should_suppress(&crash.inner).await {
+            self.record.insert_crash(p, crash, false).await;
+            warn!("Crashed, match suppressions, restarting ...");
+            executor.start().await;
+            return;
+        }
+
         warn!("========== Crashed ========= \n{}", crash);
         let p_str = to_prog(&p, &self.target);
         warn!("Caused by:\n{}", p_str);
+        warn!("Restarting to repro ...");
+        executor.start().await;
 
-        if self.need_repo(&crash.inner).await {
-            warn!("Restarting to repro ...");
-            executor.start().await;
-
-            self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-            match executor.exec(&p).await {
-                Ok(exec_result) => {
-                    match exec_result {
-                        ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
-                        ExecResult::Failed(reason) => {
-                            warn!("Repo failed, executed failed: {}", reason)
-                        }
-                    };
-                    self.record.insert_crash(p, crash, false).await
-                }
-                Err(repo_crash) => {
-                    self.record
-                        .insert_crash(p, repo_crash.unwrap_or(crash), true)
-                        .await;
-                    warn!("Repo successfully, restarting guest ...");
-                    executor.start().await;
-                }
+        self.exec_cnt.fetch_add(1, Ordering::SeqCst);
+        match executor.exec(&p).await {
+            Ok(exec_result) => {
+                match exec_result {
+                    ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
+                    ExecResult::Failed(reason) => warn!("Repo failed, executed failed: {}", reason),
+                };
+                self.record.insert_crash(p, crash, false).await
             }
-        } else {
-            info!("Restarting, ignoring useless crash ...");
-            executor.start().await;
+            Err(repo_crash) => {
+                self.record
+                    .insert_crash(p, repo_crash.unwrap_or(crash), true)
+                    .await;
+                warn!("Repo successfully, restarting guest ...");
+                executor.start().await;
+            }
         }
     }
 
-    async fn need_repo(&self, crash: &str) -> bool {
-        if crash.contains("CRASH-MEMLEAK") || crash == "$$" || crash.is_empty() {
-            return false;
+    fn should_ignore(&self, reason: &str) -> bool {
+        if reason.is_empty() {
+            true
+        } else if let Some(ignores) = &self.ignores {
+            ignores.is_match(reason)
+        } else {
+            false
         }
-        let digest = md5::compute(crash);
+    }
+
+    async fn should_suppress(&self, reason: &str) -> bool {
+        if reason.contains("CRASH-MEMLEAK") {
+            return true;
+        }
+
+        if let Some(suppress) = &self.suppressions {
+            if suppress.is_match(reason) {
+                return true;
+            }
+        }
+
+        let digest = md5::compute(reason);
         let mut g = self.crash_digests.lock().await;
         g.insert(digest)
     }
