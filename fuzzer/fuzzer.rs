@@ -149,7 +149,7 @@ impl Fuzzer {
 
         let digest = md5::compute(reason);
         let mut g = self.crash_digests.lock().await;
-        g.insert(digest)
+        !g.insert(digest)
     }
 
     async fn feedback_analyze(
