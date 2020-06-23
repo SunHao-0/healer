@@ -74,6 +74,8 @@ Modify config options in your `healer-fuzzer.toml` based on following template.
 fots_bin = "./syscalls"     # file contains compiled FOTS
 vm_num = 2
 auto_reboot_duration = 90
+suppressions = [ "KCSAN: data-race in fsnotify"]   # regex expression allowed here.
+ignores = ["KCSAN: data-race in ip6_tnl_xmit"]
 
 [guest]
 os = "linux"
@@ -96,7 +98,7 @@ host_ip="127.0.0.1"
 concurrency=true
 
 [sampler]
-sample_interval=15  # seconds
+sample_interval=60  # seconds
 report_interval=60  # minutes
 ```
 Meaning of each option:
@@ -124,15 +126,14 @@ If everything works ok, you'll see following msg:
    \: \ \\::\ \\:\____/\\:.\ \  \ \\:\/___/\\:\____/\\ \ `\ \ \
     \__\/ \::\/ \_____\/ \__\/\__\/ \_____\/ \_____\/ \_\/ \_\/
 
-2020-05-16 18:40:10 INFO fuzzer - Pid: 15017
-2020-05-16 18:40:10 INFO fuzzer - Corpus: 0
-2020-05-16 18:40:10 INFO fuzzer - Syscalls: 279  Groups: 1
-2020-05-16 18:40:10 INFO fuzzer - Booting 1 linux/amd64 on qemu ...
-2020-05-16 18:40:27 INFO fuzzer::exec - connected from: 127.0.0.1:39150
-2020-05-16 18:40:27 INFO fuzzer::exec - executor started.
-2020-05-16 18:40:27 INFO fuzzer - Boot finished, cost 17s.
-2020-05-16 18:40:27 INFO fuzzer - Send SIGINT or SIGTERM to stop fuzzer
-2020-05-16 18:40:37 INFO fuzzer::stats - corpus 14,blocks 889,branches 962,normal_case 14,failed_case 0,crashed_case 0
+2020-06-23 04:29:58 INFO fuzzer - Pid: 27905
+2020-06-23 04:29:58 INFO fuzzer - Corpus: 0
+2020-06-23 04:29:58 INFO fuzzer - Syscalls: 384  Groups: 1
+2020-06-23 04:29:58 INFO fuzzer - Booting 3 linux/amd64 on qemu ...
+2020-06-23 04:30:30 INFO fuzzer - Boot finished, cost 32s.
+2020-06-23 04:30:30 INFO fuzzer - Send SIGINT or SIGTERM to stop fuzzer
+2020-06-23 04:31:30 INFO fuzzer::stats - exec 1185, blocks 7943, branches 9702, failed 0, crashed 0
+2020-06-23 04:32:30 INFO fuzzer::stats - exec 2253, blocks 9304, branches 11483, failed 0, crashed 0
 
 ```
 
