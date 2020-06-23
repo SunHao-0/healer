@@ -146,3 +146,9 @@ After fuzzing finished, *report* tool can be used to generate readable fuzz resu
 > # then  
 > mdbook build -o ./report 
 ```
+
+
+## Contributing
+
+All contributions are welcome, if you have a feature request don't hesitate to open an issue!
+
