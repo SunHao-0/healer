@@ -12,7 +12,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
 use tokio::sync::oneshot;
-use tokio::time::{timeout, Duration};
+use tokio::time::{delay_for, timeout, Duration};
 
 // config for executor
 #[derive(Debug, Clone, Deserialize)]
@@ -148,6 +148,7 @@ impl LinuxExecutor {
             };
             break;
         }
+        let host_addr = listener.local_addr().unwrap();
 
         tokio::spawn(async move {
             match listener.accept().await {
@@ -180,7 +181,14 @@ impl LinuxExecutor {
         }
 
         self.exec_handle = Some(self.guest.run_cmd(&executor).await);
-        self.conn = Some(rx.await.unwrap());
+        self.conn = match timeout(Duration::new(32, 0), rx).await {
+            Err(_) => {
+                self.exec_handle = None;
+                eprintln!("Time out: wait executor connection {}", host_addr);
+                exit(1)
+            }
+            Ok(conn) => Some(conn.unwrap()),
+        };
     }
 
     pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
@@ -224,7 +232,19 @@ impl LinuxExecutor {
                 return Ok(result);
             }
             Err(_) => {
-                if !self.guest.is_alive().await {
+                let mut crashed: bool;
+                let mut retry: u8 = 0;
+                loop {
+                    crashed = !self.guest.is_alive().await;
+                    if crashed || retry == 10 {
+                        break;
+                    } else {
+                        retry += 1;
+                        delay_for(Duration::from_millis(500)).await;
+                    }
+                }
+
+                if crashed {
                     return Err(self.guest.try_collect_crash().await);
                 } else {
                     let mut handle = self.exec_handle.take().unwrap();

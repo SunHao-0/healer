@@ -99,8 +99,11 @@ fn bg_run(p: &Prog, t: &Target) {
     match fork() {
         Ok(ForkResult::Child) => match fork() {
             Ok(ForkResult::Child) => {
+                use gag::Gag;
+                let _stdout = Gag::stdout().unwrap();
+                let _stderr = Gag::stderr().unwrap();
                 let mut childs = HashSet::new();
-                for _ in 0..16 {
+                for _ in 0..4 {
                     match fork() {
                         Ok(ForkResult::Parent { child }) => {
                             childs.insert(child);
@@ -170,7 +173,9 @@ fn bg_fork_run(p: &Prog, t: &Target) {
             exit(0)
         }
         Ok(ForkResult::Child) => {
-            bg_exec(p, t);
+            for _ in 0..4 {
+                bg_exec(p, t);
+            }
             exit(0)
         }
         Err(_) => exit(1),

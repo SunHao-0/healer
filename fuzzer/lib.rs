@@ -21,6 +21,7 @@ use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
+use regex::Regex;
 use stats::StatSource;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -51,6 +52,8 @@ pub struct Config {
     pub fots_bin: PathBuf,
     pub curpus: Option<PathBuf>,
     pub vm_num: usize,
+    pub suppressions: Option<Vec<String>>,
+    pub ignores: Option<Vec<String>>,
     pub guest: GuestConf,
     pub qemu: QemuConf,
     pub ssh: SSHConf,
@@ -69,6 +72,24 @@ impl Config {
                 self.fots_bin.display()
             );
             exit(exitcode::CONFIG)
+        }
+
+        if let Some(suppressions) = &self.suppressions {
+            for s in suppressions {
+                Regex::new(&s).unwrap_or_else(|e| {
+                    eprintln!("Suppressions regex \"{}\" compile failed: {}", s, e);
+                    exit(exitcode::CONFIG)
+                });
+            }
+        }
+
+        if let Some(ignores) = &self.ignores {
+            for i in ignores {
+                Regex::new(&i).unwrap_or_else(|e| {
+                    eprintln!("Ignores regex \"{}\" compile failed: {}", i, e);
+                    exit(exitcode::CONFIG)
+                });
+            }
         }
 
         if let Some(corpus) = &self.curpus {
@@ -140,6 +161,20 @@ pub async fn fuzz(cfg: Config) {
         corpus: corpus.clone(),
         feedback: feedback.clone(),
         record: record.clone(),
+        suppressions: cfg
+            .suppressions
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|s| Regex::new(s).unwrap())
+            .collect(),
+        ignores: cfg
+            .ignores
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|i| Regex::new(i).unwrap())
+            .collect(),
     };
     let stats_source = StatSource {
         exec: exec_cnt,
@@ -218,6 +253,7 @@ pub async fn fuzz(cfg: Config) {
         }
     }
     info!("All done");
+    // TODO clear resources when exiting, e.g. qemu process.
     exit(exitcode::OK);
 }
 
