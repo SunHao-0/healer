@@ -253,6 +253,7 @@ pub async fn fuzz(cfg: Config) {
         }
     }
     info!("All done");
+    // TODO clear resources when exiting, e.g. qemu process.
     exit(exitcode::OK);
 }
 
