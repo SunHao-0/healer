@@ -479,15 +479,23 @@ impl LinuxQemu {
     async fn try_collect_crash(&mut self) -> Option<Crash> {
         assert!(self.rp.is_some());
         match timeout(Duration::new(30, 0), self.handle.as_mut().unwrap()).await {
-            Err(_e) => None,
-            Ok(_) => {
-                self.handle = None;
-                let crash = read_all_nonblock(self.rp.as_mut().unwrap());
-                let crash_info = String::from_utf8_lossy(&crash).to_string();
-                self.rp = None;
-                Some(Crash { inner: crash_info })
+            Err(_e) => {
+                if !self.is_alive().await {
+                    Some(self.collect_crash())
+                } else {
+                    None
+                }
             }
+            Ok(_) => Some(self.collect_crash()),
         }
+    }
+
+    fn collect_crash(&mut self) -> Crash {
+        self.handle = None;
+        let crash = read_all_nonblock(self.rp.as_mut().unwrap());
+        let crash_info = String::from_utf8_lossy(&crash).to_string();
+        self.rp = None;
+        Crash { inner: crash_info }
     }
 }
 

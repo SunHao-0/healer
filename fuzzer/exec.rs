@@ -148,7 +148,7 @@ impl LinuxExecutor {
             };
             break;
         }
-        let host_addr = listener.local_addr().unwarp();
+        let host_addr = listener.local_addr().unwrap();
 
         tokio::spawn(async move {
             match listener.accept().await {
@@ -181,13 +181,13 @@ impl LinuxExecutor {
         }
 
         self.exec_handle = Some(self.guest.run_cmd(&executor).await);
-        self.conn = match timeout(rx.await.unwrap(), Duration::new(32, 0)) {
+        self.conn = match timeout(Duration::new(32, 0), rx).await {
             Err(_) => {
                 self.exec_handle = None;
                 eprintln!("Time out: wait executor connection {}", host_addr);
                 exit(1)
             }
-            Ok(conn) => Some(conn),
+            Ok(conn) => Some(conn.unwrap()),
         };
     }
 
