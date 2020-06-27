@@ -545,16 +545,15 @@ fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
     ssh
 }
 
+#[allow(unused)]
 fn long_pipe() -> (PipeReader, PipeWriter) {
     let (rp, wp) = pipe().unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to creat pipe:{}", e));
-    fcntl(wp.as_raw_fd(), FcntlArg::F_SETPIPE_SZ(1024 * 1024)).unwrap_or_else(|e| {
-        exits!(
-            exitcode::OSERR,
-            "Fail to set pipe size to {} :{}",
-            1024 * 1024,
-            e
-        )
-    });
+
+    let mut sz = 128 << 10;
+    while sz <= 2 << 20 {
+        fcntl(wp.as_raw_fd(), FcntlArg::F_SETPIPE_SZ(sz));
+        sz *= 2;
+    }
 
     (rp, wp)
 }
