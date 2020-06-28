@@ -1,9 +1,26 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::process::{exit, id};
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate serde;
 #[macro_use]
 extern crate log;
+use circular_queue::CircularQueue;
+use regex::Regex;
+use tokio::fs::{create_dir_all, read};
+use tokio::signal::ctrl_c;
+use tokio::sync::{broadcast, Barrier, Mutex};
+use tokio::time::{delay_for, Duration, Instant};
+
+use core::analyze::static_analyze;
+use core::prog::Prog;
+use core::target::Target;
+use fots::types::Items;
 
 use crate::corpus::Corpus;
 use crate::exec::{Executor, ExecutorConf};
@@ -13,39 +30,21 @@ use crate::guest::{GuestConf, QemuConf, SSHConf};
 #[cfg(feature = "mail")]
 use crate::mail::MailConf;
 use crate::report::TestCaseRecord;
+use crate::stats::{SamplerConf, StatSource};
 use crate::utils::queue::CQueue;
 
-use crate::stats::SamplerConf;
-use circular_queue::CircularQueue;
-use core::analyze::static_analyze;
-use core::prog::Prog;
-use core::target::Target;
-use fots::types::Items;
-use regex::Regex;
-use stats::StatSource;
-use std::collections::HashSet;
-use std::path::PathBuf;
-use std::process;
-use std::process::exit;
-use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
-use tokio::fs::{create_dir_all, read};
-use tokio::signal::ctrl_c;
-use tokio::sync::Mutex;
-use tokio::sync::{broadcast, Barrier};
-use tokio::time::{delay_for, Duration, Instant};
-
 #[macro_use]
-pub mod utils;
+#[allow(dead_code)]
+mod utils;
 pub mod corpus;
-pub mod exec;
+mod exec;
 pub mod feedback;
-pub mod fuzzer;
-pub mod guest;
+mod fuzzer;
+mod guest;
 #[cfg(feature = "mail")]
-pub mod mail;
+mod mail;
 pub mod report;
-pub mod stats;
+mod stats;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -278,7 +277,7 @@ async fn load_target(cfg: &Config) -> Target {
 
 pub async fn prepare_env() {
     init_logger();
-    let pid = process::id();
+    let pid = id(); // pid
     std::env::set_var("HEALER_FUZZER_PID", format!("{}", pid));
     info!("Pid: {}", pid);
 

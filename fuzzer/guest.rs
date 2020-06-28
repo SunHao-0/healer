@@ -292,7 +292,6 @@ impl fmt::Display for Crash {
 pub const LINUX_QEMU_HOST_IP_ADDR: &str = "localhost";
 pub const LINUX_QEMU_USER_NET_HOST_IP_ADDR: &str = "10.0.2.10";
 pub const LINUX_QEMU_HOST_USER: &str = "root";
-pub const LINUX_QEMU_PIPE_LEN: i32 = 1024 * 1024;
 
 pub struct LinuxQemu {
     handle: Option<Child>,
