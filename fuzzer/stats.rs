@@ -76,6 +76,12 @@ pub struct Sampler {
 }
 
 impl Sampler {
+    pub fn new(source: StatSource) -> Self {
+        Self {
+            source,
+            stats: CircularQueue::with_capacity(1024),
+        }
+    }
     pub async fn sample(
         &mut self,
         conf: &Option<SamplerConf>,

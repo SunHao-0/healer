@@ -1,7 +1,5 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::{exit, id};
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 #[macro_use]
@@ -10,28 +8,23 @@ extern crate lazy_static;
 extern crate serde;
 #[macro_use]
 extern crate log;
-use circular_queue::CircularQueue;
+
 use regex::Regex;
 use tokio::fs::{create_dir_all, read};
 use tokio::signal::ctrl_c;
-use tokio::sync::{broadcast, Barrier, Mutex};
+use tokio::sync::{broadcast, Barrier};
 use tokio::time::{delay_for, Duration, Instant};
 
-use core::analyze::static_analyze;
 use core::prog::Prog;
 use core::target::Target;
 use fots::types::Items;
 
-use crate::corpus::Corpus;
 use crate::exec::{Executor, ExecutorConf};
-use crate::feedback::FeedBack;
 use crate::fuzzer::Fuzzer;
 use crate::guest::{GuestConf, QemuConf, SSHConf};
 #[cfg(feature = "mail")]
 use crate::mail::MailConf;
-use crate::report::TestCaseRecord;
-use crate::stats::{SamplerConf, StatSource};
-use crate::utils::queue::CQueue;
+use crate::stats::SamplerConf;
 
 #[macro_use]
 #[allow(dead_code)]
@@ -132,63 +125,30 @@ impl Config {
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
-    let (target, candidates) = tokio::join!(load_target(&cfg), load_candidates(&cfg.curpus));
-    info!("Corpus: {}", candidates.len().await);
+    let (target, corpus) = tokio::join!(load_target(&cfg), load_corpus(&cfg.curpus));
+    check_corpus(&target, &corpus);
+    info!("Corpus: {}", corpus.len());
     info!(
         "Syscalls: {}  Groups: {}",
         target.fns.len(),
         target.groups.len()
     );
 
-    // init system state, shared between multi tasks
-    let target = Arc::new(target);
-    let candidates = Arc::new(candidates);
-    let corpus = Arc::new(Corpus::default());
-    let feedback = Arc::new(FeedBack::default());
-    let record = Arc::new(TestCaseRecord::new(target.clone()));
-    let crash_digests = Arc::new(Mutex::new(HashSet::new()));
-    let rt = static_analyze(&target);
-    let exec_cnt = Arc::new(AtomicUsize::new(0));
-    let fuzzer = Fuzzer {
-        target,
-        crash_digests,
-        exec_cnt: exec_cnt.clone(),
-        rt: Arc::new(Mutex::new(rt)),
-        conf: Default::default(),
-        candidates: candidates.clone(),
-        corpus: corpus.clone(),
-        feedback: feedback.clone(),
-        record: record.clone(),
-        suppressions: cfg
-            .suppressions
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|s| Regex::new(s).unwrap())
-            .collect(),
-        ignores: cfg
-            .ignores
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|i| Regex::new(i).unwrap())
-            .collect(),
-    };
-    let stats_source = StatSource {
-        exec: exec_cnt,
-        corpus,
-        feedback,
-        candidates,
-        record,
-    };
-
-    let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
-    let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
+    let fuzzer = Fuzzer::new(target, corpus, &cfg);
     info!(
         "Booting {} {}/{} on {} ...",
         cfg.vm_num, cfg.guest.os, cfg.guest.arch, cfg.guest.platform
     );
     let now = std::time::Instant::now();
+    let shutdown = start_fuzz(fuzzer.clone(), cfg.clone()).await;
+    info!("Boot finished, cost {}s.", now.elapsed().as_secs());
+
+    wait_exit_signal(fuzzer, shutdown).await
+}
+
+async fn start_fuzz(fuzzer: Fuzzer, cfg: Arc<Config>) -> broadcast::Sender<()> {
+    let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
+    let barrier = Arc::new(Barrier::new(cfg.vm_num + 1));
     for _ in 0..cfg.vm_num {
         let cfg = cfg.clone();
         let fuzzer = fuzzer.clone();
@@ -202,18 +162,17 @@ pub async fn fuzz(cfg: Config) {
             fuzzer.fuzz(executor, shutdown).await;
         });
     }
-
     barrier.wait().await;
-    info!("Boot finished, cost {}s.", now.elapsed().as_secs());
 
+    let stats_source = fuzzer.stats();
     tokio::spawn(async move {
-        let mut sampler = stats::Sampler {
-            source: stats_source,
-            stats: CircularQueue::with_capacity(1024),
-        };
+        let mut sampler = stats::Sampler::new(stats_source);
         sampler.sample(&cfg.sampler, shutdown_rx).await;
     });
+    shutdown_tx
+}
 
+async fn wait_exit_signal(fuzzer: Fuzzer, shutdown: broadcast::Sender<()>) {
     if cfg!(unix) {
         use tokio::signal::unix::{signal, SignalKind};
         let mut sig_ir =
@@ -238,12 +197,12 @@ pub async fn fuzz(cfg: Config) {
     }
 
     warn!("Stopping, persisting data...");
-    shutdown_tx.send(()).unwrap();
+    shutdown.send(()).unwrap();
     fuzzer.persist().await;
 
     let now = Instant::now();
     let wait_time = Duration::new(5, 0);
-    while shutdown_tx.receiver_count() != 0 {
+    while shutdown.receiver_count() != 0 {
         delay_for(Duration::from_millis(200)).await;
         if now.elapsed() >= wait_time {
             warn!("Wait time out, force to exit...");
@@ -255,13 +214,27 @@ pub async fn fuzz(cfg: Config) {
     exit(exitcode::OK);
 }
 
-async fn load_candidates(path: &Option<PathBuf>) -> CQueue<Prog> {
+fn check_corpus(t: &Target, corpus: &[Prog]) {
+    for p in corpus.iter() {
+        if !t.groups.contains_key(&p.gid) {
+            eprintln!("Config Error: fots_bin/corpus not match: corpus contains unknown groups");
+            exit(1);
+        }
+        for c in p.calls.iter() {
+            if !t.fns.contains_key(&c.fid) {
+                eprintln!("Config Error: fots_bin/corpus not match: corpus contains unknown fn");
+                exit(1);
+            }
+        }
+    }
+}
+
+async fn load_corpus(path: &Option<PathBuf>) -> Vec<Prog> {
     if let Some(path) = path.as_ref() {
         let data = read(path).await.unwrap();
-        let progs: Vec<Prog> = bincode::deserialize(&data).unwrap();
-        CQueue::from(progs)
+        bincode::deserialize(&data).unwrap()
     } else {
-        CQueue::default()
+        Vec::new()
     }
 }
 
