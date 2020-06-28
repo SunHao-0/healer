@@ -76,7 +76,10 @@ impl Config {
         if let Some(suppressions) = &self.suppressions {
             for s in suppressions {
                 Regex::new(&s).unwrap_or_else(|e| {
-                    eprintln!("Suppressions regex \"{}\" compile failed: {}", s, e);
+                    eprintln!(
+                        "Config Error: suppressions regex \"{}\" compile failed: {}",
+                        s, e
+                    );
                     exit(exitcode::CONFIG)
                 });
             }
@@ -85,7 +88,10 @@ impl Config {
         if let Some(ignores) = &self.ignores {
             for i in ignores {
                 Regex::new(&i).unwrap_or_else(|e| {
-                    eprintln!("Ignores regex \"{}\" compile failed: {}", i, e);
+                    eprintln!(
+                        "Config Error: ignores regex \"{}\" compile failed: {}",
+                        i, e
+                    );
                     exit(exitcode::CONFIG)
                 });
             }
@@ -108,11 +114,6 @@ impl Config {
             exit(exitcode::CONFIG)
         }
 
-        self.guest.check();
-        self.executor.check();
-        self.qemu.check();
-        self.ssh.check();
-
         if let Some(sampler) = self.sampler.as_ref() {
             sampler.check()
         }
@@ -121,15 +122,13 @@ impl Config {
         if let Some(mail) = mail.as_ref() {
             mail.check()
         }
+
+        self.guest.check();
+        self.executor.check();
+        self.qemu.check();
+        self.ssh.check();
     }
 }
-
-// #[cfg(feature = "mail")]
-// fn mail_check(mail: &Option<MailConf>) {
-//     if let Some(mail) = mail.as_ref() {
-//         mail.check()
-//     }
-// }
 
 pub async fn fuzz(cfg: Config) {
     let cfg = Arc::new(cfg);
