@@ -333,7 +333,7 @@ impl LinuxQemu {
             self.rp = None;
         }
 
-        const MAX_RETRY: u8 = 5;
+        const MAX_RETRY: u8 = 64;
         let mut retry = 0;
         loop {
             let (qemu, port) = build_qemu_cli(&self.guest, &self.qemu);
@@ -359,27 +359,30 @@ impl LinuxQemu {
                 (handle, rp)
             };
 
-            let mut wait = 1;
+            let mut waited = Duration::new(0, 0);
+            let wait_duration = Duration::from_millis(500);
+            let max_wait_time = Duration::new(self.wait_boot_time as u64 * 3, 0);
             let mut started = false;
             let mut failed_reason = String::new();
             loop {
-                delay_for(Duration::new(self.wait_boot_time as u64, 0)).await;
+                delay_for(wait_duration).await;
+                waited += wait_duration;
+                failed_reason
+                    .push_str(String::from_utf8_lossy(&read_all_nonblock(&mut rp)).as_ref());
 
                 if self.is_alive().await {
                     started = true;
                     break;
                 }
 
-                if wait == MAX_RETRY {
+                if waited >= max_wait_time {
                     handle.kill().unwrap_or_else(|e| {
                         exits!(exitcode::OSERR, "Fail to kill failed guest:{}", e)
                     });
-                    failed_reason = String::from_utf8_lossy(&read_all_nonblock(&mut rp))
-                        .to_owned()
-                        .to_string();
+                    failed_reason
+                        .push_str(String::from_utf8_lossy(&read_all_nonblock(&mut rp)).as_ref());
                     break;
                 }
-                wait += 1;
             }
 
             if !started {
@@ -545,16 +548,15 @@ fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
     ssh
 }
 
+#[allow(unused)]
 fn long_pipe() -> (PipeReader, PipeWriter) {
     let (rp, wp) = pipe().unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to creat pipe:{}", e));
-    fcntl(wp.as_raw_fd(), FcntlArg::F_SETPIPE_SZ(1024 * 1024)).unwrap_or_else(|e| {
-        exits!(
-            exitcode::OSERR,
-            "Fail to set pipe size to {} :{}",
-            1024 * 1024,
-            e
-        )
-    });
+
+    let mut sz = 128 << 10;
+    while sz <= 2 << 20 {
+        fcntl(wp.as_raw_fd(), FcntlArg::F_SETPIPE_SZ(sz));
+        sz *= 2;
+    }
 
     (rp, wp)
 }
