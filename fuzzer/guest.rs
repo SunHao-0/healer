@@ -187,13 +187,13 @@ impl QemuConf {
             );
             exit(exitcode::CONFIG)
         }
-        let image = PathBuf::from(&self.image);
-        let kernel = PathBuf::from(&self.kernel);
+
+        let image = Path::new(&self.image);
+        let kernel = Path::new(&self.kernel);
         if !image.is_file() {
             eprintln!("Config Error: image {} is invalid", self.image);
             exit(exitcode::CONFIG)
         }
-
         if !kernel.is_file() {
             eprintln!("Config Error: kernel {} is invalid", self.kernel);
             exit(exitcode::CONFIG)
@@ -208,7 +208,7 @@ pub struct SSHConf {
 
 impl SSHConf {
     pub fn check(&self) {
-        let key = PathBuf::from(&self.key_path);
+        let key = Path::new(&self.key_path);
         if !key.is_file() {
             eprintln!("Config Error: ssh key file {} is invalid", self.key_path);
             exit(exitcode::CONFIG)
@@ -292,7 +292,6 @@ impl fmt::Display for Crash {
 pub const LINUX_QEMU_HOST_IP_ADDR: &str = "localhost";
 pub const LINUX_QEMU_USER_NET_HOST_IP_ADDR: &str = "10.0.2.10";
 pub const LINUX_QEMU_HOST_USER: &str = "root";
-pub const LINUX_QEMU_PIPE_LEN: i32 = 1024 * 1024;
 
 pub struct LinuxQemu {
     handle: Option<Child>,

@@ -3,8 +3,11 @@ use crate::exec::Executor;
 use crate::feedback::{Block, Branch, FeedBack};
 use crate::guest::Crash;
 use crate::report::TestCaseRecord;
+use crate::stats::StatSource;
 use crate::utils::queue::CQueue;
+use crate::Config;
 use core::analyze::prog_analyze;
+use core::analyze::static_analyze;
 use core::analyze::RTable;
 use core::c::to_prog;
 use core::gen::gen;
@@ -40,6 +43,47 @@ pub struct Fuzzer {
 }
 
 impl Fuzzer {
+    pub fn new(target: Target, candidates: Vec<Prog>, cfg: &Config) -> Self {
+        let target = Arc::new(target);
+        let record = Arc::new(TestCaseRecord::new(target.clone()));
+        let rt = static_analyze(&target);
+        Self {
+            target,
+            record,
+            crash_digests: Arc::new(Mutex::new(HashSet::new())),
+            exec_cnt: Arc::new(AtomicUsize::new(0)),
+            rt: Arc::new(Mutex::new(rt)),
+            conf: Default::default(),
+            candidates: Arc::new(CQueue::from(candidates)),
+            corpus: Arc::new(Corpus::default()),
+            feedback: Arc::new(FeedBack::default()),
+
+            suppressions: cfg
+                .suppressions
+                .clone()
+                .unwrap_or_default()
+                .iter()
+                .map(|s| Regex::new(s).unwrap())
+                .collect(),
+            ignores: cfg
+                .ignores
+                .clone()
+                .unwrap_or_default()
+                .iter()
+                .map(|i| Regex::new(i).unwrap())
+                .collect(),
+        }
+    }
+
+    pub fn stats(&self) -> StatSource {
+        StatSource {
+            exec: self.exec_cnt.clone(),
+            corpus: self.corpus.clone(),
+            feedback: self.feedback.clone(),
+            candidates: self.candidates.clone(),
+            record: self.record.clone(),
+        }
+    }
     pub async fn fuzz(self, executor: Executor, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
             _ = shutdown.recv() => (),
@@ -51,7 +95,7 @@ impl Fuzzer {
         let mut gen_cnt = 0;
         loop {
             let p = self.get_prog(&mut gen_cnt).await;
-            match executor.exec(&p).await {
+            match executor.exec(&p, &self.target).await {
                 Ok(exec_result) => match exec_result {
                     ExecResult::Ok(raw_branches) => {
                         self.feedback_analyze(p, raw_branches, &mut executor).await
@@ -110,7 +154,7 @@ impl Fuzzer {
         executor.start().await;
 
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(&p).await {
+        match executor.exec(&p, &self.target).await {
             Ok(exec_result) => {
                 match exec_result {
                     ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
@@ -276,7 +320,7 @@ impl Fuzzer {
 
     async fn exec_no_crash(&self, executor: &mut Executor, p: &Prog) -> ExecResult {
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(p).await {
+        match executor.exec(p, &self.target).await {
             Ok(exec_result) => exec_result,
             Err(crash) => {
                 self.crash_analyze(p.clone(), crash.unwrap_or_default(), executor)
@@ -288,7 +332,7 @@ impl Fuzzer {
 
     async fn exec_no_fail(&self, executor: &mut Executor, p: &Prog) -> Vec<Vec<usize>> {
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(p).await {
+        match executor.exec(p, &self.target).await {
             Ok(exec_result) => match exec_result {
                 ExecResult::Ok(raw_branches) => raw_branches,
                 ExecResult::Failed(_) => Default::default(),
