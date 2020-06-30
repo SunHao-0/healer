@@ -10,6 +10,7 @@ use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 
@@ -22,6 +23,19 @@ lazy_static! {
             Arg::new_opt("-display", OptVal::normal("none")),
             Arg::new_opt("-serial", OptVal::normal("stdio")),
             Arg::new_flag("-snapshot"),
+            Arg::new_opt(
+                "-virtfs",
+                OptVal::multiple(
+                    vec![
+                        "local",
+                        "path=/tmp/healer",
+                        "mount_tag=host0",
+                        "security_model=mapped",
+                        "id=host0",
+                    ],
+                    Some(','),
+                ),
+            ),
         ];
 
         let mut linux_amd64 = App::new("qemu-system-x86_64");
@@ -243,9 +257,9 @@ impl Guest {
     }
 
     /// Run command on guest,return handle or crash
-    pub async fn run_cmd(&self, app: &App) -> Child {
+    pub async fn run_cmd(&self, app: &App, copy_executable: bool) -> Child {
         match self {
-            Guest::LinuxQemu(ref guest) => guest.run_cmd(app).await,
+            Guest::LinuxQemu(ref guest) => guest.run_cmd(app, copy_executable).await,
         }
     }
 
@@ -404,6 +418,44 @@ impl LinuxQemu {
                 break;
             }
         }
+        self.mount_9p().await
+    }
+
+    async fn mount_9p(&self) {
+        let mut mkdir = App::new("mkdir");
+        mkdir.arg(Arg::new_flag("healer-9p"));
+        let mut mkdir = self.run_cmd(&mkdir, false).await;
+        let mut stderr = mkdir.stderr.take().unwrap();
+        let mkdir_status = mkdir
+            .await
+            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
+        if !mkdir_status.success() {
+            let mut err = String::new();
+            stderr.read_to_string(&mut err).await.unwrap();
+            eprintln!("Failed to crate dir \"healer-9p\" before mount 9p: {}", err);
+            exit(1);
+        }
+
+        let mut mount = App::new("mount");
+        mount
+            .arg(Arg::new_opt("-t", OptVal::normal("9p")))
+            .arg(Arg::new_opt(
+                "-o",
+                OptVal::multiple(vec!["trans=virtio", "version=9p2000.L"], Some(',')),
+            ))
+            .arg(Arg::new_flag("host0"))
+            .arg(Arg::new_flag("healer-9p"));
+        let mut mount = self.run_cmd(&mount, false).await;
+        let mut stderr = mount.stderr.take().unwrap();
+        let mount_status = mount
+            .await
+            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
+        if !mount_status.success() {
+            let mut err = String::new();
+            stderr.read_to_string(&mut err).await.unwrap();
+            eprintln!("Failed to mount \"healer-9p\": {}", err);
+            exit(1);
+        }
     }
 
     async fn is_alive(&self) -> bool {
@@ -427,12 +479,14 @@ impl LinuxQemu {
         }
     }
 
-    async fn run_cmd(&self, app: &App) -> Child {
+    async fn run_cmd(&self, app: &App, copy_executable: bool) -> Child {
         assert!(self.handle.is_some());
 
         let mut app = app.clone();
-        let bin = self.copy(PathBuf::from(&app.bin)).await;
-        app.bin = String::from(bin.to_str().unwrap());
+        if copy_executable {
+            let bin = self.copy(PathBuf::from(&app.bin)).await;
+            app.bin = String::from(bin.to_str().unwrap());
+        }
         let mut app = ssh_app(&self.key, &self.user, &self.addr, self.port, app).into_cmd();
         app.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())

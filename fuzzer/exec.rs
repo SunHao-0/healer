@@ -122,7 +122,7 @@ impl ScriptExecutor {
         let mut executor = App::new(self.path_on_host.to_str().unwrap());
         executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
 
-        let mut exec_handle = self.guest.run_cmd(&executor).await;
+        let mut exec_handle = self.guest.run_cmd(&executor, true).await;
 
         match timeout(Duration::new(15, 0), &mut exec_handle).await {
             Err(_) => Ok(ExecResult::Failed(Reason("Time out".to_string()))),
@@ -267,7 +267,7 @@ impl LinuxExecutor {
             executor.arg(Arg::new_flag("-c"));
         }
 
-        self.exec_handle = Some(self.guest.run_cmd(&executor).await);
+        self.exec_handle = Some(self.guest.run_cmd(&executor, true).await);
         self.conn = match timeout(Duration::new(32, 0), rx).await {
             Err(_) => {
                 self.exec_handle = None;
