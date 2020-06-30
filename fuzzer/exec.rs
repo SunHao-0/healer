@@ -8,10 +8,9 @@ use core::prog::Prog;
 use core::target::Target;
 use executor::transfer::{async_recv_result, async_send};
 use executor::{ExecResult, Reason};
-use std::env::temp_dir;
 use std::path::PathBuf;
 use std::process::exit;
-use tokio::fs::write;
+use tokio::fs::{copy, write};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
@@ -91,6 +90,7 @@ struct ScriptExecutor {
     path_on_host: PathBuf,
     guest: Guest,
 }
+const QEMU_HOST_SHARE_DIR: &str = "/tmp/healer";
 
 impl ScriptExecutor {
     pub fn new(cfg: &Config) -> Self {
@@ -104,11 +104,17 @@ impl ScriptExecutor {
 
     pub async fn start(&mut self) {
         self.guest.boot().await;
+        copy(
+            &self.path_on_host,
+            PathBuf::from(QEMU_HOST_SHARE_DIR).join("healer-executor-script"),
+        )
+        .await
+        .unwrap();
     }
 
     pub async fn exec(&mut self, p: &Prog, t: &Target) -> Result<ExecResult, Option<Crash>> {
         let p_text = to_prog(p, t);
-        let tmp = temp_dir().join("HEALER_test_case_v1-1-1.c");
+        let tmp = PathBuf::from(QEMU_HOST_SHARE_DIR).join("HEALER_test_case_v1-1-1.c");
         if let Err(e) = write(&tmp, &p_text).await {
             eprintln!(
                 "Failed to write test case to tmp dir \"{}\": {}",
@@ -118,11 +124,12 @@ impl ScriptExecutor {
             exit(1);
         }
 
-        let guest_case_file = self.guest.copy(&tmp).await;
-        let mut executor = App::new(self.path_on_host.to_str().unwrap());
-        executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
-
-        let mut exec_handle = self.guest.run_cmd(&executor, true).await;
+        // let guest_case_file = self.guest.copy(&tmp).await;
+        // let mut executor = App::new(self.path_on_host.to_str().unwrap());
+        // executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
+        let mut executor = App::new("~/healer-9p/healer-executor-script");
+        executor.arg(Arg::new_flag("~/healer-9p/HEALER_test_case_v1-1-1.c"));
+        let mut exec_handle = self.guest.run_cmd(&executor, false).await;
 
         match timeout(Duration::new(15, 0), &mut exec_handle).await {
             Err(_) => Ok(ExecResult::Failed(Reason("Time out".to_string()))),

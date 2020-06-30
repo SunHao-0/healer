@@ -524,10 +524,15 @@ impl LinuxQemu {
             .into_cmd()
             .output()
             .await
-            .unwrap_or_else(|e| panic!("Failed to spawn:{}", e));
+            .unwrap_or_else(|e| exits!(1, "Failed to spawn:{}", e));
 
         if !output.status.success() {
-            panic!(String::from_utf8(output.stderr).unwrap());
+            exits!(
+                1,
+                "Failed to scp: {}, file: {}",
+                String::from_utf8(output.stderr).unwrap(),
+                path.display()
+            );
         }
         guest_path
     }
