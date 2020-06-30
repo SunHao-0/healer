@@ -8,8 +8,9 @@ use core::prog::Prog;
 use core::target::Target;
 use executor::transfer::{async_recv_result, async_send};
 use executor::{ExecResult, Reason};
+use std::env::temp_dir;
 use std::path::PathBuf;
-use std::process::exit;
+use std::process::{exit, id};
 use tokio::fs::{copy, write};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
@@ -22,9 +23,10 @@ use tokio::time::{delay_for, timeout, Duration};
 pub struct ExecutorConf {
     pub path: PathBuf,
     pub host_ip: Option<String>,
-    pub concurrency: bool,
-    pub memleak_check: bool,
-    pub script_mode: bool,
+    pub concurrency: Option<bool>,
+    pub memleak_check: Option<bool>,
+    pub script_mode: Option<bool>,
+    pub use_9p: Option<bool>,
 }
 
 impl ExecutorConf {
@@ -58,13 +60,13 @@ pub struct Executor {
 
 enum ExecutorImpl {
     Linux(LinuxExecutor),
-    Scripy(ScriptExecutor),
+    Script(ScriptExecutor),
 }
 
 impl Executor {
     pub fn new(cfg: &Config) -> Self {
-        let inner = if cfg.executor.script_mode {
-            ExecutorImpl::Scripy(ScriptExecutor::new(cfg))
+        let inner = if cfg.executor.script_mode.unwrap_or(false) {
+            ExecutorImpl::Script(ScriptExecutor::new(cfg))
         } else {
             ExecutorImpl::Linux(LinuxExecutor::new(cfg))
         };
@@ -74,47 +76,96 @@ impl Executor {
     pub async fn start(&mut self) {
         match self.inner {
             ExecutorImpl::Linux(ref mut e) => e.start().await,
-            ExecutorImpl::Scripy(ref mut e) => e.start().await,
+            ExecutorImpl::Script(ref mut e) => e.start().await,
         }
     }
 
     pub async fn exec(&mut self, p: &Prog, t: &Target) -> Result<ExecResult, Option<Crash>> {
         match self.inner {
             ExecutorImpl::Linux(ref mut e) => e.exec(p).await,
-            ExecutorImpl::Scripy(ref mut e) => e.exec(p, t).await,
+            ExecutorImpl::Script(ref mut e) => e.exec(p, t).await,
         }
     }
 }
 
 struct ScriptExecutor {
     path_on_host: PathBuf,
+    path_on_guest: PathBuf,
     guest: Guest,
+    use_9p: bool,
+    host_share_dir: PathBuf,
 }
-const QEMU_HOST_SHARE_DIR: &str = "/tmp/healer";
+
+const QEMU_GUEST_SHARE_DIR: &str = "~/healer-9p";
+const EXEC_SCIPT_NAME: &str = "healer-executor-script";
 
 impl ScriptExecutor {
     pub fn new(cfg: &Config) -> Self {
-        let guest = Guest::new(cfg);
-
         Self {
+            guest: Guest::new(cfg),
             path_on_host: cfg.executor.path.clone(),
-            guest,
+            path_on_guest: PathBuf::new(),
+            use_9p: cfg.executor.use_9p.unwrap_or(false),
+            host_share_dir: PathBuf::new(),
         }
     }
 
     pub async fn start(&mut self) {
         self.guest.boot().await;
-        copy(
-            &self.path_on_host,
-            PathBuf::from(QEMU_HOST_SHARE_DIR).join("healer-executor-script"),
-        )
-        .await
-        .unwrap();
+        if self.use_9p {
+            self.mount_9p().await;
+            self.host_share_dir = temp_dir().join(format!("healer-{}", id()));
+            copy(
+                &self.path_on_host,
+                self.host_share_dir.join(EXEC_SCIPT_NAME),
+            )
+            .await
+            .unwrap();
+        } else {
+            self.path_on_guest = self.guest.copy(&self.path_on_host).await;
+        }
+    }
+
+    async fn mount_9p(&self) {
+        let mut mkdir = App::new("mkdir");
+        mkdir.arg(Arg::new_flag(QEMU_GUEST_SHARE_DIR));
+        let mut mkdir = self.guest.run_cmd(&mkdir, false).await;
+        let mut stderr = mkdir.stderr.take().unwrap();
+        let mkdir_status = mkdir
+            .await
+            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
+        if !mkdir_status.success() {
+            let mut err = String::new();
+            stderr.read_to_string(&mut err).await.unwrap();
+            eprintln!("Failed to crate dir \"healer-9p\" before mount 9p: {}", err);
+            exit(1);
+        }
+
+        let mut mount = App::new("mount");
+        mount
+            .arg(Arg::new_opt("-t", OptVal::normal("9p")))
+            .arg(Arg::new_opt(
+                "-o",
+                OptVal::multiple(vec!["trans=virtio", "version=9p2000.L"], Some(',')),
+            ))
+            .arg(Arg::new_flag("host0"))
+            .arg(Arg::new_flag(QEMU_GUEST_SHARE_DIR));
+        let mut mount = self.guest.run_cmd(&mount, false).await;
+        let mut stderr = mount.stderr.take().unwrap();
+        let mount_status = mount
+            .await
+            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
+        if !mount_status.success() {
+            let mut err = String::new();
+            stderr.read_to_string(&mut err).await.unwrap();
+            eprintln!("Failed to mount \"healer-9p\": {}", err);
+            exit(1);
+        }
     }
 
     pub async fn exec(&mut self, p: &Prog, t: &Target) -> Result<ExecResult, Option<Crash>> {
         let p_text = to_prog(p, t);
-        let tmp = PathBuf::from(QEMU_HOST_SHARE_DIR).join("HEALER_test_case_v1-1-1.c");
+        let tmp = self.host_share_dir.join("HEALER_test_case_v1-1-1.c");
         if let Err(e) = write(&tmp, &p_text).await {
             eprintln!(
                 "Failed to write test case to tmp dir \"{}\": {}",
@@ -124,14 +175,19 @@ impl ScriptExecutor {
             exit(1);
         }
 
-        // let guest_case_file = self.guest.copy(&tmp).await;
-        // let mut executor = App::new(self.path_on_host.to_str().unwrap());
-        // executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
-        let mut executor = App::new("~/healer-9p/healer-executor-script");
-        executor.arg(Arg::new_flag("~/healer-9p/HEALER_test_case_v1-1-1.c"));
-        let mut exec_handle = self.guest.run_cmd(&executor, false).await;
+        let exec = if self.use_9p {
+            let mut executor = App::new("~/healer-9p/healer-executor-script");
+            executor.arg(Arg::new_flag("~/healer-9p/HEALER_test_case_v1-1-1.c"));
+            executor
+        } else {
+            let guest_case_file = self.guest.copy(&tmp).await;
+            let mut executor = App::new(self.path_on_guest.to_str().unwrap());
+            executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
+            executor
+        };
+        let mut exec_handle = self.guest.run_cmd(&exec, false).await;
 
-        match timeout(Duration::new(15, 0), &mut exec_handle).await {
+        match timeout(Duration::new(32, 0), &mut exec_handle).await {
             Err(_) => Ok(ExecResult::Failed(Reason("Time out".to_string()))),
             Ok(_) => {
                 let mut stdout = exec_handle.stdout.take().unwrap();
@@ -200,8 +256,8 @@ impl LinuxExecutor {
             exec_handle: None,
             conn: None,
 
-            concurrency: cfg.executor.concurrency,
-            memleak_check: cfg.executor.memleak_check,
+            concurrency: cfg.executor.concurrency.unwrap_or(false),
+            memleak_check: cfg.executor.memleak_check.unwrap_or(false),
             executor_bin_path: cfg.executor.path.clone(),
             target_path: PathBuf::from(&cfg.fots_bin),
             host_ip,

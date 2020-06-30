@@ -5,12 +5,13 @@ use crate::Config;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use os_pipe::{pipe, PipeReader, PipeWriter};
 use std::collections::HashMap;
+use std::env::temp_dir;
 use std::fmt;
+use std::fs::create_dir;
 use std::io::{ErrorKind, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio::time::{delay_for, timeout, Duration};
 
@@ -23,19 +24,6 @@ lazy_static! {
             Arg::new_opt("-display", OptVal::normal("none")),
             Arg::new_opt("-serial", OptVal::normal("stdio")),
             Arg::new_flag("-snapshot"),
-            Arg::new_opt(
-                "-virtfs",
-                OptVal::multiple(
-                    vec![
-                        "local",
-                        "path=/tmp/healer",
-                        "mount_tag=host0",
-                        "security_model=mapped",
-                        "id=host0",
-                    ],
-                    Some(','),
-                ),
-            ),
         ];
 
         let mut linux_amd64 = App::new("qemu-system-x86_64");
@@ -155,7 +143,7 @@ pub struct GuestConf {
 }
 
 pub const PLATFORM: [&str; 1] = ["qemu"];
-pub const ARCH: [&str; 1] = ["amd64"];
+pub const ARCH: [&str; 3] = ["amd64", "aarch64", "arm"];
 pub const OS: [&str; 1] = ["linux"];
 
 impl GuestConf {
@@ -318,6 +306,7 @@ pub struct LinuxQemu {
     user: String,
     guest: GuestConf,
     qemu: QemuConf,
+    use_9p: bool,
 }
 
 impl LinuxQemu {
@@ -334,23 +323,24 @@ impl LinuxQemu {
             user: LINUX_QEMU_HOST_USER.to_string(),
             guest: cfg.guest.clone(),
             qemu: cfg.qemu.clone(),
+            use_9p: cfg.executor.use_9p.unwrap_or(false),
         }
     }
 }
 
 impl LinuxQemu {
+    #[allow(unused_must_use)]
     async fn boot(&mut self) {
         if let Some(ref mut h) = self.handle {
-            h.kill()
-                .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to kill running guest:{}", e));
+            h.kill();
+            self.handle = None;
             self.rp = None;
         }
 
         const MAX_RETRY: u8 = 64;
         let mut retry = 0;
         loop {
-            let (qemu, port) = build_qemu_cli(&self.guest, &self.qemu);
-            self.port = port;
+            let qemu = self.build_qemu_cli();
 
             let (mut handle, mut rp) = {
                 let mut cmd = qemu.clone().into_cmd();
@@ -417,44 +407,6 @@ impl LinuxQemu {
                 self.rp = Some(rp);
                 break;
             }
-        }
-        self.mount_9p().await
-    }
-
-    async fn mount_9p(&self) {
-        let mut mkdir = App::new("mkdir");
-        mkdir.arg(Arg::new_flag("healer-9p"));
-        let mut mkdir = self.run_cmd(&mkdir, false).await;
-        let mut stderr = mkdir.stderr.take().unwrap();
-        let mkdir_status = mkdir
-            .await
-            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
-        if !mkdir_status.success() {
-            let mut err = String::new();
-            stderr.read_to_string(&mut err).await.unwrap();
-            eprintln!("Failed to crate dir \"healer-9p\" before mount 9p: {}", err);
-            exit(1);
-        }
-
-        let mut mount = App::new("mount");
-        mount
-            .arg(Arg::new_opt("-t", OptVal::normal("9p")))
-            .arg(Arg::new_opt(
-                "-o",
-                OptVal::multiple(vec!["trans=virtio", "version=9p2000.L"], Some(',')),
-            ))
-            .arg(Arg::new_flag("host0"))
-            .arg(Arg::new_flag("healer-9p"));
-        let mut mount = self.run_cmd(&mount, false).await;
-        let mut stderr = mount.stderr.take().unwrap();
-        let mount_status = mount
-            .await
-            .unwrap_or_else(|e| exits!(exitcode::OSERR, "Fail to spawn:{}", e));
-        if !mount_status.success() {
-            let mut err = String::new();
-            stderr.read_to_string(&mut err).await.unwrap();
-            eprintln!("Failed to mount \"healer-9p\": {}", err);
-            exit(1);
         }
     }
 
@@ -558,25 +510,24 @@ impl LinuxQemu {
         self.rp = None;
         Crash { inner: crash_info }
     }
-}
 
-fn build_qemu_cli(g: &GuestConf, q: &QemuConf) -> (App, u16) {
-    let target = format!("{}/{}", g.os, g.arch);
+    fn build_qemu_cli(&mut self) -> App {
+        let target = format!("{}/{}", self.guest.os, self.guest.arch);
+        let mut qemu = QEMUS
+            .get(&target)
+            .unwrap_or_else(|| exits!(exitcode::CONFIG, "Unsupported target:{}", &target))
+            .clone();
+        self.port = free_ipv4_port()
+            .unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
+        // self.port = port;
 
-    let mut qemu = QEMUS
-        .get(&target)
-        .unwrap_or_else(|| exits!(exitcode::CONFIG, "Unsupported target:{}", &target))
-        .clone();
-
-    // use low level port
-    let port =
-        free_ipv4_port().unwrap_or_else(|| exits!(exitcode::TEMPFAIL, "No Free port to forword"));
-    let cfg = q;
-
-    qemu.arg(Arg::new_opt("-m", OptVal::Normal(cfg.mem_size.to_string())))
+        qemu.arg(Arg::new_opt(
+            "-m",
+            OptVal::Normal(self.qemu.mem_size.to_string()),
+        ))
         .arg(Arg::new_opt(
             "-smp",
-            OptVal::Normal(cfg.cpu_num.to_string()),
+            OptVal::Normal(self.qemu.cpu_num.to_string()),
         ))
         .arg(Arg::new_opt(
             "-net",
@@ -584,14 +535,46 @@ fn build_qemu_cli(g: &GuestConf, q: &QemuConf) -> (App, u16) {
                 vals: vec![
                     String::from("user"),
                     format!("host={}", LINUX_QEMU_USER_NET_HOST_IP_ADDR),
-                    format!("hostfwd=tcp::{}-:22", port),
+                    format!("hostfwd=tcp::{}-:22", self.port),
                 ],
                 sp: Some(','),
             },
         ))
-        .arg(Arg::new_opt("-hda", OptVal::Normal(cfg.image.clone())))
-        .arg(Arg::new_opt("-kernel", OptVal::Normal(cfg.kernel.clone())));
-    (qemu, port)
+        .arg(Arg::new_opt(
+            "-hda",
+            OptVal::Normal(self.qemu.image.clone()),
+        ))
+        .arg(Arg::new_opt(
+            "-kernel",
+            OptVal::Normal(self.qemu.kernel.clone()),
+        ));
+
+        if self.use_9p {
+            let dir_9p = temp_dir().join(format!("healer-{}", std::process::id()));
+            if let Err(e) = create_dir(&dir_9p) {
+                if e.kind() != ErrorKind::AlreadyExists {
+                    eprintln!("Failed to create dir for 9p: {}", e);
+                    exit(1);
+                }
+            }
+            let opt_9p = Arg::new_opt(
+                "-virtfs",
+                OptVal::multiple(
+                    vec![
+                        "local",
+                        &format!("path={}", dir_9p.display()),
+                        "mount_tag=host0",
+                        "security_model=mapped",
+                        "id=host0",
+                    ],
+                    Some(','),
+                ),
+            );
+            qemu.arg(opt_9p);
+        }
+
+        qemu
+    }
 }
 
 fn ssh_app(key: &str, user: &str, addr: &str, port: u16, app: App) -> App {
