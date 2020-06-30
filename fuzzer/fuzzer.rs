@@ -95,7 +95,7 @@ impl Fuzzer {
         let mut gen_cnt = 0;
         loop {
             let p = self.get_prog(&mut gen_cnt).await;
-            match executor.exec(&p).await {
+            match executor.exec(&p, &self.target).await {
                 Ok(exec_result) => match exec_result {
                     ExecResult::Ok(raw_branches) => {
                         self.feedback_analyze(p, raw_branches, &mut executor).await
@@ -154,7 +154,7 @@ impl Fuzzer {
         executor.start().await;
 
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(&p).await {
+        match executor.exec(&p, &self.target).await {
             Ok(exec_result) => {
                 match exec_result {
                     ExecResult::Ok(_) => warn!("Repo failed, executed successfully"),
@@ -320,7 +320,7 @@ impl Fuzzer {
 
     async fn exec_no_crash(&self, executor: &mut Executor, p: &Prog) -> ExecResult {
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(p).await {
+        match executor.exec(p, &self.target).await {
             Ok(exec_result) => exec_result,
             Err(crash) => {
                 self.crash_analyze(p.clone(), crash.unwrap_or_default(), executor)
@@ -332,7 +332,7 @@ impl Fuzzer {
 
     async fn exec_no_fail(&self, executor: &mut Executor, p: &Prog) -> Vec<Vec<usize>> {
         self.exec_cnt.fetch_add(1, Ordering::SeqCst);
-        match executor.exec(p).await {
+        match executor.exec(p, &self.target).await {
             Ok(exec_result) => match exec_result {
                 ExecResult::Ok(raw_branches) => raw_branches,
                 ExecResult::Failed(_) => Default::default(),

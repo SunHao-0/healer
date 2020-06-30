@@ -3,11 +3,15 @@ use crate::guest::{Crash, Guest};
 use crate::utils::cli::{App, Arg, OptVal};
 use crate::utils::free_ipv4_port;
 use crate::Config;
+use core::c::to_prog;
 use core::prog::Prog;
+use core::target::Target;
 use executor::transfer::{async_recv_result, async_send};
 use executor::{ExecResult, Reason};
+use std::env::temp_dir;
 use std::path::PathBuf;
 use std::process::exit;
+use tokio::fs::write;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Child;
@@ -21,6 +25,7 @@ pub struct ExecutorConf {
     pub host_ip: Option<String>,
     pub concurrency: bool,
     pub memleak_check: bool,
+    pub script_mode: bool,
 }
 
 impl ExecutorConf {
@@ -54,24 +59,106 @@ pub struct Executor {
 
 enum ExecutorImpl {
     Linux(LinuxExecutor),
+    Scripy(ScriptExecutor),
 }
 
 impl Executor {
     pub fn new(cfg: &Config) -> Self {
-        Self {
-            inner: ExecutorImpl::Linux(LinuxExecutor::new(cfg)),
-        }
+        let inner = if cfg.executor.script_mode {
+            ExecutorImpl::Scripy(ScriptExecutor::new(cfg))
+        } else {
+            ExecutorImpl::Linux(LinuxExecutor::new(cfg))
+        };
+        Self { inner }
     }
 
     pub async fn start(&mut self) {
         match self.inner {
             ExecutorImpl::Linux(ref mut e) => e.start().await,
+            ExecutorImpl::Scripy(ref mut e) => e.start().await,
         }
     }
 
-    pub async fn exec(&mut self, p: &Prog) -> Result<ExecResult, Option<Crash>> {
+    pub async fn exec(&mut self, p: &Prog, t: &Target) -> Result<ExecResult, Option<Crash>> {
         match self.inner {
             ExecutorImpl::Linux(ref mut e) => e.exec(p).await,
+            ExecutorImpl::Scripy(ref mut e) => e.exec(p, t).await,
+        }
+    }
+}
+
+struct ScriptExecutor {
+    path_on_host: PathBuf,
+    guest: Guest,
+}
+
+impl ScriptExecutor {
+    pub fn new(cfg: &Config) -> Self {
+        let guest = Guest::new(cfg);
+
+        Self {
+            path_on_host: cfg.executor.path.clone(),
+            guest,
+        }
+    }
+
+    pub async fn start(&mut self) {
+        self.guest.boot().await;
+    }
+
+    pub async fn exec(&mut self, p: &Prog, t: &Target) -> Result<ExecResult, Option<Crash>> {
+        let p_text = to_prog(p, t);
+        let tmp = temp_dir().join("HEALER_test_case_v1-1-1.c");
+        if let Err(e) = write(&tmp, &p_text).await {
+            eprintln!(
+                "Failed to write test case to tmp dir \"{}\": {}",
+                tmp.display(),
+                e
+            );
+            exit(1);
+        }
+
+        let guest_case_file = self.guest.copy(&tmp).await;
+        let mut executor = App::new(self.path_on_host.to_str().unwrap());
+        executor.arg(Arg::new_flag(guest_case_file.to_str().unwrap()));
+
+        let mut exec_handle = self.guest.run_cmd(&executor).await;
+
+        match timeout(Duration::new(15, 0), &mut exec_handle).await {
+            Err(_) => Ok(ExecResult::Failed(Reason("Time out".to_string()))),
+            Ok(_) => {
+                let mut stdout = exec_handle.stdout.take().unwrap();
+                let mut output = String::new();
+                stdout.read_to_string(&mut output).await.unwrap();
+                self.parse_exec_result(output).await
+            }
+        }
+    }
+
+    pub async fn parse_exec_result(&mut self, out: String) -> Result<ExecResult, Option<Crash>> {
+        let mut result_line = String::new();
+
+        for l in out.lines() {
+            if l.contains("HEALER_EXEC_RESULT") {
+                result_line = l.to_string();
+            }
+        }
+
+        if !result_line.is_empty() {
+            let out = out.replace(&result_line, "");
+            if result_line.contains("success") {
+                return Ok(ExecResult::Ok(Default::default()));
+            } else if result_line.contains("failed") {
+                return Ok(ExecResult::Failed(Reason(out)));
+            } else if result_line.contains("crashed") {
+                return Err(Some(Crash { inner: out }));
+            }
+        }
+
+        if !self.guest.is_alive().await {
+            Err(Some(Crash { inner: out }))
+        } else {
+            Ok(ExecResult::Ok(Default::default()))
         }
     }
 }
