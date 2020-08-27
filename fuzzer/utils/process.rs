@@ -104,7 +104,9 @@ pub fn spawn(app: App, timeout: Option<Duration>) -> Handle {
     }
 }
 
-fn redirect<T: AsyncRead + Send + Sync + 'static>(mut src: T) -> mpsc::UnboundedReceiver<BytesMut> {
+fn redirect<T: std::marker::Unpin + AsyncRead + Send + Sync + 'static>(
+    mut src: T,
+) -> mpsc::UnboundedReceiver<BytesMut> {
     let (tx, rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
         loop {
