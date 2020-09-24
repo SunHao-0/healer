@@ -1,0 +1,14 @@
+[package]
+name = "hl_spec"
+version = "0.0.0"
+authors = ["Hao Sun <sunhaoyl@outlook.com>"]
+edition = "2018"
+description = "System call specification of healer"
+license = "Apache-2.0"
+
+[lib]
+name = "hl_spec"
+path = "lib.rs"
+
+[dependencies]
+
