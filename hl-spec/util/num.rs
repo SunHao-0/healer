@@ -1,10 +1,12 @@
 use std::num::ParseIntError;
 
-pub trait Integer: Sized + Copy {
+pub trait Integer: Sized + Copy + std::fmt::Display {
     const MIN: Self;
     const MAX: Self;
 
     fn from_str_radix(input: &str, r: u32) -> Result<Self, ParseIntError>;
+    fn maybe_change_sign(self, sign: i8) -> Self;
+    fn zero() -> Self;
 }
 
 macro_rules! impl_integer {
@@ -15,6 +17,19 @@ macro_rules! impl_integer {
 
             fn from_str_radix(input: &str, r: u32) -> Result<$t, ParseIntError> {
                 <$t>::from_str_radix(input, r)
+            }
+
+            fn maybe_change_sign(self, sign: i8) -> Self {
+                assert!(sign == -1 || sign == 1);
+                if !std::any::type_name::<$t>().contains("u") && sign == -1 {
+                    self * (sign as $t)
+                } else {
+                    self
+                }
+            }
+
+            fn zero() -> Self {
+                0
             }
         }
     };
