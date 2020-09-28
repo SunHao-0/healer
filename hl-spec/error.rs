@@ -14,7 +14,7 @@ pub struct ParseError {
 
 impl ParseError {
     pub fn new(span: Span) -> Self {
-        let err_line = span.fragment().lines().next().unwrap_or_default();
+        let err_line = span.fragment().lines().next().unwrap_or("EOF");
         Self {
             err_snippets: err_line.to_string(),
             location: (span.location_line() as usize, span.location_offset()),
@@ -64,7 +64,7 @@ impl std::fmt::Display for ParseError {
             write!(f, "in {}: ", ctx)?;
         }
         writeln!(f, "expect {}, but found {}.", self.expect, self.found)?;
-        writeln!(f, "\t{}", self.err_snippets)
+        write!(f, "\t{}", self.err_snippets)
     }
 }
 
@@ -77,13 +77,13 @@ mod tests {
     #[test]
     fn error_fmt() {
         let span = Span::new("fn foo()\n");
-        let mut err = ParseError::new(span)
+        let err = ParseError::new(span)
             .filename("test.hl")
             .add_context("test")
             .expect("test")
             .found("test");
         assert_eq!(
-            "In test.hl:1:0: ERROR: in test: expect test, but found test.\n\tfn foo()\n",
+            "In test.hl:1:0: ERROR: in test: expect test, but found test.\n\tfn foo()",
             err.to_string()
         );
     }
