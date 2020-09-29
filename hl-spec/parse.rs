@@ -13,19 +13,19 @@ pub type Span<'a> = LocatedSpan<&'a str, ()>;
 pub(crate) fn parse_ident(input: Span) -> IResult<Span, &str, ParseError> {
     const LEGAL_LEADING_CH: &str = "a-z, A-Z, _";
 
-    let (input, fst_ch) = peek_one(input).map_err(|e| {
+    let fst_ch = peek_one(input).map_err(|e| {
         e.add_context("identifier parsing")
             .expect(LEGAL_LEADING_CH)
             .into()
     })?;
 
     if !fst_ch.is_alpha() && fst_ch != '_' {
-        let err: String = if fst_ch.is_whitespace() {
-            "whitespace".into()
+        let err = if fst_ch.is_whitespace() {
+            "whitespace".to_string()
         } else if fst_ch.is_control() {
             fst_ch.escape_unicode().collect()
         } else {
-            fst_ch.into()
+            fst_ch.to_string()
         };
         Err(ParseError::new(input)
             .expect(LEGAL_LEADING_CH)
@@ -41,31 +41,29 @@ pub(crate) fn parse_ident(input: Span) -> IResult<Span, &str, ParseError> {
 }
 
 /// Parse an integer literal.
-/// [-][0x|0b|0o][0-9|a-f]+
+/// An Integer should be [-][0x|0b|0o][0-9|a-f|A-F]+
 pub(crate) fn parse_integer<T: Integer>(mut input: Span) -> IResult<Span, T, ParseError> {
     let origin_input = input;
     let mut sign = 1;
 
-    let (_, mut fst_ch) =
+    let mut fst_ch =
         peek_one(input).map_err(|e| e.add_context("integer parsing").expect("-, 0-9,").into())?;
 
     if fst_ch == '-' {
         sign = -1;
         input = eat_one(input);
-        let ret = peek_one(input).map_err(|e| {
+        fst_ch = peek_one(input).map_err(|e| {
             ParseError::new(origin_input)
                 .add_context("integer parsing")
                 .expect("0-9")
                 .into()
         })?;
-        input = ret.0;
-        fst_ch = ret.1;
     }
 
     if fst_ch == '0' {
         input = eat_one(input);
 
-        return if let Ok((_, ch)) = peek_one(input) {
+        return if let Ok(ch) = peek_one(input) {
             match ch {
                 'x' | 'X' => {
                     input = eat_one(input);
@@ -170,9 +168,9 @@ pub(crate) fn parse_integer<T: Integer>(mut input: Span) -> IResult<Span, T, Par
 }
 
 /// Read one character without consume any byte.
-fn peek_one(input: Span) -> Result<(Span, char), ParseError> {
+fn peek_one(input: Span) -> Result<char, ParseError> {
     if let Some(fst_ch) = input.fragment().chars().next() {
-        Ok((input, fst_ch))
+        Ok(fst_ch)
     } else {
         Err(ParseError::new(input).found("EOF"))
     }

@@ -2,6 +2,7 @@
 
 use crate::parse::Span;
 use ansi_term::Color::Red;
+use ansi_term::Style;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct ParseError {
@@ -67,14 +68,18 @@ impl Into<nom::Err<ParseError>> for ParseError {
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut detailed_loc = String::new();
         if let Some(filename) = self.filename.as_ref() {
-            write!(f, "In {}:", filename)?;
+            detailed_loc.push_str("In ");
+            detailed_loc.push_str(&filename);
+            detailed_loc.push(':');
         }
+        detailed_loc.push_str(&format!("{}:{}", self.location.0, self.location.1));
+
         write!(
             f,
-            "{}:{}: {}: ",
-            self.location.0,
-            self.location.1,
+            "{}: {}: ",
+            Style::new().underline().paint(&detailed_loc),
             Red.paint("ERROR")
         )?;
         for ctx in self.context.iter() {
@@ -103,12 +108,16 @@ mod tests {
             .column(1)
             .filename("test.hl")
             .add_context("test")
-            .expect("test")
-            .found("test");
-
-        assert_eq!(
-            "In test.hl:1:0: ERROR: in test: expect test, but found test.\n\tfn foo()",
-            err.to_string()
+            .expect("debug")
+            .found("release");
+        let expect_err = format!(
+            "{}: {}: in test: expect debug, but found release.\n\tfn foo()\n\t {}",
+            Style::new().underline().paint("In test.hl:1:1"),
+            Red.paint("ERROR"),
+            Red.paint("^^")
         );
+        let actual_err = err.to_string();
+        println!("{}", actual_err);
+        assert_eq!(expect_err, actual_err);
     }
 }
