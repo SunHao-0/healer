@@ -10,6 +10,11 @@ license = "Apache-2.0"
 name = "hl_spec"
 path = "lib.rs"
 
+[[bin]]
+name = "hl_test"
+path = "test.rs"
+
 [dependencies]
 nom = "5.1.2"
 nom_locate = "2.0.0"
+ansi_term = "0.12"
