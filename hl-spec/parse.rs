@@ -21,6 +21,7 @@ pub(crate) fn parse_ident(input: Span) -> IResult<Span, &str, ParseError> {
 
     if !fst_ch.is_alpha() && fst_ch != '_' {
         let err = if fst_ch.is_whitespace() {
+            // make white space visible
             "whitespace".to_string()
         } else if fst_ch.is_control() {
             fst_ch.escape_unicode().collect()
@@ -34,26 +35,24 @@ pub(crate) fn parse_ident(input: Span) -> IResult<Span, &str, ParseError> {
             .into())
     } else {
         // We know this input contains at least one legal character.
-        let (new_input, ident) = take_while::<_, _, ()>(is_ident_ch)(input).unwrap();
-        let ident = ident.fragment();
-        Ok((new_input, ident))
+        let (input, ident) = take_while::<_, _, ()>(is_ident_ch)(input).unwrap();
+        Ok((input, ident.fragment()))
     }
 }
 
 /// Parse an integer literal.
 /// An Integer should be [-][0x|0b|0o][0-9|a-f|A-F]+
 pub(crate) fn parse_integer<T: Integer>(mut input: Span) -> IResult<Span, T, ParseError> {
-    let origin_input = input;
     let mut sign = 1;
-
     let mut fst_ch =
         peek_one(input).map_err(|e| e.add_context("integer parsing").expect("-, 0-9,").into())?;
+    let target_line = input.fragment().lines().next().unwrap(); // We know input must contain at least one line.
 
     if fst_ch == '-' {
         sign = -1;
         input = eat_one(input);
         fst_ch = peek_one(input).map_err(|e| {
-            ParseError::new(origin_input)
+            e.err_snippets(target_line)
                 .add_context("integer parsing")
                 .expect("0-9")
                 .into()
@@ -67,104 +66,109 @@ pub(crate) fn parse_integer<T: Integer>(mut input: Span) -> IResult<Span, T, Par
             match ch {
                 'x' | 'X' => {
                     input = eat_one(input);
-                    let (input, num) = take_while1::<_, _, ()>(|c| is_hex_digit(c as u8))(input)
-                        .map_err(|_| {
-                            ParseError::new(origin_input)
-                                .add_context("integer parsing")
-                                .expect("0-9, a-f, A-F")
-                                .found("non hex digit")
-                                .into()
-                        })?;
+                    let (new_input, num) = take_while1::<_, _, ()>(|c| is_hex_digit(c as u8))(
+                        input,
+                    )
+                    .map_err(|_| {
+                        ParseError::new(input)
+                            .err_snippets(target_line)
+                            .add_context("integer parsing")
+                            .expect("0-9, a-f, A-F")
+                            .found("non hex digit")
+                            .into()
+                    })?;
                     let num = T::from_str_radix(num.fragment(), 16).map_err(|e| {
-                        ParseError::new(origin_input)
+                        ParseError::new(input)
+                            .err_snippets(target_line)
                             .add_context("integer parsing")
                             .expect(format!("integer in range ({}, {})", T::MIN, T::MAX))
                             .found(format!("error: {}", e))
                             .into()
                     })?;
-                    Ok((input, T::maybe_change_sign(num, sign)))
+                    Ok((new_input, T::maybe_change_sign(num, sign)))
                 }
                 'b' | 'B' => {
                     input = eat_one(input);
-                    let (input, num) = take_while1::<_, _, ()>(|c| c == '0' || c == '1')(input)
+                    let (new_input, num) = take_while1::<_, _, ()>(|c| c == '0' || c == '1')(input)
                         .map_err(|_| {
-                            ParseError::new(origin_input)
+                            ParseError::new(input)
+                                .err_snippets(target_line)
                                 .add_context("integer parsing")
                                 .expect("0, 1")
                                 .found("non 0/1 digit")
                                 .into()
                         })?;
                     let num = T::from_str_radix(num.fragment(), 2).map_err(|e| {
-                        ParseError::new(origin_input)
+                        ParseError::new(input)
+                            .err_snippets(target_line)
                             .add_context("integer parsing")
                             .expect(format!("integer in range ({}, {})", T::MIN, T::MAX))
                             .found(format!("error: {}", e))
                             .into()
                     })?;
-                    Ok((input, T::maybe_change_sign(num, sign)))
+                    Ok((new_input, T::maybe_change_sign(num, sign)))
                 }
                 'o' | 'O' => {
                     input = eat_one(input);
-                    let (input, num) = take_while1::<_, _, ()>(|c| is_oct_digit(c as u8))(input)
-                        .map_err(|_| {
-                            ParseError::new(origin_input)
-                                .add_context("integer parsing")
-                                .expect("0-7")
-                                .found("non 0-7 dight")
-                                .into()
-                        })?;
+                    let (new_input, num) = take_while1::<_, _, ()>(|c| is_oct_digit(c as u8))(
+                        input,
+                    )
+                    .map_err(|_| {
+                        ParseError::new(input)
+                            .err_snippets(target_line)
+                            .add_context("integer parsing")
+                            .expect("0-7")
+                            .found("non 0-7 dight")
+                            .into()
+                    })?;
                     let num = T::from_str_radix(num.fragment(), 8).map_err(|e| {
-                        ParseError::new(origin_input)
+                        ParseError::new(input)
+                            .err_snippets(target_line)
                             .add_context("integer parsing")
                             .expect(format!("integer in range ({}, {})", T::MIN, T::MAX))
                             .found(format!("error: {}", e))
                             .into()
                     })?;
-                    Ok((input, T::maybe_change_sign(num, sign)))
+                    Ok((new_input, T::maybe_change_sign(num, sign)))
                 }
                 '0'..='9' => {
-                    let (input, num) = take_while::<_, _, ()>(|c| is_digit(c as u8))(input)
-                        .map_err(|_| {
-                            ParseError::new(origin_input)
-                                .add_context("integer parsing")
-                                .expect("0-9")
-                                .found("non digit value")
-                                .into()
-                        })?;
-                    let num = if num.fragment().is_empty() {
-                        T::zero()
-                    } else {
-                        T::from_str_radix(num.fragment(), 10).map_err(|e| {
-                            ParseError::new(origin_input)
-                                .add_context("integre parsing")
-                                .expect(format!("integer in range: ({}, {})", T::MIN, T::MAX))
-                                .found(format!("error: {}", e))
-                                .into()
-                        })?
-                    };
-                    Ok((input, T::maybe_change_sign(num, sign)))
+                    // We already got one digit
+                    let (new_input, num) =
+                        take_while::<_, _, ()>(|c| is_digit(c as u8))(input).unwrap();
+                    let num = T::from_str_radix(num.fragment(), 10).map_err(|e| {
+                        ParseError::new(input)
+                            .err_snippets(target_line)
+                            .add_context("integre parsing")
+                            .expect(format!("integer in range: ({}, {})", T::MIN, T::MAX))
+                            .found(format!("error: {}", e))
+                            .into()
+                    })?;
+                    Ok((new_input, T::maybe_change_sign(num, sign)))
                 }
                 _ => Ok((input, T::zero())),
             }
         } else {
             Ok((input, T::zero()))
         };
-    }
-    let (input, num) = take_while1::<_, _, ()>(|c| is_digit(c as _))(input).map_err(|e| {
-        ParseError::new(origin_input)
+    } // fst_ch == '0'
+
+    let (new_input, num) = take_while1::<_, _, ()>(|c| is_digit(c as _))(input).map_err(|_| {
+        ParseError::new(input)
+            .err_snippets(target_line)
             .add_context("integer parsing")
             .expect("0-9")
             .found("non digit value")
             .into()
     })?;
     let num = T::from_str_radix(num.fragment(), 10).map_err(|e| {
-        ParseError::new(origin_input)
+        ParseError::new(input)
+            .err_snippets(target_line)
             .add_context("integer parsing")
             .expect(format!("integer in range: ({}, {})", T::MIN, T::MAX))
             .found(format!("error: {}", e))
             .into()
     })?;
-    Ok((input, T::maybe_change_sign(num, sign)))
+    Ok((new_input, T::maybe_change_sign(num, sign)))
 }
 
 /// Read one character without consume any byte.
@@ -172,7 +176,7 @@ fn peek_one(input: Span) -> Result<char, ParseError> {
     if let Some(fst_ch) = input.fragment().chars().next() {
         Ok(fst_ch)
     } else {
-        Err(ParseError::new(input).found("EOF"))
+        Err(ParseError::new(input).found("EOF").err_snippets("EOF"))
     }
 }
 
