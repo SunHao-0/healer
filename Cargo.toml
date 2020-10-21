@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "hl-spec",
-    "fots",
-    "core",
-    "tools",
-    "fuzzer",
-    "executor"
+    "hlang",
+    "old/fots",
+    "old/core",
+    "old/tools",
+    "old/fuzzer",
+    "old/executor"
 ]
 
 [profile.dev]
