@@ -1,11 +1,12 @@
 [workspace]
 members = [
     "hlang",
-    "old/fots",
-    "old/core",
-    "old/tools",
-    "old/fuzzer",
-    "old/executor"
+    "fuzzer"
+    # "old/fots",
+    # "old/core",
+    # "old/tools",
+    # "old/fuzzer",
+    # "old/executor"
 ]
 
 [profile.dev]
