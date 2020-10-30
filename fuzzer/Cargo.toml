@@ -10,5 +10,25 @@ license = "Apache-2.0"
 name = "hl_fuzzer"
 path = "lib.rs"
 
+[features]
+# possible featues are: (amd64, _386, arm, arm64, mips64le, ppc64le, riscv64, s390x) * (linux)
+default = ["amd64-linux"]
+amd64-linux = []
+_386-linux = []
+arm64-linux = []
+arm-linux = []
+mips64le-linux = []
+riscv64-linux = []
+s390x-linux = []
+amd64-akaros = []
+_386-freebsd = []
+amd64-freebsd = []
+amd64-fuchsia = []
+arm64-fuchsia = []
+amd64-netbsd = []
+amd64-openbsd = []
+arm-trusty = []
+amd64-windows = []
+
 [dependencies]
-hlang = "0.0.0"
+hlang = {version = "0.0.0", path = "../hlang"}
