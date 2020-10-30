@@ -7,15 +7,11 @@ description = "System call specification of healer"
 license = "Apache-2.0"
 
 [lib]
-name = "hl_spec"
+name = "hlang"
 path = "lib.rs"
-
-[[bin]]
-name = "hl_test"
-path = "test.rs"
 
 [dependencies]
 nom = "5.1.2"
-nom_locate = "2.0.0"
+nom_locate = "2.1.0"
 ansi_term = "0.12"
 rustc-hash = "1.1.0"

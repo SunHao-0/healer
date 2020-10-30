@@ -1,6 +1,8 @@
 //! Implementation of Healer-spec
 //! Healer-spec is system call specification language of healer.
 //! It is a domain specific language for kernel scenario.
+
+#[allow(unused_variables)]
 pub mod ast;
 pub mod error;
 pub mod parse;
@@ -41,7 +43,7 @@ pub fn parse_integer_test<T: Integer>(i: &str) -> Result<T, ParseError> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn hello_hl_spec() {
+    fn hello_hlang() {
         assert!(true);
     }
 }

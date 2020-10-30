@@ -327,7 +327,7 @@ impl TypeKind {
         todo!()
     }
 
-    pub fn new_flags(vals: Vec<u64>, bitmask: bool) -> Self {
+    pub fn new_flags(intfmt: IntFmt, vals: Vec<u64>, bitmask: bool) -> Self {
         todo!()
     }
 
@@ -375,13 +375,13 @@ pub enum CsumKind {
 pub enum BufferKind {
     BlobRand,
     BlobRange(u64, u64),
-    String { vals: Box<[Box<str>]>, noz: bool },
+    String { vals: Box<[Box<[u8]>]>, noz: bool },
     Filename { vals: Box<Box<str>>, noz: bool },
     Text(TextKind),
 }
 
 impl BufferKind {
-    pub fn new_str(vals: Vec<&str>, noz: bool) -> Self {
+    pub fn new_str(vals: Vec<&[u8]>, noz: bool) -> Self {
         todo!()
     }
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
