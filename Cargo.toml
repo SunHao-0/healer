@@ -2,15 +2,4 @@
 members = [
     "hlang",
     "fuzzer"
-    # "old/fots",
-    # "old/core",
-    # "old/tools",
-    # "old/fuzzer",
-    # "old/executor"
 ]
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
