@@ -15,8 +15,7 @@ name = "hl_fuzzer"
 path = "fuzzer.rs"
 
 [features]
-# possible featues are: (amd64, _386, arm, arm64, mips64le, ppc64le, riscv64, s390x) * (linux)
-default = ["amd64-netbsd"]
+default = ["amd64-linux"]
 amd64-linux = []
 _386-linux = []
 arm64-linux = []

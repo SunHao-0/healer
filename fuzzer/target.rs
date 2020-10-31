@@ -54,6 +54,14 @@
 #[path = "syscalls/netbsd/amd64.rs"]
 #[rustfmt::skip]mod syscalls;
 
+#[cfg(feature = "amd64-openbsd")]
+#[path = "syscalls/openbsd/amd64.rs"]
+#[rustfmt::skip]mod syscalls;
+
+#[cfg(feature = "arm-trusty")]
+#[path = "syscalls/trusty/arm.rs"]
+#[rustfmt::skip]mod syscalls;
+
 #[cfg(feature = "amd64-windows")]
 #[path = "syscalls/windows/amd64.rs"]
 #[rustfmt::skip]mod syscalls;
