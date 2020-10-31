@@ -2,7 +2,6 @@
 //! Healer-spec is system call specification language of healer.
 //! It is a domain specific language for kernel scenario.
 
-#[allow(unused_variables)]
 pub mod ast;
 pub mod error;
 pub mod parse;

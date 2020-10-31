@@ -37,6 +37,7 @@ pub struct Syscall {
 }
 
 impl Syscall {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: SId,
         nr: u64,
@@ -67,18 +68,20 @@ fn to_box_str<T: AsRef<str>>(s: T) -> Box<str> {
 
 impl fmt::Display for Syscall {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.attr != SyscallAttr::default() {
-            writeln!(f, "{}", self.attr)?;
+        let attr = format!("{}", self.attr);
+        if !attr.is_empty(){
+            writeln!(f, "{}", attr)?;
         }
-        write!(f, "{}(", self.call_name)?;
+        write!(f, "fn {}(", self.call_name)?;
         for (i, p) in self.params.iter().enumerate() {
             write!(f, "{}", p)?;
             if i != self.params.len() - 1 {
                 write!(f, ",")?;
             }
         }
+        write!(f, ")")?;
         if let Some(ref ret) = self.ret {
-            write!(f, ") -> {}", ret)?;
+            write!(f, " -> {}", ret)?;
         }
         Ok(())
     }
@@ -94,7 +97,7 @@ pub struct Param {
 
 impl fmt::Display for Param {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
+        write!(f, "{}:", self.name)?;
         if let Some(dir) = self.dir {
             write!(f, " {}", dir)?;
         }
@@ -144,11 +147,11 @@ impl fmt::Display for BinFmt {
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SyscallAttr {
-    disable: bool,
-    timeout: u64,
-    prog_tmout: u64,
-    ignore_ret: bool,
-    brk_ret: bool,
+    pub disable: bool,
+    pub timeout: u64,
+    pub prog_tmout: u64,
+    pub ignore_ret: bool,
+    pub brk_ret: bool,
 }
 
 impl Default for SyscallAttr {
@@ -165,26 +168,30 @@ impl Default for SyscallAttr {
 
 impl fmt::Display for SyscallAttr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self == &SyscallAttr::default() {
-            return Ok(());
-        }
-        write!(f, "#[")?;
+        let mut buf = String::new();
         if self.disable {
-            write!(f, "disable,")?;
+            buf.push_str("disable,");
         }
         if self.ignore_ret {
-            write!(f, "ignore_ret,")?;
+            buf.push_str("ignore_ret,");
         }
         if self.brk_ret {
-            write!(f, "brk_ret,")?;
+            buf.push_str("brk_ret,");
         }
         if self.timeout != 0 {
-            write!(f, "timeout={},", self.timeout)?;
+            buf.push_str(&format!("timeout={},", self.timeout));
         }
         if self.prog_tmout != 0 {
-            write!(f, "prog_tmout={},", self.prog_tmout)?;
+            buf.push_str(&format!("prog_tmout={},", self.prog_tmout));
         }
-        Ok(())
+        if !buf.is_empty(){
+            if buf.ends_with(','){
+                buf.pop();
+            }
+            write!(f, "#[{}]", buf)
+        }else{
+            Ok(())
+        }
     }
 }
 
@@ -309,26 +316,53 @@ pub struct Field {
 
 impl TypeKind {
     pub fn new_buffer(kind: BufferKind, subkind: &str) -> Self {
-        todo!()
+        TypeKind::Buffer {
+            kind,
+            subkind: if subkind.is_empty() {
+                None
+            } else {
+                Some(to_box_str(subkind))
+            },
+        }
     }
     pub fn new_struct(align: u64, fields: Vec<Field>) -> Self {
-        todo!()
+        TypeKind::Struct {
+            fields: fields.into_boxed_slice(),
+            align_attr: align,
+        }
     }
 
     pub fn new_union(fields: Vec<Field>) -> Self {
-        todo!()
+        TypeKind::Union {
+            fields: fields.into_boxed_slice(),
+        }
     }
 
     pub fn new_len(int_fmt: IntFmt, bit_sz: u64, offset: bool, path: Vec<&str>) -> Self {
-        todo!()
+        let path = path.iter().map(to_box_str).collect::<Vec<_>>();
+        TypeKind::Len {
+            int_fmt,
+            bit_sz,
+            offset,
+            path: path.into_boxed_slice(),
+        }
     }
 
     pub fn new_csum(int_fmt: IntFmt, kind: CsumKind, buf: Option<&str>, proto: u64) -> Self {
-        todo!()
+        TypeKind::Csum {
+            int_fmt,
+            kind,
+            buf: buf.map( to_box_str),
+            protocol: proto,
+        }
     }
 
-    pub fn new_flags(intfmt: IntFmt, vals: Vec<u64>, bitmask: bool) -> Self {
-        todo!()
+    pub fn new_flags(int_fmt: IntFmt, vals: Vec<u64>, bitmask: bool) -> Self {
+        TypeKind::Flags {
+            int_fmt,
+            vals: vals.into_boxed_slice(),
+            bitmask,
+        }
     }
 
     pub fn void() -> Self {
@@ -352,17 +386,21 @@ pub struct ResDesc {
 
 impl ResDesc {
     pub fn new(name: &str, kinds: Vec<&str>, vals: Vec<u64>) -> Self {
-        todo!()
+        ResDesc{
+            name: to_box_str(name),
+            kinds: Vec::into_boxed_slice(kinds.iter().map(to_box_str).collect()),
+            vals: vals.into_boxed_slice()
+        }
     }
 }
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
 
 pub struct IntFmt {
-    fmt: BinFmt,
-    bitfield_off: u64,
-    bitfield_len: u64,
-    bitfield_unit: u64,
-    bitfield_unit_off: u64,
+    pub fmt: BinFmt,
+    pub bitfield_off: u64,
+    pub bitfield_len: u64,
+    pub bitfield_unit: u64,
+    pub bitfield_unit_off: u64,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
@@ -376,16 +414,30 @@ pub enum BufferKind {
     BlobRand,
     BlobRange(u64, u64),
     String { vals: Box<[Box<[u8]>]>, noz: bool },
-    Filename { vals: Box<Box<str>>, noz: bool },
+    Filename { vals: Box<[Box<str>]>, noz: bool },
     Text(TextKind),
 }
 
 impl BufferKind {
     pub fn new_str(vals: Vec<&[u8]>, noz: bool) -> Self {
-        todo!()
+        let vals = vals
+            .iter()
+            .map(|&v| Vec::into_boxed_slice(Vec::from(v)))
+            .collect::<Vec<_>>();
+        BufferKind::String {
+            vals: vals.into_boxed_slice(),
+            noz,
+        }
     }
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
-        todo!()
+        let vals = vals
+            .iter()
+            .map(to_box_str)
+            .collect::<Vec<_>>();
+        BufferKind::Filename {
+            vals: vals.into_boxed_slice(),
+            noz,
+        }
     }
 }
 
