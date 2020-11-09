@@ -70,5 +70,6 @@ use hlang::ast::{Syscall, Type};
 use std::rc::Rc;
 
 pub fn new() -> (Vec<Syscall>, Vec<Rc<Type>>) {
+    let _re = syscalls::REVISION;
     syscalls::syscalls()
 }
