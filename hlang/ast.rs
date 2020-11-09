@@ -69,7 +69,7 @@ fn to_box_str<T: AsRef<str>>(s: T) -> Box<str> {
 impl fmt::Display for Syscall {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let attr = format!("{}", self.attr);
-        if !attr.is_empty(){
+        if !attr.is_empty() {
             writeln!(f, "{}", attr)?;
         }
         write!(f, "fn {}(", self.call_name)?;
@@ -93,6 +93,16 @@ pub struct Param {
     /// Typeid of Field.
     pub ty: Rc<Type>,
     pub dir: Option<Dir>,
+}
+
+impl Param {
+    pub fn new(name: &str, ty: Rc<Type>, dir: Option<Dir>) -> Self {
+        Self {
+            name: to_box_str(name),
+            ty,
+            dir,
+        }
+    }
 }
 
 impl fmt::Display for Param {
@@ -184,12 +194,12 @@ impl fmt::Display for SyscallAttr {
         if self.prog_tmout != 0 {
             buf.push_str(&format!("prog_tmout={},", self.prog_tmout));
         }
-        if !buf.is_empty(){
-            if buf.ends_with(','){
+        if !buf.is_empty() {
+            if buf.ends_with(',') {
                 buf.pop();
             }
             write!(f, "#[{}]", buf)
-        }else{
+        } else {
             Ok(())
         }
     }
@@ -352,7 +362,7 @@ impl TypeKind {
         TypeKind::Csum {
             int_fmt,
             kind,
-            buf: buf.map( to_box_str),
+            buf: buf.map(to_box_str),
             protocol: proto,
         }
     }
@@ -386,10 +396,10 @@ pub struct ResDesc {
 
 impl ResDesc {
     pub fn new(name: &str, kinds: Vec<&str>, vals: Vec<u64>) -> Self {
-        ResDesc{
+        ResDesc {
             name: to_box_str(name),
             kinds: Vec::into_boxed_slice(kinds.iter().map(to_box_str).collect()),
-            vals: vals.into_boxed_slice()
+            vals: vals.into_boxed_slice(),
         }
     }
 }
@@ -430,10 +440,7 @@ impl BufferKind {
         }
     }
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
-        let vals = vals
-            .iter()
-            .map(to_box_str)
-            .collect::<Vec<_>>();
+        let vals = vals.iter().map(to_box_str).collect::<Vec<_>>();
         BufferKind::Filename {
             vals: vals.into_boxed_slice(),
             noz,
