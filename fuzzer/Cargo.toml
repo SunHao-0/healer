@@ -12,7 +12,7 @@ path = "lib.rs"
 
 [[bin]]
 name = "hl_fuzzer"
-path = "fuzzer.rs"
+path = "main.rs"
 
 [features]
 default = ["amd64-linux"]
@@ -35,3 +35,4 @@ amd64-windows = []
 
 [dependencies]
 hlang = {version = "0.0.0", path = "../hlang"}
+rustc-hash = "1.1.0"

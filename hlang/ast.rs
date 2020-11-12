@@ -457,3 +457,26 @@ pub enum TextKind {
     X86bit64,
     Arm64,
 }
+
+pub struct Prog(pub Vec<Call>);
+
+pub struct Call {
+    pub meta: Rc<Syscall>,
+    pub args: Vec<Value>,
+    pub ret: Value,
+}
+
+pub struct Value {
+    pub dir: Dir,
+    pub ty: Rc<Type>,
+    pub kind: ValueKind,
+}
+
+pub enum ValueKind {
+    Scalar(u64),
+    Ptr { addr: u64, pointee: Box<Value> },
+    Vma { addr: u64, size: u64 },
+    Bytes(Box<[u8]>),
+    Group(Vec<Box<Value>>),
+    Ref,
+}
