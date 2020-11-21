@@ -1,19 +1,20 @@
 //! Abstract representation or AST of system call model.
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 /// System call id.
 pub type SId = usize;
 
 /// Information related to particular system call.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Syscall {
     /// Index of system call, diffierent from nr.
     pub id: SId,
     /// Call number, set to 0 for system that doesn't use nr.
     pub nr: u64,
     /// System call name.
-    // TODO This could be optimized. Not every syscall need store the whole name.
     pub name: Box<str>,
     /// Name of specialized system call.
     pub call_name: Box<str>,
@@ -25,15 +26,12 @@ pub struct Syscall {
     pub ret: Option<Rc<Type>>,
     /// Attributes of system call.
     pub attr: SyscallAttr,
-    // /// Input result parameters.
-    // in_res: FxHashSet<Box<Type>>,
-    // /// Output result parameters.
-    // out_res: FxHashSet<TypeId>,
-    // /// Name to param map.
-    // param_map: FxHashMap<Box<str>, usize>,
-    // /// Hash of current entry, decided by nr and sp_name.
-    // /// Must be inited properly.
-    // hash: u32,
+    /// Resources consumed by current system call.
+    /// Key is resourse type, value is count of that kind of resource .
+    pub input_res: FxHashMap<Rc<Type>, usize>,
+    /// Resource produced by current system call.
+    /// Key is resourse type, value if count.
+    pub output_res: FxHashMap<Rc<Type>, usize>,
 }
 
 impl Syscall {
@@ -57,6 +55,8 @@ impl Syscall {
             name: to_box_str(name),
             call_name: to_box_str(call_name),
             params: Vec::into_boxed_slice(params),
+            input_res: FxHashMap::default(),
+            output_res: FxHashMap::default(),
         }
     }
 }
@@ -86,7 +86,22 @@ impl fmt::Display for Syscall {
         Ok(())
     }
 }
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+
+impl PartialEq for Syscall {
+    fn eq(&self, other: &Syscall) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Syscall {}
+
+impl Hash for Syscall {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.id)
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Param {
     /// Name of Field.
     pub name: Box<str>,
@@ -207,15 +222,15 @@ impl fmt::Display for SyscallAttr {
 
 pub type TypeId = usize;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Type {
-    id: TypeId,
-    name: Box<str>,
-    sz: usize,
-    align: usize,
-    optional: bool,
-    varlen: bool,
-    kind: TypeKind,
+    pub id: TypeId,
+    pub name: Box<str>,
+    pub sz: usize,
+    pub align: usize,
+    pub optional: bool,
+    pub varlen: bool,
+    pub kind: TypeKind,
 }
 
 impl Type {
@@ -238,6 +253,50 @@ impl Type {
             name: to_box_str(name),
         }
     }
+
+    pub fn is_res_kind(&self) -> bool {
+        matches!(&self.kind, TypeKind::Res { .. })
+    }
+
+    pub fn res_desc(&self) -> Option<&ResDesc> {
+        match &self.kind {
+            TypeKind::Res { desc, .. } => Some(desc),
+            _ => None,
+        }
+    }
+
+    pub fn res_desc_mut(&mut self) -> Option<&mut ResDesc> {
+        match &mut self.kind {
+            TypeKind::Res { desc, .. } => Some(desc),
+            _ => None,
+        }
+    }
+}
+
+impl PartialOrd for Type {
+    fn partial_cmp(&self, other: &Type) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl Ord for Type {
+    fn cmp(&self, other: &Type) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Type) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<T: Hasher>(&self, h: &mut T) {
+        h.write_usize(self.id);
+    }
 }
 
 impl fmt::Display for Type {
@@ -246,13 +305,29 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum TypeRef {
     Id(TypeId),
     Ref(Rc<Type>),
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+impl TypeRef {
+    pub fn as_id(&self) -> Option<TypeId> {
+        match self {
+            Self::Id(tid) => Some(*tid),
+            Self::Ref(_) => None,
+        }
+    }
+
+    pub fn as_ref(&self) -> Option<&Rc<Type>> {
+        match &self {
+            Self::Id(_) => None,
+            Self::Ref(ty) => Some(ty),
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum TypeKind {
     Res {
         fmt: BinFmt,
@@ -315,7 +390,7 @@ pub enum TypeKind {
     },
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Field {
     /// Name of Field.
     pub name: Box<str>,
@@ -382,16 +457,20 @@ impl TypeKind {
         }
     }
 }
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct ResDesc {
     /// Name of resource.
-    name: Box<str>,
+    pub name: Box<str>,
     /// Subkind of these kind resource.
-    kinds: Box<[Box<str>]>,
+    pub kinds: Box<[Box<str>]>,
     /// Special value for current resource.
-    vals: Box<[u64]>,
-    // /// Possible constructor
-    // ctors: Box<[(SyscallId, bool)]>,
+    pub vals: Box<[u64]>,
+    /// Underlying type, None value for default u64.
+    pub ty: Option<Rc<Type>>,
+    /// Possible constructor
+    pub ctors: FxHashSet<Rc<Syscall>>,
+    /// Possible consumer
+    pub consumers: FxHashSet<Rc<Syscall>>,
 }
 
 impl ResDesc {
@@ -400,6 +479,9 @@ impl ResDesc {
             name: to_box_str(name),
             kinds: Vec::into_boxed_slice(kinds.iter().map(to_box_str).collect()),
             vals: vals.into_boxed_slice(),
+            ty: None,
+            ctors: FxHashSet::default(),
+            consumers: FxHashSet::default(),
         }
     }
 }
@@ -477,6 +559,6 @@ pub enum ValueKind {
     Ptr { addr: u64, pointee: Box<Value> },
     Vma { addr: u64, size: u64 },
     Bytes(Box<[u8]>),
-    Group(Vec<Box<Value>>),
+    Group(Vec<Value>),
     Ref,
 }

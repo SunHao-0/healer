@@ -1,8 +1,7 @@
-use std::sync::{Arc, Mutex};
-use rustc_hash::{FxHashMap};
 use hlang::ast::Syscall;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
-
+use std::sync::{Arc, Mutex};
 
 pub struct GlobalState {
     branches: (),
