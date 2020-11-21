@@ -72,7 +72,7 @@ use hlang::ast::{Call, Syscall, Type};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 
-/// A test target
+/// Target maintain all information related to current test target.
 pub struct Target {
     pub os: Box<str>,
     pub arch: Box<str>,
@@ -85,13 +85,14 @@ pub struct Target {
 
     pub syscalls: Vec<Rc<Syscall>>,
     pub tys: Vec<Rc<Type>>,
+    // resource type is special, we maintain a dependent vec. 
     pub res: Vec<Rc<Type>>,
 
+    // Maybe move this part to analysis part.
+    // Add more information there.
     pub gen_res_calls: FxHashMap<Box<str>, Box<[Rc<Syscall>]>>,
     pub consume_res_call: FxHashMap<Box<str>, Box<[Rc<Syscall>]>>,
     pub compatible_res: FxHashMap<Box<str>, Box<[Box<str>]>>,
-    pub res_fuzz_count: FxHashMap<Box<str>, u64>,
-    pub call_fuzz_count: FxHashMap<Rc<Syscall>, u64>,
 
     pub os_specific_operation: Option<Box<dyn OsSpecificOperation>>,
     pub special_types: FxHashMap<Box<str>, ()>,

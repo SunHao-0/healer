@@ -1,4 +1,8 @@
 use std::sync::{Arc, Mutex};
+use rustc_hash::{FxHashMap};
+use hlang::ast::Syscall;
+use std::rc::Rc;
+
 
 pub struct GlobalState {
     branches: (),
@@ -7,8 +11,10 @@ pub struct GlobalState {
 }
 
 pub struct LocalState {
-    branches: (),
-    cover: (),
+    pub branches: (),
+    pub cover: (),
+    pub res_fuzz_count: FxHashMap<Box<str>, u64>,
+    pub call_fuzz_count: FxHashMap<Rc<Syscall>, u64>,
 }
 
 pub struct FuzzInstance {
