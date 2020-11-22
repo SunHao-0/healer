@@ -1,228 +1,13 @@
-//! Abstract representation or AST of system call model.
-use rustc_hash::{FxHashMap, FxHashSet};
+//! Abstract representation or AST type information.
+use super::{to_boxed_str, Dir, Syscall};
+use rustc_hash::FxHashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-/// System call id.
-pub type SId = usize;
-
-/// Information related to particular system call.
-#[derive(Debug, Clone)]
-pub struct Syscall {
-    /// Index of system call, diffierent from nr.
-    pub id: SId,
-    /// Call number, set to 0 for system that doesn't use nr.
-    pub nr: u64,
-    /// System call name.
-    pub name: Box<str>,
-    /// Name of specialized system call.
-    pub call_name: Box<str>,
-    /// Syzkaller: Number of trailing args that should be zero-filled.
-    pub miss_args: u64,
-    /// Parameters of calls.
-    pub params: Box<[Param]>,
-    /// Return type of system call: a ref to res type or None.
-    pub ret: Option<Rc<Type>>,
-    /// Attributes of system call.
-    pub attr: SyscallAttr,
-    /// Resources consumed by current system call.
-    /// Key is resourse type, value is count of that kind of resource .
-    pub input_res: FxHashMap<Rc<Type>, usize>,
-    /// Resource produced by current system call.
-    /// Key is resourse type, value if count.
-    pub output_res: FxHashMap<Rc<Type>, usize>,
-}
-
-impl Syscall {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: SId,
-        nr: u64,
-        name: &str,
-        call_name: &str,
-        miss_args: u64,
-        params: Vec<Param>,
-        ret: Option<Rc<Type>>,
-        attr: SyscallAttr,
-    ) -> Self {
-        Syscall {
-            id,
-            nr,
-            miss_args,
-            attr,
-            ret,
-            name: to_box_str(name),
-            call_name: to_box_str(call_name),
-            params: Vec::into_boxed_slice(params),
-            input_res: FxHashMap::default(),
-            output_res: FxHashMap::default(),
-        }
-    }
-}
-
-fn to_box_str<T: AsRef<str>>(s: T) -> Box<str> {
-    let t = s.as_ref();
-    String::into_boxed_str(t.to_string())
-}
-
-impl fmt::Display for Syscall {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let attr = format!("{}", self.attr);
-        if !attr.is_empty() {
-            writeln!(f, "{}", attr)?;
-        }
-        write!(f, "fn {}(", self.call_name)?;
-        for (i, p) in self.params.iter().enumerate() {
-            write!(f, "{}", p)?;
-            if i != self.params.len() - 1 {
-                write!(f, ",")?;
-            }
-        }
-        write!(f, ")")?;
-        if let Some(ref ret) = self.ret {
-            write!(f, " -> {}", ret)?;
-        }
-        Ok(())
-    }
-}
-
-impl PartialEq for Syscall {
-    fn eq(&self, other: &Syscall) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for Syscall {}
-
-impl Hash for Syscall {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_usize(self.id)
-    }
-}
-
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct Param {
-    /// Name of Field.
-    pub name: Box<str>,
-    /// Typeid of Field.
-    pub ty: Rc<Type>,
-    pub dir: Option<Dir>,
-}
-
-impl Param {
-    pub fn new(name: &str, ty: Rc<Type>, dir: Option<Dir>) -> Self {
-        Self {
-            name: to_box_str(name),
-            ty,
-            dir,
-        }
-    }
-}
-
-impl fmt::Display for Param {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:", self.name)?;
-        if let Some(dir) = self.dir {
-            write!(f, " {}", dir)?;
-        }
-        write!(f, " {}", self.ty)
-    }
-}
-
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
-pub enum Dir {
-    In,
-    Out,
-    InOut,
-}
-
-impl fmt::Display for Dir {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let p = match self {
-            Self::In => "In",
-            Self::Out => "Out",
-            Self::InOut => "InOut",
-        };
-        write!(f, "{}", p)
-    }
-}
-
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
-pub enum BinFmt {
-    Native,
-    BigEndian,
-    StrDec,
-    StrHex,
-    StrOct,
-}
-
-impl fmt::Display for BinFmt {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let b = match self {
-            Self::Native => "Native",
-            Self::BigEndian => "BigEndian",
-            Self::StrDec => "StrDec",
-            Self::StrHex => "StrHex",
-            Self::StrOct => "StrOct",
-        };
-        write!(f, "{}", b)
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct SyscallAttr {
-    pub disable: bool,
-    pub timeout: u64,
-    pub prog_tmout: u64,
-    pub ignore_ret: bool,
-    pub brk_ret: bool,
-}
-
-impl Default for SyscallAttr {
-    fn default() -> Self {
-        Self {
-            disable: false,
-            timeout: 0,
-            prog_tmout: 0,
-            ignore_ret: true,
-            brk_ret: false,
-        }
-    }
-}
-
-impl fmt::Display for SyscallAttr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut buf = String::new();
-        if self.disable {
-            buf.push_str("disable,");
-        }
-        if self.ignore_ret {
-            buf.push_str("ignore_ret,");
-        }
-        if self.brk_ret {
-            buf.push_str("brk_ret,");
-        }
-        if self.timeout != 0 {
-            buf.push_str(&format!("timeout={},", self.timeout));
-        }
-        if self.prog_tmout != 0 {
-            buf.push_str(&format!("prog_tmout={},", self.prog_tmout));
-        }
-        if !buf.is_empty() {
-            if buf.ends_with(',') {
-                buf.pop();
-            }
-            write!(f, "#[{}]", buf)
-        } else {
-            Ok(())
-        }
-    }
-}
-
 pub type TypeId = usize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Type {
     pub id: TypeId,
     pub name: Box<str>,
@@ -250,7 +35,7 @@ impl Type {
             optional,
             varlen,
             kind,
-            name: to_box_str(name),
+            name: to_boxed_str(name),
         }
     }
 
@@ -273,6 +58,7 @@ impl Type {
     }
 }
 
+/// Order by TypeId
 impl PartialOrd for Type {
     fn partial_cmp(&self, other: &Type) -> Option<std::cmp::Ordering> {
         self.id.partial_cmp(&other.id)
@@ -285,6 +71,7 @@ impl Ord for Type {
     }
 }
 
+/// Compare by TypeId
 impl PartialEq for Type {
     fn eq(&self, other: &Type) -> bool {
         self.id == other.id
@@ -293,6 +80,7 @@ impl PartialEq for Type {
 
 impl Eq for Type {}
 
+/// Hash by TypeId
 impl Hash for Type {
     fn hash<T: Hasher>(&self, h: &mut T) {
         h.write_usize(self.id);
@@ -305,9 +93,13 @@ impl fmt::Display for Type {
     }
 }
 
+/// Ref of another type.
+/// Id ref is only used during constructing target.
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum TypeRef {
+    /// Temporary ref representation for convenience.
     Id(TypeId),
+    /// Share ref.
     Ref(Rc<Type>),
 }
 
@@ -327,17 +119,21 @@ impl TypeRef {
     }
 }
 
+/// Type kind.
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum TypeKind {
+    /// Resource kind.
     Res {
         fmt: BinFmt,
         desc: ResDesc,
     },
+    /// Const kind.
     Const {
         int_fmt: IntFmt,
         val: u64,
         pad: bool,
     },
+    /// Integer kind.
     Int {
         int_fmt: IntFmt,
         range: Option<(u64, u64)>,
@@ -396,6 +192,7 @@ pub struct Field {
     pub name: Box<str>,
     /// Typeid of Field.
     pub ty: TypeRef,
+    /// Direction of field.
     pub dir: Option<Dir>,
 }
 
@@ -406,7 +203,7 @@ impl TypeKind {
             subkind: if subkind.is_empty() {
                 None
             } else {
-                Some(to_box_str(subkind))
+                Some(to_boxed_str(subkind))
             },
         }
     }
@@ -424,7 +221,7 @@ impl TypeKind {
     }
 
     pub fn new_len(int_fmt: IntFmt, bit_sz: u64, offset: bool, path: Vec<&str>) -> Self {
-        let path = path.iter().map(to_box_str).collect::<Vec<_>>();
+        let path = path.iter().map(to_boxed_str).collect::<Vec<_>>();
         TypeKind::Len {
             int_fmt,
             bit_sz,
@@ -437,7 +234,7 @@ impl TypeKind {
         TypeKind::Csum {
             int_fmt,
             kind,
-            buf: buf.map(to_box_str),
+            buf: buf.map(to_boxed_str),
             protocol: proto,
         }
     }
@@ -457,6 +254,7 @@ impl TypeKind {
         }
     }
 }
+
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct ResDesc {
     /// Name of resource.
@@ -467,17 +265,17 @@ pub struct ResDesc {
     pub vals: Box<[u64]>,
     /// Underlying type, None value for default u64.
     pub ty: Option<Rc<Type>>,
-    /// Possible constructor
+    /// Possible constructors.
     pub ctors: FxHashSet<Rc<Syscall>>,
-    /// Possible consumer
+    /// Possible consumers.
     pub consumers: FxHashSet<Rc<Syscall>>,
 }
 
 impl ResDesc {
     pub fn new(name: &str, kinds: Vec<&str>, vals: Vec<u64>) -> Self {
         ResDesc {
-            name: to_box_str(name),
-            kinds: Vec::into_boxed_slice(kinds.iter().map(to_box_str).collect()),
+            name: to_boxed_str(name),
+            kinds: Vec::into_boxed_slice(kinds.iter().map(to_boxed_str).collect()),
             vals: vals.into_boxed_slice(),
             ty: None,
             ctors: FxHashSet::default(),
@@ -485,8 +283,32 @@ impl ResDesc {
         }
     }
 }
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
 
+/// Binary format.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
+pub enum BinFmt {
+    Native,
+    BigEndian,
+    StrDec,
+    StrHex,
+    StrOct,
+}
+
+impl fmt::Display for BinFmt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let b = match self {
+            Self::Native => "Native",
+            Self::BigEndian => "BigEndian",
+            Self::StrDec => "StrDec",
+            Self::StrHex => "StrHex",
+            Self::StrOct => "StrOct",
+        };
+        write!(f, "{}", b)
+    }
+}
+
+/// Integer format.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
 pub struct IntFmt {
     pub fmt: BinFmt,
     pub bitfield_off: u64,
@@ -522,7 +344,7 @@ impl BufferKind {
         }
     }
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
-        let vals = vals.iter().map(to_box_str).collect::<Vec<_>>();
+        let vals = vals.iter().map(to_boxed_str).collect::<Vec<_>>();
         BufferKind::Filename {
             vals: vals.into_boxed_slice(),
             noz,
@@ -538,27 +360,4 @@ pub enum TextKind {
     X86bit32,
     X86bit64,
     Arm64,
-}
-
-pub struct Prog(pub Vec<Call>);
-
-pub struct Call {
-    pub meta: Rc<Syscall>,
-    pub args: Vec<Value>,
-    pub ret: Value,
-}
-
-pub struct Value {
-    pub dir: Dir,
-    pub ty: Rc<Type>,
-    pub kind: ValueKind,
-}
-
-pub enum ValueKind {
-    Scalar(u64),
-    Ptr { addr: u64, pointee: Box<Value> },
-    Vma { addr: u64, size: u64 },
-    Bytes(Box<[u8]>),
-    Group(Vec<Value>),
-    Ref,
 }
