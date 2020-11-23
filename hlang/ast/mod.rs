@@ -136,7 +136,7 @@ impl fmt::Display for Param {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
 pub enum Dir {
     In,
     Out,
@@ -204,10 +204,24 @@ impl fmt::Display for SyscallAttr {
     }
 }
 
-pub struct Prog(pub Vec<Call>);
+pub struct Prog {
+    pub calls: Vec<Call>, // may be add other analysis data
+}
+
+impl Prog {
+    pub fn new(calls: Vec<Call>) -> Self {
+        Prog { calls }
+    }
+}
 
 pub struct Call {
     pub meta: Rc<Syscall>,
     pub args: Vec<Value>,
-    pub ret: Value,
+    pub ret: Option<Rc<ResValue>>,
+}
+
+impl Call {
+    pub fn new(meta: Rc<Syscall>, args: Vec<Value>, ret: Option<Rc<ResValue>>) -> Self {
+        Self { meta, args, ret }
+    }
 }
