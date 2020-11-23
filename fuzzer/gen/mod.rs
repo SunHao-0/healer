@@ -1,5 +1,5 @@
 /// resource oriented generation algorithm
-use crate::fuzzer::ValuePool;
+use crate::fuzz::ValuePool;
 use crate::target::Target;
 use hlang::ast::*;
 use rand::prelude::*;
