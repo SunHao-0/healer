@@ -35,4 +35,5 @@ amd64-windows = []
 
 [dependencies]
 hlang = {version = "0.0.0", path = "../hlang"}
-rustc-hash = "1.1.0"
+rustc-hash = "1.1"
+rand = "0.7"

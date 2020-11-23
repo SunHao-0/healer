@@ -115,10 +115,11 @@ impl Target {
             .collect::<FxHashSet<Rc<Type>>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let res_eq_class = Self::cal_res_eq_class(&res_tys);
+        let mut res_eq_class = Self::cal_res_eq_class(&res_tys);
         assert!(res_tys.iter().all(|ty| ty.is_res_kind()));
         Self::analyze_syscall_inout_res(&mut syscalls, &mut tys);
         Self::complete_res_ty_info(&mut res_tys, &syscalls);
+        Self::filter_unreachable_res(&mut res_tys, &mut res_eq_class);
 
         let os_specific_operation: Option<Box<dyn OsSpecificOperation>> = if os.as_ref().eq("linux")
         {
@@ -144,6 +145,31 @@ impl Target {
             special_types: FxHashMap::default(),
             aux_resources: FxHashSet::default(),
             special_ptr_val: None,
+        }
+    }
+
+    #[allow(clippy::collapsible_if)]
+    fn filter_unreachable_res(
+        res_tys: &mut Vec<Rc<Type>>,
+        res_eq_class: &mut FxHashMap<Rc<Type>, Rc<[Rc<Type>]>>,
+    ) {
+        let mut reachable_res = FxHashSet::default();
+        for (res, eq_res) in res_eq_class.iter() {
+            if !reachable_res.contains(res) {
+                if eq_res
+                    .iter()
+                    .any(|res| !res.res_desc().unwrap().ctors.is_empty())
+                {
+                    reachable_res.extend(eq_res.iter().cloned())
+                }
+            }
+        }
+
+        for i in 0..res_tys.len() {
+            if !reachable_res.contains(&res_tys[i]) {
+                res_eq_class.remove(&res_tys[i]);
+                res_tys.remove(i);
+            }
         }
     }
 

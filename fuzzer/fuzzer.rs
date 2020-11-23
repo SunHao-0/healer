@@ -1,5 +1,5 @@
-use hlang::ast::Syscall;
-use rustc_hash::FxHashMap;
+use hlang::ast::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -8,6 +8,8 @@ pub struct GlobalState {
     covers: (),
     corpus: (),
 }
+
+pub type ValuePool = FxHashMap<Rc<Type>, FxHashSet<Value>>;
 
 pub struct LocalState {
     pub branches: (),
