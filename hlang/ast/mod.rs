@@ -217,11 +217,11 @@ impl Prog {
 pub struct Call {
     pub meta: Rc<Syscall>,
     pub args: Vec<Value>,
-    pub ret: Option<Rc<ResValue>>,
+    pub ret: Option<Value>,
 }
 
 impl Call {
-    pub fn new(meta: Rc<Syscall>, args: Vec<Value>, ret: Option<Rc<ResValue>>) -> Self {
+    pub fn new(meta: Rc<Syscall>, args: Vec<Value>, ret: Option<Value>) -> Self {
         Self { meta, args, ret }
     }
 }

@@ -82,11 +82,11 @@ impl Value {
         }
     }
 
-    pub fn new_res(dir: Dir, ty: Rc<Type>, val: u64, id: usize) -> Self {
+    pub fn new_res(dir: Dir, ty: Rc<Type>, kind: Rc<ResValue>) -> Self {
         Self {
             dir,
             ty,
-            kind: ValueKind::Res(Rc::new(ResValue::new_res(val, id))),
+            kind: ValueKind::Res(kind),
         }
     }
 }
