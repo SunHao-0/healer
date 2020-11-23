@@ -6,7 +6,12 @@ use rand::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 
+// Syscall selection.
 mod select;
+// Argument value generation.
+mod arg;
+// Call generation.
+mod call;
 
 /// Gnerate test case based current value pool and test target.
 pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
@@ -32,11 +37,12 @@ struct GenContext<'a, 'b> {
 }
 
 fn gen_inner(ctx: &mut GenContext) -> Prog {
-    let calls: Vec<Call> = Vec::new();
+    let mut calls: Vec<Call> = Vec::new();
     while !should_stop(calls.len()) {
-        let next_sc = select::select_syscall(ctx);
+        let next_syscall = select::select_syscall(ctx);
+        calls.push(call::gen(ctx, next_syscall));
     }
-    todo!()
+    Prog::new(calls)
 }
 
 fn should_stop(len: usize) -> bool {
@@ -52,8 +58,4 @@ fn should_stop(len: usize) -> bool {
     } else {
         true
     }
-}
-
-fn gen_call(ctx: &mut GenContext, sc: Rc<Syscall>) -> Call {
-    todo!()
 }
