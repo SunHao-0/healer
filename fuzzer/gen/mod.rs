@@ -15,13 +15,7 @@ mod call;
 
 /// Gnerate test case based current value pool and test target.
 pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
-    let mut ctx = GenContext {
-        target,
-        generated_res: FxHashMap::default(),
-        generated_buf: FxHashMap::default(),
-        pool,
-        id_count: 0,
-    };
+    let mut ctx = GenContext::new(target, pool);
     gen_inner(&mut ctx)
 }
 
@@ -40,6 +34,16 @@ struct GenContext<'a, 'b> {
 }
 
 impl<'a, 'b> GenContext<'a, 'b> {
+    pub fn new(target: &'a Target, pool: &'b ValuePool) -> Self {
+        GenContext {
+            target,
+            generated_res: FxHashMap::default(),
+            generated_buf: FxHashMap::default(),
+            pool,
+            id_count: 0,
+        }
+    }
+
     pub fn next_id(&mut self) -> usize {
         let id = self.id_count;
         self.id_count += 1;

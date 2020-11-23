@@ -13,8 +13,8 @@ pub(super) fn select_syscall(ctx: &GenContext) -> Rc<Syscall> {
 }
 
 fn should_try_gen_res(ctx: &GenContext) -> bool {
-    // Since the length of a test case is [4, 16}, the number
-    // of generated resource should be [2, 6}
+    // Since the length of a test case is [4, 16), the number
+    // of generated resource should be [2, 6)
     const MIN_RES_NUMBER: usize = 2;
     const MAX_RES_NUMBER: usize = 6;
     let res_count = ctx.generated_res.len();
@@ -34,6 +34,18 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
 }
 
 fn select_syscall_rand(ctx: &GenContext) -> Rc<Syscall> {
+    // Try to select a consumer first.
+    if random::<f32>() < 0.9 {
+        if let Some(syscall) = ctx
+            .generated_res
+            .iter()
+            .flat_map(|(res_ty, _)| res_ty.res_desc().unwrap().consumers.iter())
+            .choose(&mut thread_rng())
+            .map(Rc::clone)
+        {
+            return syscall;
+        }
+    }
     ctx.target
         .syscalls
         .iter()
