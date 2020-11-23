@@ -119,6 +119,16 @@ pub enum ValueKind {
     Res(Rc<ResValue>),
 }
 
+impl ValueKind {
+    pub fn get_scalar_val(&self) -> Option<u64> {
+        if let ValueKind::Scalar(val) = self {
+            Some(*val)
+        } else {
+            None
+        }
+    }
+}
+
 /// Value of resource type.
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct ResValue {
