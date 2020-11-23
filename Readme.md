@@ -1,5 +1,7 @@
 **NOTE: Healer is still in its early stages and is now experiencing active refactoring.** 
 
+**SEE REFACTOR BRANCH**
+
 # Healer
 [![Rustc Version 1.39+](https://img.shields.io/badge/rustc-1.39%2B-green)](https://blog.rust-lang.org/2019/11/07/Rust-1.39.0.html)
  [![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg?branch=master)](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) 
