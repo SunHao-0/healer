@@ -34,7 +34,7 @@ impl Value {
             ty,
             kind: ValueKind::Ptr {
                 addr,
-                pointee: pointee.map(|x| Box::new(x)),
+                pointee: pointee.map(Box::new),
             },
         }
     }
@@ -228,16 +228,16 @@ impl PartialEq for ResValueKind {
     fn eq(&self, other: &ResValueKind) -> bool {
         if let Some(id0) = self.get_id() {
             if let Some(id1) = other.get_id() {
-                return id0 == id1;
+                id0 == id1
             } else {
-                return false;
+                false
             }
         } else {
             let src0 = self.get_src().unwrap();
             if let Some(src1) = other.get_src() {
-                return src0.eq(src1);
+                src0.eq(src1)
             } else {
-                return false;
+                false
             }
         }
     }
