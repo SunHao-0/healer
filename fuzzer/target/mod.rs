@@ -206,7 +206,7 @@ impl Target {
             Dir::In => add_counter(&mut sc.input_res, res_ty),
             Dir::Out => add_counter(&mut sc.output_res, res_ty),
             Dir::InOut => {
-                add_counter(&mut sc.output_res, res_ty.clone());
+                add_counter(&mut sc.output_res, Rc::clone(&res_ty));
                 add_counter(&mut sc.input_res, res_ty);
             }
         }
@@ -228,7 +228,7 @@ impl Target {
             assert!(ctx.insert(ty.id));
         }
         match &(*ty).kind {
-            Res { .. } => vec![(ty.clone(), Dir::In)],
+            Res { .. } => vec![(Rc::clone(ty), Dir::In)],
             Array { elem, .. } => Self::extract_res_ty_inner(elem.as_ref().unwrap(), ctx),
             Ptr { elem, dir } => Self::extract_res_ty_inner(elem.as_ref().unwrap(), ctx)
                 .into_iter()
@@ -256,10 +256,14 @@ impl Target {
             let res_ty = Self::rc_to_mut(res_ty);
             for sc in syscalls {
                 if sc.output_res.contains_key(res_ty) {
-                    res_ty.res_desc_mut().unwrap().ctors.insert(sc.clone());
+                    res_ty.res_desc_mut().unwrap().ctors.insert(Rc::clone(sc));
                 }
                 if sc.input_res.contains_key(res_ty) {
-                    res_ty.res_desc_mut().unwrap().consumers.insert(sc.clone());
+                    res_ty
+                        .res_desc_mut()
+                        .unwrap()
+                        .consumers
+                        .insert(Rc::clone(sc));
                 }
             }
         }
@@ -278,7 +282,7 @@ impl Target {
                 }
                 Struct { fields, .. } | Union { fields, .. } => {
                     for field in fields.iter_mut() {
-                        field.ty = TypeRef::Ref(tys[field.ty.as_id().unwrap()].clone());
+                        field.ty = TypeRef::Ref(Rc::clone(&tys[field.ty.as_id().unwrap()]));
                     }
                 }
                 // just pass other ty kinds
