@@ -89,6 +89,14 @@ impl Value {
             kind: ValueKind::Res(kind),
         }
     }
+
+    pub fn new_res_null(dir: Dir, ty: Rc<Type>, val: u64) -> Self {
+        Self {
+            dir,
+            ty,
+            kind: ValueKind::Res(Rc::new(ResValue::new_null(val))),
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -165,6 +173,15 @@ impl ResValue {
         }
     }
 
+    pub fn new_null(val: u64) -> Self {
+        Self {
+            val,
+            op_add: 0,
+            op_div: 0,
+            kind: ResValueKind::Null,
+        }
+    }
+
     pub fn inc_ref_count_uncheck(&self) {
         self.kind.inc_ref_count_uncheck();
     }
@@ -184,6 +201,8 @@ pub enum ResValueKind {
     },
     /// Current syscall ref some other resources outputed by previous calls.
     Ref { src: Rc<ResValue> },
+    /// Do not own or ref any resource, only contains special value.
+    Null,
 }
 
 impl ResValueKind {
@@ -238,6 +257,9 @@ impl Hash for ResValueKind {
                 h.write_usize(0x8855738149);
                 src.hash(h);
             }
+            ResValueKind::Null => {
+                h.write_usize(0x47022874);
+            }
         }
     }
 }
@@ -250,13 +272,14 @@ impl PartialEq for ResValueKind {
             } else {
                 false
             }
-        } else {
-            let src0 = self.get_src().unwrap();
+        } else if let Some(src0) = self.get_src() {
             if let Some(src1) = other.get_src() {
                 src0.eq(src1)
             } else {
                 false
             }
+        } else {
+            true
         }
     }
 }
