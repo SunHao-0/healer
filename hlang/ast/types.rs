@@ -336,7 +336,7 @@ pub enum BufferKind {
     BlobRand,
     BlobRange(u64, u64),
     String { vals: Box<[Box<[u8]>]>, noz: bool },
-    Filename { vals: Box<[Box<str>]>, noz: bool },
+    Filename { vals: Box<[Box<[u8]>]>, noz: bool },
     Text(TextKind),
 }
 
@@ -352,7 +352,10 @@ impl BufferKind {
         }
     }
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
-        let vals = vals.iter().map(to_boxed_str).collect::<Vec<_>>();
+        let vals = vals
+            .iter()
+            .map(|s| Vec::from(s.as_bytes()).into_boxed_slice())
+            .collect::<Vec<_>>();
         BufferKind::Filename {
             vals: vals.into_boxed_slice(),
             noz,
