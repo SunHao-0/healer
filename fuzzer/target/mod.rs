@@ -164,13 +164,8 @@ impl Target {
                 }
             }
         }
-
-        for i in 0..res_tys.len() {
-            if !reachable_res.contains(&res_tys[i]) {
-                res_eq_class.remove(&res_tys[i]);
-                res_tys.remove(i);
-            }
-        }
+        res_eq_class.retain(|k, _| reachable_res.contains(k));
+        res_tys.retain(|r| reachable_res.contains(r));
     }
 
     /// Analyze input/output resources of eacho system call.

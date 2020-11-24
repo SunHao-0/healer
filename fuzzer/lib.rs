@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+extern crate bv;
 
 pub mod exec;
 pub mod fuzz;

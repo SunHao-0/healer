@@ -1,3 +1,4 @@
+use self::param::alloc::{MemAlloc, VmaAlloc};
 /// resource oriented generation algorithm
 use crate::fuzz::ValuePool;
 use crate::target::Target;
@@ -31,6 +32,8 @@ struct GenContext<'a, 'b> {
     pool: &'b ValuePool,
     // id for resource value count.
     id_count: usize,
+    mem_alloc: MemAlloc,
+    vma_alloc: VmaAlloc,
 }
 
 impl<'a, 'b> GenContext<'a, 'b> {
@@ -41,6 +44,8 @@ impl<'a, 'b> GenContext<'a, 'b> {
             generated_str: FxHashMap::default(),
             pool,
             id_count: 0,
+            mem_alloc: MemAlloc::with_mem_size(target.page_sz * target.page_num),
+            vma_alloc: VmaAlloc::with_page_num(target.page_num),
         }
     }
 

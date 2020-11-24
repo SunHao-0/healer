@@ -1,3 +1,4 @@
+pub(super) mod alloc;
 mod buffer;
 mod scalar;
 
@@ -14,17 +15,90 @@ pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
         }
         Buffer { .. } => buffer::gen(ctx, ty, dir),
         Res { .. } => gen_res(ctx, ty, dir),
-        Ptr { dir, elem, .. } => todo!(),
-        Vma { begin, end } => todo!(),
-        Array { range, elem } => todo!(),
-        Struct { fields, .. } => todo!(),
-        Union { fields } => todo!(),
+        Ptr { .. } => gen_ptr(ctx, ty, dir),
+        Vma { .. } => gen_vma(ctx, ty, dir),
+        Array { .. } => gen_array(ctx, ty, dir),
+        Struct { .. } => gen_struct(ctx, ty, dir),
+        Union { fields } => gen_union(ctx, ty, dir),
     }
 }
 
 /// Calculate length type of a call.
 pub(super) fn calculate_length_params(call: &mut Call) {
     todo!()
+}
+
+fn gen_union(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    let (idx, field) = ty
+        .get_fields()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .choose(&mut thread_rng())
+        .unwrap();
+    let field_val = gen(
+        ctx,
+        Rc::clone(field.ty.as_ref().unwrap()),
+        field.dir.unwrap_or(dir),
+    );
+    Value::new_union(dir, ty, idx, field_val)
+}
+
+fn gen_struct(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    let fields = ty.get_fields().unwrap();
+    let mut vals = Vec::new();
+    for field in fields.iter() {
+        let dir = field.dir.unwrap_or(dir);
+        vals.push(gen(ctx, Rc::clone(field.ty.as_ref().unwrap()), dir));
+    }
+    Value::new_group(dir, ty, vals)
+}
+
+fn gen_array(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    let (elem_ty, range) = ty.get_array_info().unwrap();
+    let len = rand_array_len(range);
+    let vals = (0..len)
+        .map(|_| gen(ctx, Rc::clone(elem_ty), dir))
+        .collect();
+    Value::new_group(dir, ty, vals)
+}
+
+fn rand_array_len(range: Option<(u64, u64)>) -> u64 {
+    let mut rng = thread_rng();
+    if let Some((mut min, mut max)) = range {
+        if min > max {
+            std::mem::swap(&mut min, &mut max);
+        }
+        if min == max {
+            max += 1;
+        }
+        rng.gen_range(min, max)
+    } else {
+        let mut rng = thread_rng();
+        let (min, max) = (rng.gen_range(2, 8), rng.gen_range(8, 16));
+        rng.gen_range(min, max)
+    }
+}
+
+fn gen_vma(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    let page_num = rand_vma_num(ctx);
+    Value::new_vma(dir, ty, ctx.vma_alloc.alloc(page_num), page_num)
+}
+
+fn rand_vma_num(ctx: &GenContext) -> u64 {
+    let mut rng = thread_rng();
+    if rng.gen::<f32>() < 0.85 {
+        rng.gen_range(1, 9)
+    } else {
+        rng.gen_range(1, ctx.target.page_num as u64 / 4)
+    }
+}
+
+fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    let (elem_ty, elem_dir) = ty.get_ptr_info().unwrap();
+    let elem_val = gen(ctx, Rc::clone(elem_ty), elem_dir);
+    let addr = ctx.mem_alloc.alloc(elem_val.size(), elem_ty.align);
+    Value::new_ptr(dir, ty, addr, Some(elem_val))
 }
 
 fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {

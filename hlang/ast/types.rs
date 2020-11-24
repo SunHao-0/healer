@@ -11,8 +11,8 @@ pub type TypeId = usize;
 pub struct Type {
     pub id: TypeId,
     pub name: Box<str>,
-    pub sz: usize,
-    pub align: usize,
+    pub sz: u64,
+    pub align: u64,
     pub optional: bool,
     pub varlen: bool,
     pub kind: TypeKind,
@@ -22,8 +22,8 @@ impl Type {
     pub fn new(
         id: TypeId,
         name: &str,
-        sz: usize,
-        align: usize,
+        sz: u64,
+        align: u64,
         optional: bool,
         varlen: bool,
         kind: TypeKind,
@@ -58,10 +58,30 @@ impl Type {
     }
 
     pub fn get_buffer_kind(&self) -> Option<&BufferKind> {
-        if let TypeKind::Buffer { kind, .. } = &self.kind {
-            Some(kind)
-        } else {
-            None
+        match &self.kind {
+            TypeKind::Buffer { kind, .. } => Some(kind),
+            _ => None,
+        }
+    }
+
+    pub fn get_ptr_info(&self) -> Option<(&Rc<Type>, Dir)> {
+        match &self.kind {
+            TypeKind::Ptr { elem, dir } => Some((elem.as_ref().unwrap(), *dir)),
+            _ => None,
+        }
+    }
+
+    pub fn get_array_info(&self) -> Option<(&Rc<Type>, Option<(u64, u64)>)> {
+        match &self.kind {
+            TypeKind::Array { elem, range } => Some((elem.as_ref().unwrap(), *range)),
+            _ => None,
+        }
+    }
+
+    pub fn get_fields(&self) -> Option<&[Field]> {
+        match &self.kind {
+            TypeKind::Struct { fields, .. } | TypeKind::Union { fields } => Some(fields),
+            _ => None,
         }
     }
 }

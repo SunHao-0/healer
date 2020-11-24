@@ -208,6 +208,19 @@ pub struct Prog {
     pub calls: Vec<Call>, // may be add other analysis data
 }
 
+impl fmt::Display for Prog {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (i, call) in self.calls.iter().enumerate() {
+            if i != self.calls.len() - 1 {
+                writeln!(f, "{}", call)?
+            } else {
+                write!(f, "{}", call)?
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Prog {
     pub fn new(calls: Vec<Call>) -> Self {
         Prog { calls }
@@ -223,5 +236,22 @@ pub struct Call {
 impl Call {
     pub fn new(meta: Rc<Syscall>, args: Vec<Value>, ret: Option<Value>) -> Self {
         Self { meta, args, ret }
+    }
+}
+
+impl fmt::Display for Call {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ret) = &self.ret {
+            let id = ret.kind.get_res_id().unwrap();
+            write!(f, "r{} = ", id)?;
+        }
+        write!(f, "{}(", self.meta.name)?;
+        for (i, arg) in self.args.iter().enumerate() {
+            write!(f, "{}", arg.ty.name)?;
+            if i != self.args.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, ")")
     }
 }

@@ -97,6 +97,50 @@ impl Value {
             kind: ValueKind::Res(Rc::new(ResValue::new_null(val))),
         }
     }
+
+    pub fn size(&self) -> u64 {
+        use super::types::TypeKind;
+        match &self.kind {
+            ValueKind::Scalar { .. }
+            | ValueKind::Ptr { .. }
+            | ValueKind::Vma { .. }
+            | ValueKind::Res(_) => self.ty.sz,
+            ValueKind::Bytes(bytes) => bytes.len() as u64,
+            ValueKind::Group(vals) => {
+                if !self.ty.varlen {
+                    self.ty.sz
+                } else {
+                    match &self.ty.kind {
+                        TypeKind::Struct { align_attr, .. } => {
+                            let mut sz = 0;
+                            for val in vals {
+                                sz += val.size();
+                            }
+                            if *align_attr != 0 && sz % *align_attr != 0 {
+                                sz += *align_attr - sz % *align_attr;
+                            }
+                            sz
+                        }
+                        TypeKind::Array { .. } => {
+                            let mut sz = 0;
+                            for val in vals {
+                                sz += val.size();
+                            }
+                            sz
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            ValueKind::Union { val, .. } => {
+                if !self.ty.varlen {
+                    self.ty.sz
+                } else {
+                    val.size()
+                }
+            }
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -143,6 +187,13 @@ impl ValueKind {
             None
         }
     }
+
+    pub fn get_res_id(&self) -> Option<usize> {
+        match &self {
+            ValueKind::Res(e) => e.get_res_id(),
+            _ => None,
+        }
+    }
 }
 
 /// Value of resource type.
@@ -184,6 +235,14 @@ impl ResValue {
 
     pub fn inc_ref_count_uncheck(&self) {
         self.kind.inc_ref_count_uncheck();
+    }
+
+    pub fn get_res_id(&self) -> Option<usize> {
+        if let ResValueKind::Own { id, .. } = &self.kind {
+            Some(*id)
+        } else {
+            None
+        }
     }
 }
 
