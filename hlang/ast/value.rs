@@ -47,11 +47,11 @@ impl Value {
         }
     }
 
-    pub fn new_bytes(dir: Dir, ty: Rc<Type>, vals: Vec<u8>) -> Self {
+    pub fn new_bytes<T: Into<Box<[u8]>>>(dir: Dir, ty: Rc<Type>, vals: T) -> Self {
         Self {
             dir,
             ty,
-            kind: ValueKind::Bytes(vals.into_boxed_slice()),
+            kind: ValueKind::Bytes(vals.into()),
         }
     }
 
