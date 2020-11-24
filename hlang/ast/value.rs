@@ -127,6 +127,14 @@ impl ValueKind {
             None
         }
     }
+
+    pub fn get_bytes_val(&self) -> Option<&[u8]> {
+        if let ValueKind::Bytes(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 /// Value of resource type.

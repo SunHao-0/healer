@@ -95,7 +95,7 @@ pub fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u
     }
 }
 
-fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
+pub fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
     if min >= max {
         (u64::MIN, u64::MAX)
     } else {

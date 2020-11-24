@@ -56,6 +56,14 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn get_buffer_kind(&self) -> Option<&BufferKind> {
+        if let TypeKind::Buffer { kind, .. } = &self.kind {
+            Some(kind)
+        } else {
+            None
+        }
+    }
 }
 
 /// Order by TypeId

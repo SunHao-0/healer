@@ -27,7 +27,7 @@ type ResPool = FxHashMap<Rc<Type>, FxHashSet<Rc<ResValue>>>;
 struct GenContext<'a, 'b> {
     target: &'a Target,
     generated_res: ResPool,
-    generated_buf: FxHashMap<Rc<Type>, Value>,
+    generated_str: FxHashMap<Rc<Type>, FxHashSet<Box<str>>>,
     pool: &'b ValuePool,
     // id for resource value count.
     id_count: usize,
@@ -38,7 +38,7 @@ impl<'a, 'b> GenContext<'a, 'b> {
         GenContext {
             target,
             generated_res: FxHashMap::default(),
-            generated_buf: FxHashMap::default(),
+            generated_src: FxHashMap::default(),
             pool,
             id_count: 0,
         }
@@ -53,6 +53,11 @@ impl<'a, 'b> GenContext<'a, 'b> {
     pub fn add_res(&mut self, ty: Rc<Type>, res: Rc<ResValue>) -> bool {
         let entry = self.generated_res.entry(ty).or_default();
         entry.insert(res)
+    }
+
+    pub fn add_str(&mut self, ty: Rc<Type>, new_str: Box<str>) -> bool {
+        let entry = self.generated_str.entry(ty).or_default();
+        entry.insert(new_str)
     }
 }
 
