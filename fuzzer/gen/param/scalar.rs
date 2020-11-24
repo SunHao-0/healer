@@ -1,49 +1,5 @@
 use super::*;
-use hlang::ast::{Dir, Type, Value};
 use rustc_hash::FxHashSet;
-use std::iter::Iterator;
-use std::rc::Rc;
-
-pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
-    todo!()
-}
-
-/// Calculate length type of a call.
-pub(super) fn calculate_length_params(call: &mut Call) {
-    todo!()
-}
-
-fn gen_type(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
-    use hlang::ast::TypeKind::*;
-    match &(Rc::clone(&ty)).kind {
-        Csum { .. } | Len { .. } => Value::new_scalar(dir, ty, 0),
-        Const { val, .. } => Value::new_scalar(dir, ty, *val),
-        Int {
-            int_fmt,
-            range,
-            align,
-        } => {
-            let val = gen_integer(int_fmt.bitfield_len, *range, *align);
-            Value::new_scalar(dir, ty, val)
-        }
-        Proc { per_proc, .. } => Value::new_scalar(dir, ty, thread_rng().gen_range(0, per_proc)),
-        Flags { vals, bitmask, .. } => {
-            let val = gen_flag(ctx.pool.get(&ty), vals, *bitmask);
-            Value::new_scalar(dir, ty, val)
-        }
-        Res { desc, .. } => gen_res(ctx, ty, dir),
-        Ptr { dir, elem, .. } => todo!(),
-        Vma { begin, end } => todo!(),
-        Buffer { kind, .. } => todo!(),
-        Array { range, elem } => todo!(),
-        Struct { fields, .. } => todo!(),
-        Union { fields } => todo!(),
-    }
-}
-
-fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
-    todo!()
-}
 
 const MAGIC32: [u64; 24] = [
     0,             //
@@ -86,23 +42,35 @@ const MAGIC64: [u64; 24 * 24] = {
     magic
 };
 
+pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    use TypeKind::*;
+    let val = match &ty.kind {
+        Int {
+            int_fmt,
+            range,
+            align,
+        } => gen_integer(int_fmt.bitfield_len, *range, *align),
+        Flags { vals, bitmask, .. } => {
+            let pool = ctx.pool.get(&ty);
+            gen_flag(pool, vals, *bitmask)
+        }
+        Proc { per_proc, .. } => thread_rng().gen_range(0, *per_proc),
+        Csum { .. } | Len { .. } => 0, // can not calculate yet.
+        Const { val, .. } => *val,
+        _ => unreachable!(),
+    };
+    Value::new_scalar(dir, ty, val)
+}
+
 /// Generate a random integer value of 'bit' size, in range 'range', with alignment 'align'.
-fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u64 {
+pub fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u64 {
     if align == 0 {
         align = 1;
     }
     if bit == 0 || bit > 64 {
         bit = 64;
     }
-    let (min, max) = range
-        .map(|(min, max)| {
-            if min >= max {
-                (u64::MIN, u64::MAX)
-            } else {
-                (min, max)
-            }
-        })
-        .unwrap_or((u64::MIN, u64::MAX));
+    let (min, max) = range.map(filter_range).unwrap_or((u64::MIN, u64::MAX));
     let mask = if bit == 64 { u64::MAX } else { (1 << bit) - 1 };
 
     let mut rng = thread_rng();
@@ -127,8 +95,16 @@ fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u64 {
     }
 }
 
+fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
+    if min >= max {
+        (u64::MIN, u64::MAX)
+    } else {
+        (min, max)
+    }
+}
+
 /// Generate a random flag value.
-fn gen_flag(pool: Option<&FxHashSet<Value>>, vals: &[u64], bitmask: bool) -> u64 {
+pub(super) fn gen_flag(pool: Option<&FxHashSet<Value>>, vals: &[u64], bitmask: bool) -> u64 {
     let mut rng = thread_rng();
     let empty_set = FxHashSet::default();
     let extra_vals = || {
