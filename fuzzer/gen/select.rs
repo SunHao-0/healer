@@ -35,7 +35,7 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
 
 fn select_syscall_rand(ctx: &GenContext) -> Rc<Syscall> {
     // Try to select a consumer first.
-    if random::<f32>() < 0.9 {
+    if random::<f32>() < 0.96 {
         if let Some(syscall) = ctx
             .generated_res
             .iter()
@@ -70,7 +70,18 @@ fn select_res_producer(t: &Target, res: &Type) -> Rc<Syscall> {
         .iter()
         .flat_map(|res| res.res_desc().unwrap().ctors.iter());
     let mut rng = thread_rng();
-    if !accurate_ctors.is_empty() && random::<f32>() < 0.85 {
+    if !accurate_ctors.is_empty() && rng.gen::<f32>() < 0.85 {
+        // Try to choose calls that generate current resource and do not depend on other resources
+        // first.
+        if let Some(e) = accurate_ctors
+            .iter()
+            .filter(|s| s.input_res.is_empty())
+            .choose(&mut rng)
+        {
+            if rng.gen::<f32>() < 0.8 {
+                return Rc::clone(e);
+            }
+        }
         accurate_ctors
             .iter()
             .choose(&mut rng)

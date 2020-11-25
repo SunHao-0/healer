@@ -89,3 +89,19 @@ fn should_stop(len: usize) -> bool {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::fuzz::*;
+    use crate::gen::*;
+    use crate::target::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_gen(b: &mut Bencher) {
+        let target = Target::new();
+        let pool = ValuePool::default();
+
+        b.iter(|| gen(&target, &pool));
+    }
+}

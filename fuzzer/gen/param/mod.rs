@@ -112,21 +112,47 @@ fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
             .choose(&mut rng)
             .unwrap_or_else(|| rng.gen())
     };
-
+    let mut rng = thread_rng();
     if dir == Dir::Out || dir == Dir::InOut {
         let res = Rc::new(ResValue::new_res(0, ctx.next_id()));
         ctx.add_res(Rc::clone(&ty), Rc::clone(&res));
         Value::new_res(dir, ty, res)
     } else {
-        // reuse
-        if let Some(generated_res) = ctx.generated_res.get(&ty) {
-            if !generated_res.is_empty() {
-                let res = Rc::clone(generated_res.iter().choose(&mut thread_rng()).unwrap());
-                Value::new_res_ref(dir, ty, res)
-            } else {
-                let val = special_value();
-                Value::new_res_null(dir, ty, val)
+        // For most case, we reuse the generated resource even if the resource may not be the
+        // precise one.
+        if !ctx.generated_res.is_empty() && rng.gen::<f32>() < 0.998 {
+            // If we've already generated required resource, just reuse it.
+            if let Some(generated_res) = ctx.generated_res.get(&ty) {
+                if !generated_res.is_empty() {
+                    let res = Rc::clone(generated_res.iter().choose(&mut rng).unwrap());
+                    return Value::new_res_ref(dir, ty, res);
+                }
             }
+            // Otherwise, try to find the eq resource.
+            let eq_res = &ctx.target.res_eq_class[&ty];
+            let mut res_vals = Vec::new();
+            for res in eq_res.iter() {
+                if let Some(r) = ctx.generated_res.get(res) {
+                    if !r.is_empty() {
+                        res_vals.extend(r.iter());
+                    }
+                }
+            }
+            if !res_vals.is_empty() {
+                let res = Rc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
+                return Value::new_res_ref(dir, ty, res);
+            }
+            // We still haven't found any usable resource, try to choose a arbitrary generated
+            // resource.
+            if let Some((_, vals)) = ctx.generated_res.iter().choose(&mut rng) {
+                if !vals.is_empty() && rng.gen::<f32>() < 0.9 {
+                    let res = Rc::clone(vals.iter().choose(&mut rng).unwrap());
+                    return Value::new_res_ref(dir, ty, res);
+                }
+            }
+            // This is bad, use special value.
+            let val = special_value();
+            Value::new_res_null(dir, ty, val)
         } else {
             let val = special_value();
             Value::new_res_null(dir, ty, val)
