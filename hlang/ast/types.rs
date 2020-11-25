@@ -71,6 +71,7 @@ impl Type {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn get_array_info(&self) -> Option<(&Rc<Type>, Option<(u64, u64)>)> {
         match &self.kind {
             TypeKind::Array { elem, range } => Some((elem.as_ref().unwrap(), *range)),
@@ -279,6 +280,14 @@ impl TypeKind {
         Self::Buffer {
             kind: BufferKind::BlobRange(0, 0),
             subkind: None,
+        }
+    }
+
+    pub fn is_str_like(&self) -> bool {
+        if let TypeKind::Buffer { kind, .. } = self {
+            matches!(kind, BufferKind::Filename { .. } | BufferKind::String { .. })
+        } else {
+            false
         }
     }
 }

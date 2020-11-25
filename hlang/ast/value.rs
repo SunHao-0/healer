@@ -156,7 +156,13 @@ impl fmt::Display for Value {
                 }
             }
             ValueKind::Vma { addr, size } => write!(f, "vma=({}, {})", *addr, *size),
-            ValueKind::Bytes(val) => write!(f, "{:X?}", val),
+            ValueKind::Bytes(val) => {
+                if self.ty.kind.is_str_like() {
+                    write!(f, "\"{}\"", String::from_utf8_lossy(val))
+                } else {
+                    write!(f, "{:X?}", val)
+                }
+            }
             ValueKind::Group(vals) => {
                 let mut open_brackets = '[';
                 let mut close_brackets = ']';
@@ -281,9 +287,9 @@ impl ResValue {
 impl fmt::Display for ResValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
-            ResValueKind::Own { id, .. } => write!(f, "r{}", *id),
-            ResValueKind::Ref { src } => write!(f, "{}", src),
-            ResValueKind::Null => write!(f, "{:#X}", self.val),
+            ResValueKind::Own { id, .. } => write!(f, "r{}(out)", *id),
+            ResValueKind::Ref { src } => write!(f, "r{}", src.get_res_id().unwrap()),
+            ResValueKind::Null => write!(f, "{:#X}(null)", self.val),
         }
     }
 }

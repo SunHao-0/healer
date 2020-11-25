@@ -186,12 +186,7 @@ fn eat_one(input: Span) -> Span {
 }
 
 fn is_ident_ch(ch: char) -> bool {
-    match ch {
-        'a'..='z' | 'A'..='Z' => true,
-        '_' => true,
-        '0'..='9' => true,
-        _ => false,
-    }
+    matches!(ch, 'a'..='z' | 'A'..='Z' | '_' | '0'..='9')
 }
 
 #[cfg(test)]
