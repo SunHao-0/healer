@@ -247,7 +247,7 @@ impl fmt::Display for Call {
         }
         write!(f, "{}(", self.meta.name)?;
         for (i, arg) in self.args.iter().enumerate() {
-            write!(f, "{}", arg.ty.name)?;
+            write!(f, "{}", arg)?;
             if i != self.args.len() - 1 {
                 write!(f, ", ")?;
             }

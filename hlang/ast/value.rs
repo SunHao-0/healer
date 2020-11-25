@@ -144,8 +144,40 @@ impl Value {
 }
 
 impl fmt::Display for Value {
-    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use super::types::TypeKind;
+        match &self.kind {
+            ValueKind::Scalar(val) => write!(f, "{:#X}", *val),
+            ValueKind::Ptr { addr, pointee } => {
+                if let Some(ref pointee) = pointee {
+                    write!(f, "&{:#X}={}", *addr, pointee)
+                } else {
+                    write!(f, "NULL")
+                }
+            }
+            ValueKind::Vma { addr, size } => write!(f, "vma=({}, {})", *addr, *size),
+            ValueKind::Bytes(val) => write!(f, "{:X?}", val),
+            ValueKind::Group(vals) => {
+                let mut open_brackets = '[';
+                let mut close_brackets = ']';
+                let mut ty = "array";
+                if let TypeKind::Struct { .. } = &self.ty.kind {
+                    open_brackets = '{';
+                    close_brackets = '}';
+                    ty = "struct";
+                }
+                write!(f, "{}{}", ty, open_brackets)?;
+                for (id, val) in vals.iter().enumerate() {
+                    write!(f, "{}", val)?;
+                    if id != vals.len() - 1 {
+                        write!(f, ",")?;
+                    }
+                }
+                write!(f, "{}", close_brackets)
+            }
+            ValueKind::Union { val, idx } => write!(f, "union{{{}: {}}}", *idx, val),
+            ValueKind::Res(r) => write!(f, "{}", r),
+        }
     }
 }
 
@@ -242,6 +274,16 @@ impl ResValue {
             Some(*id)
         } else {
             None
+        }
+    }
+}
+
+impl fmt::Display for ResValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.kind {
+            ResValueKind::Own { id, .. } => write!(f, "r{}", *id),
+            ResValueKind::Ref { src } => write!(f, "{}", src),
+            ResValueKind::Null => write!(f, "{:#X}", self.val),
         }
     }
 }
