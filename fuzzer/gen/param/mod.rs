@@ -94,6 +94,7 @@ fn rand_vma_num(ctx: &GenContext) -> u64 {
     }
 }
 
+/// Generate value for ptr type.
 fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let (elem_ty, elem_dir) = ty.get_ptr_info().unwrap();
     let elem_val = gen(ctx, Rc::clone(elem_ty), elem_dir);
@@ -101,6 +102,7 @@ fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     Value::new_ptr(dir, ty, addr, Some(elem_val))
 }
 
+/// Generate value for resource type.
 fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let special_value = || {
         let mut rng = thread_rng();

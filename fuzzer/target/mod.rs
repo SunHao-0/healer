@@ -286,6 +286,7 @@ impl Target {
         }
     }
 
+    #[allow(clippy::transmute_ptr_to_ref)]
     fn rc_to_mut<T>(rc: &mut Rc<T>) -> &mut T {
         use std::mem::transmute;
         // Safety, only used during constructing target and all methods guarantee the safe use of ref.

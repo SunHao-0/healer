@@ -136,7 +136,7 @@ where
             *v = 0xFF;
         }
     }
-    if noz {
+    if !noz {
         val.push(b'\0');
     }
     val.into_boxed_slice()
