@@ -24,7 +24,7 @@ pub struct FuzzInstance {
 }
 
 impl FuzzInstance {
-    pub fn new() -> Self {
+    pub fn new(_: ()) -> Self {
         // init state
         // boot kernel
         // run executor

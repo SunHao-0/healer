@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "hlang",
-    "fuzzer"
+    "fuzzer",
+    "syscalls"
 ]

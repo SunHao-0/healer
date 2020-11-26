@@ -1,13 +1,10 @@
-use hl_fuzzer::fuzz::*;
-use hl_fuzzer::gen::*;
-use hl_fuzzer::target::*;
+use hl_fuzzer::fuzz::ValuePool;
+use hl_fuzzer::gen::gen;
+use hl_fuzzer::target::Target;
 
 pub fn main() {
-    // Parse command line arguments, validate thems
-    // Extract env vars
-    // Maybe add some performance operations, such as bind cpu
-    // start the fuzz instance.
-    let target = Target::new();
+    let (sys, ty) = syscalls::syscalls();
+    let target = Target::new(sys, ty, syscalls::REVISION);
     let pool = ValuePool::default();
     let p = gen(&target, &pool);
     println!("{}", p);

@@ -1,73 +1,3 @@
-#[cfg(feature = "amd64-linux")]
-#[path = "syscalls/linux/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "386-linux")]
-#[path = "syscalls/linux/_386.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "arm-linux")]
-#[path = "syscalls/linux/arm.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "arm64-linux")]
-#[path = "syscalls/linux/arm64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "mips64le-linux")]
-#[path = "syscalls/linux/mips64le.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "ppc64le-linux")]
-#[path = "syscalls/linux/ppc64le.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "riscv64-linux")]
-#[path = "syscalls/linux/riscv64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "s390x-linux")]
-#[path = "syscalls/linux/s390x.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-akaros")]
-#[path = "syscalls/akaros/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "_386-freebsd")]
-#[path = "syscalls/freebsd/_386.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-freebsd")]
-#[path = "syscalls/freebsd/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-fuchsia")]
-#[path = "syscalls/fuchsia/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "arm64-fuchsia")]
-#[path = "syscalls/fuchsia/arm64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-netbsd")]
-#[path = "syscalls/netbsd/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-openbsd")]
-#[path = "syscalls/openbsd/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "arm-trusty")]
-#[path = "syscalls/trusty/arm.rs"]
-#[rustfmt::skip]mod syscalls;
-
-#[cfg(feature = "amd64-windows")]
-#[path = "syscalls/windows/amd64.rs"]
-#[rustfmt::skip]mod syscalls;
-
-mod linux;
-
 use hlang::ast::{Call, Dir, Syscall, Type, TypeId, TypeRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
@@ -100,11 +30,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn new() -> Self {
-        let re = syscalls::REVISION;
-        let os = "linux".to_string().into_boxed_str();
-        let arch = "amd64".to_string().into_boxed_str();
-        let (syscalls, mut tys) = syscalls::syscalls();
+    pub fn new(syscalls: Vec<Syscall>, mut tys: Vec<Rc<Type>>, re: &str) -> Self {
         let mut syscalls = syscalls.into_iter().map(Rc::new).collect::<Vec<_>>();
 
         Self::restore_typeref(&mut tys);
@@ -121,16 +47,10 @@ impl Target {
         Self::complete_res_ty_info(&mut res_tys, &syscalls);
         Self::filter_unreachable_res(&mut res_tys, &mut res_eq_class);
 
-        let os_specific_operation: Option<Box<dyn OsSpecificOperation>> = if os.as_ref().eq("linux")
-        {
-            Some(Box::new(linux::LinuxOperation))
-        } else {
-            None
-        };
-
         Target {
-            os,
-            arch,
+            // TODO fix these hard coded value.
+            os: "linux".to_string().into_boxed_str(),
+            arch: "amd64".to_string().into_boxed_str(),
             revision: re.to_string().into_boxed_str(),
             ptr_sz: 8,
             page_sz: 4096,
@@ -141,7 +61,7 @@ impl Target {
             tys,
             res_tys,
             res_eq_class,
-            os_specific_operation,
+            os_specific_operation: Some(Box::new(linux::LinuxOperation)),
             special_types: FxHashMap::default(),
             aux_resources: FxHashSet::default(),
             special_ptr_val: None,
@@ -343,4 +263,48 @@ pub trait OsSpecificOperation {
     fn special_types(&self) -> FxHashMap<Box<str>, ()>;
     fn aux_resources(&self) -> FxHashSet<Box<str>>;
     fn special_ptr_val(&self) -> Box<[u64]>;
+}
+mod linux {
+
+    use super::OsSpecificOperation;
+    use hlang::ast::Call;
+    use rustc_hash::{FxHashMap, FxHashSet};
+
+    pub(crate) struct LinuxOperation;
+
+    impl OsSpecificOperation for LinuxOperation {
+        fn make_data_mmap(&self) -> Box<[Call]> {
+            // Add custom mmap gen
+            todo!()
+        }
+
+        fn neutralize(&self, call: &Call) {
+            todo!()
+        }
+
+        fn special_types(&self) -> FxHashMap<Box<str>, ()> {
+            todo!()
+        }
+
+        fn aux_resources(&self) -> FxHashSet<Box<str>> {
+            vec![
+                "vma",
+                "uid",
+                "pid",
+                "gid",
+                "timespec",
+                "timeval",
+                "time_sec",
+                "time_usec",
+                "time_nsec",
+            ]
+            .into_iter()
+            .map(|s| s.to_string().into_boxed_str())
+            .collect()
+        }
+
+        fn special_ptr_val(&self) -> Box<[u64]> {
+            vec![0xffffffff81000000].into_boxed_slice()
+        }
+    }
 }
