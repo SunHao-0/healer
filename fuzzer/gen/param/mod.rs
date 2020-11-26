@@ -96,6 +96,8 @@ fn rand_vma_num(ctx: &GenContext) -> u64 {
 
 /// Generate value for ptr type.
 fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    // Handle recusive type or circle reference here.
+
     let (elem_ty, elem_dir) = ty.get_ptr_info().unwrap();
     let elem_val = gen(ctx, Rc::clone(elem_ty), elem_dir);
     let addr = ctx.mem_alloc.alloc(elem_val.size(), elem_ty.align);
@@ -130,19 +132,21 @@ fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
                     return Value::new_res_ref(dir, ty, res);
                 }
             }
-            // Otherwise, try to find the eq resource.
-            let eq_res = &ctx.target.res_eq_class[&ty];
-            let mut res_vals = Vec::new();
-            for res in eq_res.iter() {
-                if let Some(r) = ctx.generated_res.get(res) {
-                    if !r.is_empty() {
-                        res_vals.extend(r.iter());
+            // Otherwise, try to find the eq resource. Also handle unreachable resource here.
+            if let Some(eq_res) = ctx.target.res_eq_class.get(&ty) {
+                let mut res_vals = Vec::new();
+
+                for res in eq_res.iter() {
+                    if let Some(r) = ctx.generated_res.get(res) {
+                        if !r.is_empty() {
+                            res_vals.extend(r.iter());
+                        }
                     }
                 }
-            }
-            if !res_vals.is_empty() {
-                let res = Rc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
-                return Value::new_res_ref(dir, ty, res);
+                if !res_vals.is_empty() {
+                    let res = Rc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
+                    return Value::new_res_ref(dir, ty, res);
+                }
             }
             // We still haven't found any usable resource, try to choose a arbitrary generated
             // resource.

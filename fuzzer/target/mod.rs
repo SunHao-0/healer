@@ -132,7 +132,7 @@ impl Target {
             os,
             arch,
             revision: re.to_string().into_boxed_str(),
-            ptr_sz: 4,
+            ptr_sz: 8,
             page_sz: 4096,
             page_num: 4096,
             data_offset: 0xFFFF,
@@ -166,6 +166,7 @@ impl Target {
         }
         res_eq_class.retain(|k, _| reachable_res.contains(k));
         res_tys.retain(|r| reachable_res.contains(r));
+        assert_eq!(res_eq_class.len(), res_tys.len());
     }
 
     /// Analyze input/output resources of eacho system call.
@@ -298,23 +299,20 @@ impl Target {
     fn cal_res_eq_class(res_tys: &[Rc<Type>]) -> FxHashMap<Rc<Type>, Rc<[Rc<Type>]>> {
         let mut ret = FxHashMap::default();
         let mut left_res_tys = Vec::from(res_tys);
-
         loop {
             if left_res_tys.is_empty() {
                 break;
             }
 
-            let ty1 = left_res_tys.pop().unwrap();
+            let ty1 = left_res_tys.pop().unwrap(); // so, the loop will stop.
             let mut eq_class = FxHashSet::default();
             for ty2 in left_res_tys.iter() {
                 if Self::is_equivalence_class(&ty1, ty2) {
                     eq_class.insert(Rc::clone(ty2));
                 }
             }
-            left_res_tys = left_res_tys
-                .into_iter()
-                .filter(|t| !eq_class.contains(t))
-                .collect::<Vec<_>>();
+
+            left_res_tys.retain(|x| !eq_class.contains(x));
             eq_class.insert(ty1);
 
             let eq_class: Rc<[Rc<Type>]> =
@@ -324,7 +322,8 @@ impl Target {
                 ret.insert(Rc::clone(ty), Rc::clone(&eq_class));
             }
         }
-
+        assert_eq!(ret.len(), res_tys.len());
+        assert!(res_tys.iter().all(|ty| ret.contains_key(ty)));
         ret
     }
 

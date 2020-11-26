@@ -90,6 +90,7 @@ fn should_stop(len: usize) -> bool {
     }
 }
 
+/* Require nightly.
 #[cfg(test)]
 mod tests {
     use crate::fuzz::*;
@@ -105,3 +106,4 @@ mod tests {
         b.iter(|| gen(&target, &pool));
     }
 }
+*/

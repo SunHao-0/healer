@@ -125,7 +125,7 @@ where
     M: FnOnce(&mut Vec<u8>),
 {
     let mut val = try_reuse(pool, generated, vals);
-    if val.is_none() {
+    if val.is_none() || val.as_ref().unwrap().is_empty() {
         val = Some(gen_new());
     } else if random::<f32>() < 0.01 {
         mutate(val.as_mut().unwrap());
@@ -151,7 +151,11 @@ fn try_reuse(
     let mut val = None;
     let mut rng = thread_rng();
     if !vals.is_empty() && rng.gen::<f32>() < 0.8 {
-        val = vals.iter().choose(&mut rng).map(|x| Vec::from(&**x))
+        val = vals
+            .iter()
+            .filter(|val| !val.is_empty())
+            .choose(&mut rng)
+            .map(|x| Vec::from(&**x))
     } else if generated.is_some() && rng.gen::<f32>() < 0.8 {
         val = generated
             .unwrap()
@@ -201,6 +205,9 @@ fn mutate_exist_blob(pool: Option<&FxHashSet<Value>>, (min, max): (usize, usize)
                 .choose(&mut thread_rng())
                 .map(|v| Vec::from(v.kind.get_bytes_val().unwrap()))
                 .unwrap();
+            if src.is_empty() {
+                return rand_blob_range((min, max));
+            }
             mutate_blob(&mut src, Some(pool), (min, max));
             src.into_boxed_slice()
         }

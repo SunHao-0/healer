@@ -1,8 +1,8 @@
-#![allow(dead_code)]
-#![feature(test)]
+// #![feature(test)] require nightly
+// extern crate test;
 #![allow(unused_variables)]
+#![allow(dead_code)]
 extern crate bv;
-extern crate test;
 
 pub mod exec;
 pub mod fuzz;
