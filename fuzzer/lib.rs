@@ -1,4 +1,5 @@
-// #![feature(test)] require nightly
+// Use nightly version is a bad idea, because it sometimes generates the wrong code and the implementation of the borrow checker is also incorrect.
+// #![feature(test)]. Require nightly.
 // extern crate test;
 #![allow(unused_variables)]
 #![allow(dead_code)]

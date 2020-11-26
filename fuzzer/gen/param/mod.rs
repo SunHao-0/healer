@@ -96,11 +96,27 @@ fn rand_vma_num(ctx: &GenContext) -> u64 {
 
 /// Generate value for ptr type.
 fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
-    // Handle recusive type or circle reference here.
-
     let (elem_ty, elem_dir) = ty.get_ptr_info().unwrap();
+
+    // Handle recusive type or circle reference here.
+    if ty.optional
+        && matches!(elem_ty.kind, TypeKind::Struct{..} | TypeKind::Union{..} | TypeKind::Array{..})
+    {
+        let depth = ctx.inc_rec_depth(elem_ty);
+        if depth >= 3 {
+            ctx.dec_rec_depth(elem_ty);
+            return Value::new_ptr_null(dir, ty);
+        }
+    }
+
     let elem_val = gen(ctx, Rc::clone(elem_ty), elem_dir);
     let addr = ctx.mem_alloc.alloc(elem_val.size(), elem_ty.align);
+    // TODO use a recusive depth guard here.
+    if ty.optional
+        && matches!(elem_ty.kind, TypeKind::Struct{..} | TypeKind::Union{..} | TypeKind::Array{..})
+    {
+        ctx.dec_rec_depth(elem_ty);
+    }
     Value::new_ptr(dir, ty, addr, Some(elem_val))
 }
 

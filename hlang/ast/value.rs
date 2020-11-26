@@ -39,6 +39,10 @@ impl Value {
         }
     }
 
+    pub fn new_ptr_null(dir: Dir, ty: Rc<Type>) -> Self {
+        Self::new_ptr(dir, ty, 0, None)
+    }
+
     pub fn new_vma(dir: Dir, ty: Rc<Type>, addr: u64, size: u64) -> Self {
         Self {
             dir,

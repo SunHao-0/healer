@@ -34,6 +34,8 @@ struct GenContext<'a, 'b> {
     id_count: usize,
     mem_alloc: MemAlloc,
     vma_alloc: VmaAlloc,
+    // handle recusive type or circle reference.
+    rec_depth: FxHashMap<Rc<Type>, usize>,
 }
 
 impl<'a, 'b> GenContext<'a, 'b> {
@@ -46,6 +48,7 @@ impl<'a, 'b> GenContext<'a, 'b> {
             id_count: 0,
             mem_alloc: MemAlloc::with_mem_size(target.page_sz * target.page_num),
             vma_alloc: VmaAlloc::with_page_num(target.page_num),
+            rec_depth: FxHashMap::default(),
         }
     }
 
@@ -63,6 +66,23 @@ impl<'a, 'b> GenContext<'a, 'b> {
     pub fn add_str(&mut self, ty: Rc<Type>, new_str: Box<[u8]>) -> bool {
         let entry = self.generated_str.entry(ty).or_default();
         entry.insert(new_str)
+    }
+
+    pub fn inc_rec_depth(&mut self, ty: &Rc<Type>) -> usize {
+        let entry = self.rec_depth.entry(Rc::clone(ty)).or_insert(0);
+        *entry += 1;
+        *entry
+    }
+
+    pub fn dec_rec_depth(&mut self, ty: &Rc<Type>) {
+        if let Some(v) = self.rec_depth.get_mut(ty) {
+            *v -= 1;
+        } else {
+            return;
+        }
+        if self.rec_depth[ty] == 0 {
+            self.rec_depth.remove(ty);
+        }
     }
 }
 
