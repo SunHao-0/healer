@@ -13,6 +13,8 @@ mod select;
 mod param;
 // Call generation.
 mod call;
+// Length type calculation. It's here because length calculation is inter-params.
+mod len;
 
 /// Gnerate test case based current value pool and test target.
 pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
@@ -36,6 +38,9 @@ struct GenContext<'a, 'b> {
     vma_alloc: VmaAlloc,
     // handle recusive type or circle reference.
     rec_depth: FxHashMap<Rc<Type>, usize>,
+
+    call_ctx: call::GenCallContext,
+    param_ctx: param::GenParamContext,
 }
 
 impl<'a, 'b> GenContext<'a, 'b> {
@@ -49,6 +54,8 @@ impl<'a, 'b> GenContext<'a, 'b> {
             mem_alloc: MemAlloc::with_mem_size(target.page_sz * target.page_num),
             vma_alloc: VmaAlloc::with_page_num(target.page_num),
             rec_depth: FxHashMap::default(),
+            call_ctx: Default::default(),
+            param_ctx: Default::default(),
         }
     }
 
@@ -83,6 +90,22 @@ impl<'a, 'b> GenContext<'a, 'b> {
         if self.rec_depth[ty] == 0 {
             self.rec_depth.remove(ty);
         }
+    }
+
+    pub fn record_len_to_call_ctx(&mut self, len: (*mut u64, Rc<LenInfo>)) {
+        self.call_ctx.left_len_vals.push(len);
+    }
+
+    pub fn has_len_call_ctx(&self) -> bool {
+        !self.call_ctx.left_len_vals.is_empty()
+    }
+
+    pub fn record_len_to_param_ctx(&mut self) {
+        self.param_ctx.len_type_count += 1;
+    }
+
+    pub fn has_len_param_ctx(&self) -> bool {
+        self.param_ctx.len_type_count != 0
     }
 }
 

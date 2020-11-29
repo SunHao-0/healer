@@ -55,7 +55,11 @@ pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
             gen_flag(pool, vals, *bitmask)
         }
         Proc { per_proc, .. } => thread_rng().gen_range(0, *per_proc),
-        Csum { .. } | Len { .. } => 0, // can not calculate yet.
+        Csum { .. } => 0, // Calculated by syz-executor
+        Len { .. } => {
+            ctx.record_len_to_param_ctx(); // Mark here, calculate later.
+            0
+        }
         Const { val, .. } => *val,
         _ => unreachable!(),
     };

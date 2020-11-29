@@ -85,6 +85,13 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn get_len_info(&self) -> Option<Rc<LenInfo>> {
+        match &self.kind {
+            TypeKind::Len { len_info, .. } => Some(Rc::clone(len_info)),
+            _ => None,
+        }
+    }
 }
 
 /// Order by TypeId
@@ -175,9 +182,7 @@ pub enum TypeKind {
     },
     Len {
         int_fmt: IntFmt,
-        bit_sz: u64,
-        offset: bool,
-        path: Box<[Box<str>]>,
+        len_info: Rc<LenInfo>,
     },
     Proc {
         int_fmt: IntFmt,
@@ -253,9 +258,11 @@ impl TypeKind {
         let path = path.iter().map(to_boxed_str).collect::<Vec<_>>();
         TypeKind::Len {
             int_fmt,
-            bit_sz,
-            offset,
-            path: path.into_boxed_slice(),
+            len_info: Rc::new(LenInfo {
+                bit_sz,
+                offset,
+                path: path.into_boxed_slice(),
+            }),
         }
     }
 
@@ -290,6 +297,12 @@ impl TypeKind {
             false
         }
     }
+}
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct LenInfo {
+    pub bit_sz: u64,
+    pub offset: bool,
+    pub path: Box<[Box<str>]>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]

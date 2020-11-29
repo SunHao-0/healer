@@ -102,6 +102,33 @@ impl Value {
         }
     }
 
+    pub fn inner_val(&self) -> Option<&Value> {
+        if let ValueKind::Ptr { ref pointee, .. } = self.kind {
+            if let Some(pointee) = pointee {
+                Self::inner_val(pointee)
+            } else {
+                None
+            }
+        } else {
+            Some(self)
+        }
+    }
+
+    pub fn inner_val_mut(&mut self) -> Option<&mut Value> {
+        if let ValueKind::Ptr {
+            ref mut pointee, ..
+        } = self.kind
+        {
+            if let Some(pointee) = pointee {
+                Self::inner_val_mut(pointee)
+            } else {
+                None
+            }
+        } else {
+            Some(self)
+        }
+    }
+
     pub fn size(&self) -> u64 {
         use super::types::TypeKind;
         match &self.kind {
@@ -225,6 +252,14 @@ impl ValueKind {
     pub fn get_bytes_val(&self) -> Option<&[u8]> {
         if let ValueKind::Bytes(v) = self {
             Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_group_val(&self) -> Option<&[Value]> {
+        if let ValueKind::Group(vals) = self {
+            Some(vals)
         } else {
             None
         }

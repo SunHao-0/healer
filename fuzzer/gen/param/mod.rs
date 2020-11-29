@@ -6,8 +6,23 @@ use super::*;
 use hlang::ast::{Dir, ResValue, Type, TypeKind, Value};
 use std::iter::Iterator;
 use std::rc::Rc;
+#[derive(Default)]
+pub(super) struct GenParamContext {
+    /// Counter of len type of current parameter type.
+    pub(super) len_type_count: u32,
+}
 
 pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+    ctx.param_ctx.len_type_count = 0; // clear count first;
+    let mut val = gen_inner(ctx, ty, dir);
+    if ctx.has_len_param_ctx() {
+        // Try to calculate length value here.
+        super::len::try_cal(ctx, &mut val);
+    }
+    val
+}
+
+fn gen_inner(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     use hlang::ast::TypeKind::*;
     match &ty.kind {
         Const { .. } | Int { .. } | Csum { .. } | Len { .. } | Proc { .. } | Flags { .. } => {
@@ -23,11 +38,6 @@ pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     }
 }
 
-/// Calculate length type of a call.
-pub(super) fn calculate_length_params(call: &mut Call) {
-    todo!()
-}
-
 fn gen_union(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let (idx, field) = ty
         .get_fields()
@@ -36,7 +46,7 @@ fn gen_union(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
         .enumerate()
         .choose(&mut thread_rng())
         .unwrap();
-    let field_val = gen(
+    let field_val = gen_inner(
         ctx,
         Rc::clone(field.ty.as_ref().unwrap()),
         field.dir.unwrap_or(dir),
@@ -49,7 +59,7 @@ fn gen_struct(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let mut vals = Vec::new();
     for field in fields.iter() {
         let dir = field.dir.unwrap_or(dir);
-        vals.push(gen(ctx, Rc::clone(field.ty.as_ref().unwrap()), dir));
+        vals.push(gen_inner(ctx, Rc::clone(field.ty.as_ref().unwrap()), dir));
     }
     Value::new_group(dir, ty, vals)
 }
@@ -58,7 +68,7 @@ fn gen_array(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let (elem_ty, range) = ty.get_array_info().unwrap();
     let len = rand_array_len(range);
     let vals = (0..len)
-        .map(|_| gen(ctx, Rc::clone(elem_ty), dir))
+        .map(|_| gen_inner(ctx, Rc::clone(elem_ty), dir))
         .collect();
     Value::new_group(dir, ty, vals)
 }
@@ -109,7 +119,7 @@ fn gen_ptr(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
         }
     }
 
-    let elem_val = gen(ctx, Rc::clone(elem_ty), elem_dir);
+    let elem_val = gen_inner(ctx, Rc::clone(elem_ty), elem_dir);
     let addr = ctx.mem_alloc.alloc(elem_val.size(), elem_ty.align);
     // TODO use a recusive depth guard here.
     if ty.optional
@@ -165,7 +175,7 @@ fn gen_res(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
                 }
             }
             // We still haven't found any usable resource, try to choose a arbitrary generated
-            // resource.
+            // resource. May be we can use resource centric strategy here just like syzkaller.
             if let Some((_, vals)) = ctx.generated_res.iter().choose(&mut rng) {
                 if !vals.is_empty() && rng.gen::<f32>() < 0.9 {
                     let res = Rc::clone(vals.iter().choose(&mut rng).unwrap());
