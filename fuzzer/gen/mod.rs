@@ -107,6 +107,10 @@ impl<'a, 'b> GenContext<'a, 'b> {
     pub fn has_len_param_ctx(&self) -> bool {
         self.param_ctx.len_type_count != 0
     }
+
+    pub fn get_generating_syscall(&self) -> Option<&Syscall> {
+        self.call_ctx.generating_syscall.as_deref()
+    }
 }
 
 fn gen_inner(ctx: &mut GenContext) -> Prog {

@@ -249,6 +249,14 @@ impl ValueKind {
         }
     }
 
+    pub fn get_vma_size(&self) -> Option<u64> {
+        if let ValueKind::Vma { size, .. } = self {
+            Some(*size)
+        } else {
+            None
+        }
+    }
+
     pub fn get_bytes_val(&self) -> Option<&[u8]> {
         if let ValueKind::Bytes(v) = self {
             Some(v)
@@ -258,6 +266,14 @@ impl ValueKind {
     }
 
     pub fn get_group_val(&self) -> Option<&[Value]> {
+        if let ValueKind::Group(vals) = self {
+            Some(vals)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_group_val_mut(&mut self) -> Option<&mut [Value]> {
         if let ValueKind::Group(vals) = self {
             Some(vals)
         } else {
