@@ -178,7 +178,21 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use super::types::TypeKind;
         match &self.kind {
-            ValueKind::Scalar(val) => write!(f, "{:#X}", *val),
+            ValueKind::Scalar(val) => match &self.ty.kind {
+                TypeKind::Const { .. } => write!(f, "{:#X}(const)", *val),
+                TypeKind::Csum { .. } => write!(f, "{:#X}(csum)", *val),
+                TypeKind::Len { len_info, .. } => {
+                    let mut len_name = "len";
+                    if len_info.offset {
+                        len_name = "offset";
+                    }
+                    if len_info.bit_sz != 0 {
+                        len_name = "bitsize"
+                    }
+                    write!(f, "{:#X}({})", val, len_name)
+                }
+                _ => write!(f, "{:#X}", *val),
+            },
             ValueKind::Ptr { addr, pointee } => {
                 if let Some(ref pointee) = pointee {
                     write!(f, "&{:#X}={}", *addr, pointee)
@@ -212,7 +226,12 @@ impl fmt::Display for Value {
                 }
                 write!(f, "{}", close_brackets)
             }
-            ValueKind::Union { val, idx } => write!(f, "union{{{}: {}}}", *idx, val),
+            ValueKind::Union { val, idx } => write!(
+                f,
+                "union{{{}: {}}}",
+                self.ty.get_fields().unwrap()[*idx].name,
+                val
+            ),
             ValueKind::Res(r) => write!(f, "{}", r),
         }
     }
