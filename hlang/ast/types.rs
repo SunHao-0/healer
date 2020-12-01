@@ -93,11 +93,11 @@ impl Type {
         }
     }
 
-    pub fn get_template_name(&self) -> &str{
+    pub fn get_template_name(&self) -> &str {
         let name = &*self.name;
-        if let Some(idx) = name.find('['){
+        if let Some(idx) = name.find('[') {
             &name[0..idx]
-        }else{
+        } else {
             name
         }
     }

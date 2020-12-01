@@ -12,12 +12,12 @@ pub(super) struct GenParamContext {
     pub(super) len_type_count: u32,
 }
 
-pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Box<Value> {
     ctx.param_ctx.len_type_count = 0; // clear count first;
-    let mut val = gen_inner(ctx, ty, dir);
+    let mut val = Box::new(gen_inner(ctx, ty, dir)); // make sure address of value won't change during calculating length.
     if ctx.has_len_param_ctx() {
         // Try to calculate length value here.
-        super::len::try_cal(ctx, &mut val);
+        super::len::try_cal(ctx, &mut *val);
     }
     val
 }
@@ -92,7 +92,12 @@ fn rand_array_len(range: Option<(u64, u64)>) -> u64 {
 
 fn gen_vma(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
     let page_num = rand_vma_num(ctx);
-    Value::new_vma(dir, ty, ctx.vma_alloc.alloc(page_num), page_num)
+    Value::new_vma(
+        dir,
+        ty,
+        ctx.vma_alloc.alloc(page_num) * ctx.target.page_sz,
+        page_num * ctx.target.page_sz,
+    )
 }
 
 fn rand_vma_num(ctx: &GenContext) -> u64 {

@@ -2,10 +2,10 @@ use super::*;
 use hlang::ast::{Value, ValueKind};
 use rustc_hash::FxHashMap;
 
-/// Finish the Calculation value of 'len' type.
+/// Finish the calculation of 'len' type.
 /// Previous calculation may failed due to ungenerated syscall parameter, so we need calculate them here.
 pub(super) fn finish_cal(ctx: &mut GenContext) {
-    let left_len_ty = ctx.call_ctx.left_len_vals.drain(0..).collect::<Vec<_>>();
+    let left_len_ty = ctx.call_ctx.left_len_vals.split_off(0);
     for (scalar_val_ref, len_info) in left_len_ty {
         cal_syscall_param_len(ctx, unsafe { scalar_val_ref.as_mut().unwrap() }, len_info)
     }
@@ -15,7 +15,7 @@ pub(super) fn finish_cal(ctx: &mut GenContext) {
 /// Insert ptr of value storage and leninfo to ctx if the calculation failed.
 pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
     let val = val.inner_val_mut().unwrap(); // Can't be null ptr.
-    let mut parent_map: Option<FxHashMap<&Value, &Value>> = None;
+    let mut parent_map: Option<FxHashMap<*const Value, &Value>> = None;
 
     match &mut val.kind {
         ValueKind::Scalar(scalar_val_ref) => {
@@ -33,7 +33,7 @@ pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
     }
 }
 
-fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<&Value, &Value>) {
+fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*const Value, &Value>) {
     let vals = val.kind.get_group_val().unwrap();
     for v in vals {
         let v = if let Some(v) = v.inner_val() {
@@ -43,7 +43,7 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<&Valu
         };
         if let ValueKind::Scalar(scalar_val_ref) = &v.kind {
             if let Some(len_info) = v.ty.get_len_info() {
-                #[allow(mutable_transmutes)]
+                #[allow(mutable_transmutes, clippy::transmute_ptr_to_ptr)]
                 let scalar_val_ref: &mut u64 = unsafe { std::mem::transmute(scalar_val_ref) };
                 if &*len_info.path[0] == "syscall" {
                     try_cal_syscall_param_len(ctx, scalar_val_ref, len_info);
@@ -57,10 +57,8 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<&Valu
 }
 
 fn cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: Rc<LenInfo>) {
-    *scalar_val_ref = try_cal_syscall_param_len_inner(ctx, &*len_info).expect(&format!(
-        "Failed to calculate length of system param: {:?}",
-        len_info,
-    ));
+    *scalar_val_ref = try_cal_syscall_param_len_inner(ctx, &*len_info)
+        .unwrap_or_else(|| panic!("Failed to calculate length of system param: {:?}", len_info));
 }
 
 fn try_cal_syscall_param_len(
@@ -111,7 +109,7 @@ fn try_cal_syscall_param_len_inner(ctx: &mut GenContext, len_info: &LenInfo) -> 
     None
 }
 
-fn do_cal(parent: &[Value], target: usize, len_info: &LenInfo) -> u64 {
+fn do_cal<T: std::borrow::Borrow<Value>>(parent: &[T], target: usize, len_info: &LenInfo) -> u64 {
     let bz = if len_info.bit_sz == 0 {
         8
     } else {
@@ -119,12 +117,17 @@ fn do_cal(parent: &[Value], target: usize, len_info: &LenInfo) -> u64 {
     };
 
     if len_info.offset {
-        parent[0..target].iter().map(|f| f.size()).sum::<u64>() * 8 / bz
+        parent[0..target]
+            .iter()
+            .map(|f| f.borrow().size())
+            .sum::<u64>()
+            * 8
+            / bz
     } else {
         if target == parent.len() {
-            return parent.iter().map(|f| f.size()).sum::<u64>() * 8 / bz;
+            return parent.iter().map(|f| f.borrow().size()).sum::<u64>() * 8 / bz;
         };
-        let v = if let Some(v) = parent[target].inner_val() {
+        let v = if let Some(v) = parent[target].borrow().inner_val() {
             v
         } else {
             return 0;
@@ -149,11 +152,19 @@ fn do_cal(parent: &[Value], target: usize, len_info: &LenInfo) -> u64 {
 
 fn cal_struct_field_len(
     val: &Value,
-    path: &[Box<str>],
+    mut path: &[Box<str>],
     len_info: &LenInfo,
-    parent_map: Option<&FxHashMap<&Value, &Value>>,
+    parent_map: Option<&FxHashMap<*const Value, &Value>>,
 ) -> u64 {
     let val = val.inner_val().unwrap();
+    if &*path[0] == "parent" {
+        path = &path[1..]; // we're already in parent struct.
+        if path.is_empty() {
+            let vals = val.kind.get_group_val().unwrap();
+            return do_cal(vals, vals.len(), len_info);
+        }
+    }
+
     if let Some((vals, pos)) = try_locate(val, path) {
         if let Some(vals) = vals {
             do_cal(vals, pos, len_info)
@@ -162,11 +173,7 @@ fn cal_struct_field_len(
         }
     } else {
         let parent_map = parent_map.expect("Fail to calculate length of struct field");
-        let root_struct = if &*path[0] == "parent" {
-            val
-        } else {
-            position(val, parent_map, path)
-        };
+        let root_struct = position(val, parent_map, path);
         if path.len() > 1 {
             cal_struct_field_len(root_struct, &path[1..], len_info, None)
         } else {
@@ -178,13 +185,25 @@ fn cal_struct_field_len(
 
 fn position<'a>(
     val: &'a Value,
-    parent_map: &'a FxHashMap<&Value, &Value>,
+    parent_map: &'a FxHashMap<*const Value, &Value>,
     path: &[Box<str>],
 ) -> &'a Value {
-    if val.ty.get_template_name() == &*path[0]{
+    if val.ty.get_template_name() == &*path[0] {
         val
     } else {
-        position(parent_map[val], parent_map, path)
+        let parent = parent_map.get(&(val as *const Value));
+        if parent.is_none() {
+            use std::fmt::Write;
+            let mut map_str = String::new();
+            for (k, v) in parent_map.iter() {
+                writeln!(map_str, "\t{} -> {}", unsafe { &(**k).ty.name }, v.ty.name).unwrap();
+            }
+            panic!(
+                "Failed to trace back to calculate length, path: {:?}, val type: {:?}.\nMap:\n{}",
+                path, val.ty.name, map_str
+            );
+        }
+        position(parent.unwrap(), parent_map, path)
     }
 }
 
@@ -211,7 +230,7 @@ fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Valu
     None
 }
 
-fn build_parent_map<'a>(val: &'a Value) -> FxHashMap<&'a Value, &'a Value> {
+fn build_parent_map<'a>(val: &'a Value) -> FxHashMap<*const Value, &'a Value> {
     let mut parent_map = FxHashMap::default();
     iter_struct_val(val, |v| {
         let vals = v.kind.get_group_val().unwrap();
@@ -221,7 +240,7 @@ fn build_parent_map<'a>(val: &'a Value) -> FxHashMap<&'a Value, &'a Value> {
             } else {
                 continue;
             };
-            assert_eq!(parent_map.insert(val, v), None); 
+            assert_eq!(parent_map.insert(val as *const Value, v), None);
         }
     });
     parent_map

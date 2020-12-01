@@ -1,11 +1,11 @@
 use super::*;
 use hlang::ast::{Call, Dir, LenInfo, ResValue};
 use std::rc::Rc;
-
+#[allow(clippy::vec_box)]
 #[derive(Default)]
 pub(super) struct GenCallContext {
     pub(super) generating_syscall: Option<Rc<Syscall>>,
-    pub(super) generated_params: Vec<Value>,
+    pub(super) generated_params: Vec<Box<Value>>, // This is neccessary.
     pub(super) left_len_vals: Vec<(*mut u64, Rc<LenInfo>)>,
 }
 
@@ -36,7 +36,12 @@ pub(super) fn gen(ctx: &mut GenContext, syscall: Rc<Syscall>) -> Call {
 
     Call::new(
         syscall,
-        ctx.call_ctx.generated_params.split_off(0),
+        ctx.call_ctx
+            .generated_params
+            .split_off(0)
+            .into_iter()
+            .map(|x| *x)
+            .collect(),
         ret_value,
     )
 }
