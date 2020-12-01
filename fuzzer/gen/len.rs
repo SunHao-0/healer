@@ -1,8 +1,9 @@
 use super::*;
-use hlang::ast::{Field, Value, ValueKind};
+use hlang::ast::{Value, ValueKind};
 use rustc_hash::FxHashMap;
 
-/// Calculate value of 'len' type.
+/// Finish the Calculation value of 'len' type.
+/// Previous calculation may failed due to ungenerated syscall parameter, so we need calculate them here.
 pub(super) fn finish_cal(ctx: &mut GenContext) {
     let left_len_ty = ctx.call_ctx.left_len_vals.drain(0..).collect::<Vec<_>>();
     for (scalar_val_ref, len_info) in left_len_ty {
@@ -11,37 +12,51 @@ pub(super) fn finish_cal(ctx: &mut GenContext) {
 }
 
 /// Try to calculate value of len type of 'val'
+/// Insert ptr of value storage and leninfo to ctx if the calculation failed.
 pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
     let val = val.inner_val_mut().unwrap(); // Can't be null ptr.
-    let mut _parent_map: Option<FxHashMap<&Value, &Value>> = None;
+    let mut parent_map: Option<FxHashMap<&Value, &Value>> = None;
 
     match &mut val.kind {
-        ValueKind::Scalar(ref mut scalar_val_ref) => {
+        ValueKind::Scalar(scalar_val_ref) => {
             if let Some(len_info) = val.ty.get_len_info() {
                 try_cal_syscall_param_len(ctx, scalar_val_ref, len_info)
             }
         }
-        ValueKind::Group { .. } | ValueKind::Union { .. } => iter_struct_val_mut(val, |v| {
-                if let TypeKind::Struct{..} = &v.ty.kind{
-                    let vals = v.kind.get_group_val().unwrap();
-                    for v in vals.iter().filter_map(|v|v.inner_val()){
-                        if let Some(len_info) = v.ty.get_len_info(){
-                            todo!() // To be continued.
-                        }
-                    }       
-                    todo!()
-                }
+        ValueKind::Group { .. } | ValueKind::Union { .. } => iter_struct_val(val, |v| {
+            if parent_map.is_none() {
+                parent_map = Some(build_parent_map(val));
+            }
+            handle_struct(ctx, v, parent_map.as_ref().unwrap())
         }),
         _ => unreachable!(),
     }
-    todo!()
 }
 
-pub(super) fn cal_syscall_param_len(
-    ctx: &mut GenContext,
-    scalar_val_ref: &mut u64,
-    len_info: Rc<LenInfo>,
-) {
+fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<&Value, &Value>) {
+    let vals = val.kind.get_group_val().unwrap();
+    for v in vals {
+        let v = if let Some(v) = v.inner_val() {
+            v
+        } else {
+            continue;
+        };
+        if let ValueKind::Scalar(scalar_val_ref) = &v.kind {
+            if let Some(len_info) = v.ty.get_len_info() {
+                #[allow(mutable_transmutes)]
+                let scalar_val_ref: &mut u64 = unsafe { std::mem::transmute(scalar_val_ref) };
+                if &*len_info.path[0] == "syscall" {
+                    try_cal_syscall_param_len(ctx, scalar_val_ref, len_info);
+                } else {
+                    *scalar_val_ref =
+                        cal_struct_field_len(val, &len_info.path, &*len_info, Some(parent_map));
+                }
+            }
+        }
+    }
+}
+
+fn cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: Rc<LenInfo>) {
     *scalar_val_ref = try_cal_syscall_param_len_inner(ctx, &*len_info).expect(&format!(
         "Failed to calculate length of system param: {:?}",
         len_info,
@@ -89,9 +104,7 @@ fn try_cal_syscall_param_len_inner(ctx: &mut GenContext, len_info: &LenInfo) -> 
         };
 
         if path.len() > 1 {
-            let fields = val.ty.get_fields().unwrap();
-            let vals = val.kind.get_group_val().unwrap();
-            return Some(cal_struct_field_len(fields, vals, &path[1..], len_info));
+            return Some(cal_struct_field_len(val, &path[1..], len_info, None));
         }
         return Some(do_cal(generated_params_val, i, len_info));
     }
@@ -99,18 +112,22 @@ fn try_cal_syscall_param_len_inner(ctx: &mut GenContext, len_info: &LenInfo) -> 
 }
 
 fn do_cal(parent: &[Value], target: usize, len_info: &LenInfo) -> u64 {
-    if len_info.offset {
-        parent[0..target].iter().map(|f| f.size()).sum::<u64>() * 8 / len_info.bit_sz
+    let bz = if len_info.bit_sz == 0 {
+        8
     } else {
+        len_info.bit_sz
+    };
+
+    if len_info.offset {
+        parent[0..target].iter().map(|f| f.size()).sum::<u64>() * 8 / bz
+    } else {
+        if target == parent.len() {
+            return parent.iter().map(|f| f.size()).sum::<u64>() * 8 / bz;
+        };
         let v = if let Some(v) = parent[target].inner_val() {
             v
         } else {
             return 0;
-        };
-        let bz = if len_info.bit_sz == 0 {
-            8
-        } else {
-            len_info.bit_sz
         };
 
         match &v.ty.kind {
@@ -131,51 +148,53 @@ fn do_cal(parent: &[Value], target: usize, len_info: &LenInfo) -> u64 {
 }
 
 fn cal_struct_field_len(
-    fields: &[Field],
-    vals: &[Value],
+    val: &Value,
     path: &[Box<str>],
     len_info: &LenInfo,
+    parent_map: Option<&FxHashMap<&Value, &Value>>,
 ) -> u64 {
-    todo!()
+    let val = val.inner_val().unwrap();
+    if let Some((vals, pos)) = try_locate(val, path) {
+        if let Some(vals) = vals {
+            do_cal(vals, pos, len_info)
+        } else {
+            0
+        }
+    } else {
+        let parent_map = parent_map.expect("Fail to calculate length of struct field");
+        let root_struct = if &*path[0] == "parent" {
+            val
+        } else {
+            position(val, parent_map, path)
+        };
+        if path.len() > 1 {
+            cal_struct_field_len(root_struct, &path[1..], len_info, None)
+        } else {
+            let vals = root_struct.kind.get_group_val().unwrap();
+            do_cal(vals, vals.len(), len_info)
+        }
+    }
 }
 
-pub(super) fn locate() {
-    todo!()
+fn position<'a>(
+    val: &'a Value,
+    parent_map: &'a FxHashMap<&Value, &Value>,
+    path: &[Box<str>],
+) -> &'a Value {
+    if val.ty.get_template_name() == &*path[0]{
+        val
+    } else {
+        position(parent_map[val], parent_map, path)
+    }
 }
 
-fn try_locate_in_params<'a>(
-    params: &[Param],
-    vals: &'a [Value],
-    path: &[&str],
-) -> Option<(Option<&'a [Value]>, usize)> {
-    try_locate_inner(
-        &params.iter().map(|p| &*p.name).collect::<Vec<_>>()[..],
-        vals,
-        path,
-    )
-}
-
-pub(super) fn try_locate<'a>(
-    fields: &[Field],
-    vals: &'a [Value],
-    path: &[&str],
-) -> Option<(Option<&'a [Value]>, usize)> {
-    try_locate_inner(
-        &fields.iter().map(|f| &*f.name).collect::<Vec<_>>()[..],
-        vals,
-        path,
-    )
-}
-
-pub(super) fn try_locate_inner<'a>(
-    fields_name: &[&str],
-    vals: &'a [Value],
-    path: &[&str],
-) -> Option<(Option<&'a [Value]>, usize)> {
+fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Value]>, usize)> {
+    let vals = val.kind.get_group_val().unwrap();
+    let fields = val.ty.get_fields().unwrap();
     let elem = &*path[0];
 
     for (i, val) in vals.iter().enumerate() {
-        if elem != fields_name[i] {
+        if elem != &*fields[i].name {
             continue;
         }
         let val = if let Some(v) = val.inner_val() {
@@ -185,36 +204,59 @@ pub(super) fn try_locate_inner<'a>(
         };
 
         if path.len() > 1 {
-            return try_locate(
-                &val.ty.get_fields().unwrap(),
-                val.kind.get_group_val().unwrap(),
-                &path[1..],
-            );
+            return try_locate(val, &path[1..]);
         }
         return Some((Some(vals), i));
     }
     None
 }
 
-fn build_parent_map(val: &Value) -> FxHashMap<&Value, &Value>{
-    todo!()
+fn build_parent_map<'a>(val: &'a Value) -> FxHashMap<&'a Value, &'a Value> {
+    let mut parent_map = FxHashMap::default();
+    iter_struct_val(val, |v| {
+        let vals = v.kind.get_group_val().unwrap();
+        for val in vals {
+            let val = if let Some(val) = val.inner_val() {
+                val
+            } else {
+                continue;
+            };
+            assert_eq!(parent_map.insert(val, v), None); 
+        }
+    });
+    parent_map
 }
 
-fn iter_struct_val_mut<F>(val: &mut Value, mut f: F)
+fn iter_struct_val<'a, F>(val: &'a Value, mut f: F)
 where
-    F: FnMut(&mut Value),
+    F: FnMut(&'a Value),
 {
-    match &mut val.kind {
+    iter_struct_val_inner(val, &mut f)
+}
+
+fn iter_struct_val_inner<'a, F>(val: &'a Value, f: &mut F)
+where
+    F: FnMut(&'a Value),
+{
+    match &val.kind {
         ValueKind::Scalar { .. }
         | ValueKind::Vma { .. }
         | ValueKind::Res { .. }
         | ValueKind::Bytes { .. } => {}
         ValueKind::Ptr { pointee, .. } => {
             if let Some(pointee) = pointee {
-                iter_struct_val_mut(pointee, f)
+                iter_struct_val_inner(pointee, f)
             }
         }
-        ValueKind::Group(_) => f(val),
-        ValueKind::Union { val, .. } => iter_struct_val_mut(val, f),
+        ValueKind::Group(_) => {
+            if val.ty.get_fields().is_some() {
+                f(val);
+                let vals = val.kind.get_group_val().unwrap();
+                for v in vals {
+                    iter_struct_val_inner(v, f)
+                }
+            }
+        }
+        ValueKind::Union { val, .. } => iter_struct_val_inner(val, f),
     }
 }

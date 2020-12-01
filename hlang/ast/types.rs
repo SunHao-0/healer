@@ -92,6 +92,15 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn get_template_name(&self) -> &str{
+        let name = &*self.name;
+        if let Some(idx) = name.find('['){
+            &name[0..idx]
+        }else{
+            name
+        }
+    }
 }
 
 /// Order by TypeId
