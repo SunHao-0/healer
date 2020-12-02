@@ -1,6 +1,6 @@
 **NOTE: Healer is still in its early stages and is now experiencing active refactoring.** 
 
-**SEE REFACTOR BRANCH**
+**This is the prototype of healer, please refer to [REFACTOR](https://github.com/SunHao-0/healer/tree/refactor) branch for the current progress**
 
 # Healer
 [![Rustc Version 1.39+](https://img.shields.io/badge/rustc-1.39%2B-green)](https://blog.rust-lang.org/2019/11/07/Rust-1.39.0.html)
