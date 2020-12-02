@@ -1,7 +1,6 @@
 //! Startint long-term process, capture its stdin/stdout/stderr
 #![macro_use]
 
-
 use crate::utils::cli::App;
 use bytes::BytesMut;
 use std::process::{ExitStatus, Stdio};
