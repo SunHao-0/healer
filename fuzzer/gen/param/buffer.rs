@@ -236,7 +236,7 @@ fn mutate_blob(src: &mut Vec<u8>, pool: Option<&FxHashSet<Value>>, (min, max): (
     }
 
     if src.len() < min {
-        let pad = rng.gen_range(min - src.len(), max - src.len() + 1);
+        let pad = rng.gen_range((min - src.len())..(max - src.len() + 1));
         src.extend((0..pad).map(|_| gen_integer(8, None, 1) as u8));
     } else if src.len() > max {
         src.truncate(max);
@@ -247,7 +247,7 @@ const MUTATE_OPERATOR: [fn(&mut Vec<u8>); 3] = [insert_content, bit_flip, replac
 
 fn insert_content(dst: &mut Vec<u8>) {
     let new_blob = rand_blob_range((4, 32));
-    let insert_point = thread_rng().gen_range(0, dst.len());
+    let insert_point = thread_rng().gen_range(0..dst.len());
     do_insert(dst, &new_blob, insert_point);
 }
 
@@ -283,7 +283,7 @@ fn replace_content(src: &mut Vec<u8>) {
 }
 
 fn splice(dst: &mut Vec<u8>, src: &[u8]) {
-    let insert_point = thread_rng().gen_range(0, dst.len());
+    let insert_point = thread_rng().gen_range(0..dst.len());
     do_insert(dst, src, insert_point);
 }
 
@@ -291,9 +291,9 @@ fn rand_sub_slice(src: &mut [u8]) -> &mut [u8] {
     assert!(!src.is_empty());
     let mut rng = thread_rng();
     let min = std::cmp::min(2, src.len());
-    let len = rng.gen_range(min, src.len() + 1);
+    let len = rng.gen_range(min..(src.len() + 1));
     let end = src.len() - len;
-    let sub_start = rng.gen_range(0, end + 1);
+    let sub_start = rng.gen_range(0..(end + 1));
     &mut src[sub_start..sub_start + len]
 }
 

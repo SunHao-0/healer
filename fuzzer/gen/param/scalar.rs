@@ -54,7 +54,7 @@ pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
             let pool = ctx.pool.get(&ty);
             gen_flag(pool, vals, *bitmask)
         }
-        Proc { per_proc, .. } => thread_rng().gen_range(0, *per_proc),
+        Proc { per_proc, .. } => thread_rng().gen_range(0..*per_proc),
         Csum { .. } => 0, // Calculated by syz-executor
         Len { .. } => {
             ctx.record_len_to_param_ctx(); // Mark here, calculate later.
@@ -78,7 +78,7 @@ pub fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u
     let mask = if bit == 64 { u64::MAX } else { (1 << bit) - 1 };
 
     let mut rng = thread_rng();
-    let val: u64 = rng.gen_range(min, max);
+    let val: u64 = rng.gen_range(min..max);
     let shift_align = |mut val: u64| {
         val -= val % align;
         val &= mask;

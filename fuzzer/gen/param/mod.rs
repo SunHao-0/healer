@@ -34,7 +34,7 @@ fn gen_inner(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
         Vma { .. } => gen_vma(ctx, ty, dir),
         Array { .. } => gen_array(ctx, ty, dir),
         Struct { .. } => gen_struct(ctx, ty, dir),
-        Union { fields } => gen_union(ctx, ty, dir),
+        Union { .. } => gen_union(ctx, ty, dir),
     }
 }
 
@@ -82,11 +82,11 @@ fn rand_array_len(range: Option<(u64, u64)>) -> u64 {
         if min == max {
             max += 1;
         }
-        rng.gen_range(min, max)
+        rng.gen_range(min..max)
     } else {
         let mut rng = thread_rng();
-        let (min, max) = (rng.gen_range(2, 8), rng.gen_range(8, 16));
-        rng.gen_range(min, max)
+        let (min, max) = (rng.gen_range(2..8), rng.gen_range(8..16));
+        rng.gen_range(min..max)
     }
 }
 
@@ -103,9 +103,9 @@ fn gen_vma(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
 fn rand_vma_num(ctx: &GenContext) -> u64 {
     let mut rng = thread_rng();
     if rng.gen::<f32>() < 0.85 {
-        rng.gen_range(1, 9)
+        rng.gen_range(1..9)
     } else {
-        rng.gen_range(1, ctx.target.page_num as u64 / 4)
+        rng.gen_range(1..ctx.target.page_num as u64 / 4)
     }
 }
 

@@ -76,14 +76,14 @@ impl VmaAlloc {
         let mut rng = thread_rng();
         let mut page;
         if self.used.is_empty() || rng.gen::<f32>() < 0.2 {
-            page = rng.gen_range(0, 4);
+            page = rng.gen_range(0..4);
             if rng.gen::<f32>() < 0.01 {
                 page = self.page_num - num - page;
             }
         } else {
             page = self.used.iter().copied().choose(&mut rng).unwrap();
             if num > 1 && rng.gen::<bool>() {
-                let mut off = rng.gen_range(0, num);
+                let mut off = rng.gen_range(0..num);
                 if off > page {
                     off = page
                 }
