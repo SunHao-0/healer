@@ -101,6 +101,81 @@ impl Type {
             name
         }
     }
+
+    pub fn get_int_fmt(&self) -> Option<&IntFmt> {
+        match &self.kind {
+            TypeKind::Int { int_fmt, .. }
+            | TypeKind::Flags { int_fmt, .. }
+            | TypeKind::Csum { int_fmt, .. }
+            | TypeKind::Proc { int_fmt, .. }
+            | TypeKind::Const { int_fmt, .. }
+            | TypeKind::Len { int_fmt, .. } => Some(int_fmt),
+            _ => None,
+        }
+    }
+
+    pub fn bf_offset(&self) -> u64 {
+        if let Some(int_fmt) = self.get_int_fmt() {
+            int_fmt.bitfield_off
+        } else {
+            0
+        }
+    }
+
+    pub fn bf_len(&self) -> u64 {
+        if let Some(int_fmt) = self.get_int_fmt() {
+            int_fmt.bitfield_len
+        } else {
+            0
+        }
+    }
+
+    pub fn bin_fmt(&self) -> BinFmt {
+        match &self.kind {
+            TypeKind::Int { int_fmt, .. }
+            | TypeKind::Flags { int_fmt, .. }
+            | TypeKind::Csum { int_fmt, .. }
+            | TypeKind::Proc { int_fmt, .. }
+            | TypeKind::Const { int_fmt, .. }
+            | TypeKind::Len { int_fmt, .. } => int_fmt.fmt,
+            TypeKind::Res { fmt, .. } => *fmt,
+            _ => BinFmt::Native,
+        }
+    }
+
+    pub fn unit_offset(&self) -> u64 {
+        if let Some(int_fmt) = self.get_int_fmt() {
+            int_fmt.bitfield_unit_off
+        } else {
+            0
+        }
+    }
+
+    pub fn is_bitfield(&self) -> bool {
+        if let Some(int_fmt) = self.get_int_fmt() {
+            int_fmt.bitfield_len != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn is_readable_date_type(&self) -> bool {
+        match &self.kind {
+            TypeKind::Buffer { kind, .. } => match kind {
+                BufferKind::String { .. } | BufferKind::Filename { .. } => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_pad(&self) -> bool {
+        if let TypeKind::Const { pad, .. } = &self.kind {
+            *pad
+        } else {
+            false
+        }
+    }
 }
 
 /// Order by TypeId
@@ -346,7 +421,7 @@ impl ResDesc {
 /// Binary format.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
 pub enum BinFmt {
-    Native,
+    Native = 0,
     BigEndian,
     StrDec,
     StrHex,

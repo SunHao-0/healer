@@ -129,6 +129,32 @@ impl Value {
         }
     }
 
+    pub fn get_scalar_val(&self) -> (u64, u64) {
+        use super::types::TypeKind;
+
+        match &self.ty.kind {
+            TypeKind::Int { .. }
+            | TypeKind::Flags { .. }
+            | TypeKind::Csum { .. }
+            | TypeKind::Res { .. }
+            | TypeKind::Const { .. }
+            | TypeKind::Len { .. } => (self.kind.get_scalar_val().unwrap(), 0),
+            TypeKind::Proc {
+                start, per_proc, ..
+            } => (*start + self.kind.get_scalar_val().unwrap(), *per_proc),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn unit_sz(&self) -> u64 {
+        if let Some(int_fmt) = self.ty.get_int_fmt() {
+            if int_fmt.bitfield_len != 0 {
+                return int_fmt.bitfield_unit;
+            }
+        }
+        self.size()
+    }
+
     pub fn size(&self) -> u64 {
         use super::types::TypeKind;
         match &self.kind {
@@ -263,6 +289,8 @@ impl ValueKind {
     pub fn get_scalar_val(&self) -> Option<u64> {
         if let ValueKind::Scalar(val) = self {
             Some(*val)
+        } else if let ValueKind::Res(res) = self {
+            Some(res.val)
         } else {
             None
         }
@@ -303,6 +331,20 @@ impl ValueKind {
     pub fn get_res_id(&self) -> Option<usize> {
         match &self {
             ValueKind::Res(e) => e.get_res_id(),
+            _ => None,
+        }
+    }
+
+    pub fn get_res_rc(&self) -> Option<usize> {
+        match &self {
+            ValueKind::Res(e) => e.get_res_rc(),
+            _ => None,
+        }
+    }
+
+    pub fn get_res_val(&self) -> Option<&ResValue> {
+        match &self {
+            ValueKind::Res(e) => Some(e),
             _ => None,
         }
     }
@@ -350,11 +392,11 @@ impl ResValue {
     }
 
     pub fn get_res_id(&self) -> Option<usize> {
-        if let ResValueKind::Own { id, .. } = &self.kind {
-            Some(*id)
-        } else {
-            None
-        }
+        self.kind.get_id()
+    }
+
+    pub fn get_res_rc(&self) -> Option<usize> {
+        self.kind.get_rc()
     }
 }
 
@@ -411,6 +453,14 @@ impl ResValueKind {
     pub fn get_id(&self) -> Option<usize> {
         if let ResValueKind::Own { id, .. } = self {
             Some(*id)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_rc(&self) -> Option<usize> {
+        if let ResValueKind::Own { refs, .. } = self {
+            Some(refs.get())
         } else {
             None
         }

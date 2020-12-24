@@ -68,6 +68,10 @@ impl Target {
         }
     }
 
+    pub fn physical_addr(&self, addr: u64) -> u64 {
+        self.data_offset + addr
+    }
+
     #[allow(clippy::collapsible_if)]
     fn filter_unreachable_res(
         res_tys: &mut Vec<Rc<Type>>,

@@ -1,3 +1,5 @@
+pub mod serialize;
+
 pub fn exec() -> Result<(), ()> {
     // se&de prog
     // monitor and communicate with executor
