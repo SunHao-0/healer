@@ -1,7 +1,7 @@
 //! Boot up and manage virtual machine
 
-use rustc_hash::FxHashMap;
-use std::sync::Once;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::{Mutex, Once};
 use std::{fmt, thread::sleep, time::Duration};
 use std::{
     path::{Path, PathBuf},
@@ -68,6 +68,7 @@ impl QemuHandle {
 pub enum BootError {
     Config(String),
     Spawn(std::io::Error),
+    NoFreePort,
 }
 
 impl fmt::Display for BootError {
@@ -75,6 +76,7 @@ impl fmt::Display for BootError {
         match self {
             BootError::Config(ref err) => write!(f, "config: {}", err),
             BootError::Spawn(ref err) => write!(f, "spawn: {}", err),
+            BootError::NoFreePort => write!(f, "no port to spawn qemu"),
         }
     }
 }
@@ -127,8 +129,8 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
         qemu: child,
         stdout: stdout_reader,
         stderr: stderr_reader,
-        ssh_ip: QEMU_HOST_IP.to_string(),
-        ssh_port: ssh_fwd_port,
+        ssh_ip: QEMU_SSH_IP.to_string(),
+        ssh_port: ssh_fwd_port.0,
         ssh_key_path: ssh_conf.ssh_key.display().to_string(),
         ssh_user,
     };
@@ -150,7 +152,7 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
             let (_, stderr) = qemu_handle.output();
             let stderr = String::from_utf8(stderr).unwrap_or_default();
             return Err(BootError::Config(format!(
-                "Failed to boot, qemu exited with: {}.\n\nSTDERR:\n{}",
+                "failed to boot, qemu exited with: {}.\nSTDERR:\n{}",
                 status, stderr
             )));
         }
@@ -162,12 +164,14 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
     if alive {
         Ok(qemu_handle)
     } else {
-        Err(BootError::Config(format!("Failed to boot: {:?}", qemu_cmd)))
+        Err(BootError::Config(format!("failed to boot: {:?}", qemu_cmd)))
     }
 }
-const QEMU_HOST_IP: &str = "10.0.2.10";
 
-pub fn build_qemu_command(conf: &QemuConf) -> Result<(Command, u16), BootError> {
+const QEMU_HOST_IP: &str = "10.0.2.10";
+const QEMU_SSH_IP: &str = "127.0.0.1";
+
+fn build_qemu_command(conf: &QemuConf) -> Result<(Command, PortGuard), BootError> {
     let static_conf = static_conf(&conf.target)
         .ok_or_else(|| BootError::Config(format!("target not supported: {}", conf.target)))?;
 
@@ -197,14 +201,14 @@ pub fn build_qemu_command(conf: &QemuConf) -> Result<(Command, u16), BootError> 
 
     let smp = vec!["-smp".to_string(), format!("{}", conf.smp.unwrap_or(2))];
 
-    let ssh_fwd_port = 2000; // TODO find a free port.
+    let ssh_fwd_port = get_free_port().ok_or(BootError::NoFreePort)?; // TODO find a free port.
     let net = vec![
         "-device".to_string(),
         format!("{},netdev=net0", static_conf.net_dev),
         "-netdev".to_string(),
         format!(
             "user,id=net0,host={},hostfwd=tcp::{}-:22",
-            QEMU_HOST_IP, ssh_fwd_port
+            QEMU_HOST_IP, ssh_fwd_port.0
         ),
     ];
     let image = vec![
@@ -385,4 +389,33 @@ fn static_conf<T: AsRef<str>>(os_arch: T) -> Option<&'static QemuStaticConf> {
     }); // call_once
     let conf = unsafe { QEMU_STATIC_CONF.as_ref().unwrap() };
     conf.get(os_arch.as_ref())
+}
+
+static mut PORTS: Option<Mutex<FxHashSet<u16>>> = None;
+static PORTS_ONCE: Once = Once::new();
+
+fn get_free_port() -> Option<PortGuard> {
+    use std::net::{Ipv4Addr, TcpListener};
+    PORTS_ONCE.call_once(|| {
+        unsafe { PORTS = Some(Mutex::new(FxHashSet::default())) };
+    });
+
+    let mut g = unsafe { PORTS.as_ref().unwrap().lock().unwrap() };
+    for p in 1025..65535 {
+        if TcpListener::bind((Ipv4Addr::LOCALHOST, p)).is_ok() {
+            if g.insert(p) {
+                return Some(PortGuard(p));
+            }
+        }
+    }
+    None
+}
+
+struct PortGuard(u16);
+
+impl Drop for PortGuard {
+    fn drop(&mut self) {
+        let mut g = unsafe { PORTS.as_ref().unwrap().lock().unwrap() };
+        assert!(g.remove(&self.0));
+    }
 }

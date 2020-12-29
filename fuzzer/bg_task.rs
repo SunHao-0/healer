@@ -57,8 +57,11 @@ impl Reader {
     #[cfg(not(target_os = "windows"))]
     pub fn new<F: IntoRawFd>(f: F) -> Self {
         let f = f.into_raw_fd();
-        let recv = Self::read_to_end_inner(unsafe { File::from_raw_fd(f) });
-        Self { recv }
+        let (cancel, data_recv) = Self::read_to_end_inner(unsafe { File::from_raw_fd(f) });
+        Self {
+            recv: data_recv,
+            cancel,
+        }
     }
 
     pub fn recv_data(self) -> Vec<u8> {
