@@ -47,8 +47,7 @@ impl QemuHandle {
     }
 
     pub fn is_alive(&self) -> Result<bool, std::io::Error> {
-        // ssh user@ip:~/pwd -p port -i key
-        let mut ssh_cmd = ssh::build_basic_cmd(
+        let mut ssh_cmd = ssh::ssh_basic_cmd(
             &self.ssh_ip,
             self.ssh_port,
             &self.ssh_key_path,
