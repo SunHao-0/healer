@@ -21,15 +21,29 @@ pub struct QemuHandle {
     ssh_user: String,
 }
 
+impl Drop for QemuHandle {
+    fn drop(&mut self) {
+        self.kill_qemu();
+    }
+}
+
 impl QemuHandle {
     pub fn ssh_addr(&self) -> String {
         format!("{}:{}", self.ssh_ip, self.ssh_port)
     }
 
-    pub fn output(self) -> (Vec<u8>, Vec<u8>) {
-        let stdout = self.stdout.recv_data();
-        let stderr = self.stderr.recv_data();
+    pub fn output(mut self) -> (Vec<u8>, Vec<u8>) {
+        self.kill_qemu();
+
+        let stdout = self.stdout.recv.recv().unwrap();
+        let stderr = self.stderr.recv.recv().unwrap();
         (stdout, stderr)
+    }
+
+    fn kill_qemu(&mut self) {
+        if self.qemu.kill().is_ok() {
+            let _ = self.qemu.wait();
+        }
     }
 
     pub fn is_alive(&self) -> Result<bool, std::io::Error> {
@@ -100,11 +114,16 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    log::debug!("{:?}", qemu_cmd);
     let mut child = qemu_cmd.spawn()?;
+
     let stdout_reader = Reader::new(child.stdout.take().unwrap());
     let stderr_reader = Reader::new(child.stderr.take().unwrap());
-    let ssh_user = ssh_conf.ssh_user.clone().unwrap_or(String::from("root"));
-    let qemu_handle = QemuHandle {
+    let ssh_user = ssh_conf
+        .ssh_user
+        .clone()
+        .unwrap_or_else(|| String::from("root"));
+    let mut qemu_handle = QemuHandle {
         qemu: child,
         stdout: stdout_reader,
         stderr: stderr_reader,
@@ -113,6 +132,7 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
         ssh_key_path: ssh_conf.ssh_key.display().to_string(),
         ssh_user,
     };
+
     let mut wait_duration = Duration::from_millis(500);
     let min_wait_duration = Duration::from_millis(100);
     let detla = Duration::from_millis(100);
@@ -124,6 +144,15 @@ pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, Boot
         if qemu_handle.is_alive()? {
             alive = true;
             break;
+        }
+        // qemu may have already exited.
+        if let Some(status) = qemu_handle.qemu.try_wait()? {
+            let (_, stderr) = qemu_handle.output();
+            let stderr = String::from_utf8(stderr).unwrap_or_default();
+            return Err(BootError::Config(format!(
+                "Failed to boot, qemu exited with: {}.\n\nSTDERR:\n{}",
+                status, stderr
+            )));
         }
         waited += wait_duration;
         if wait_duration > min_wait_duration {
@@ -226,7 +255,6 @@ pub fn build_qemu_command(conf: &QemuConf) -> Result<(Command, u16), BootError> 
         .args(&image)
         .args(&append)
         .args(&inshm);
-    log::debug!("{:?}", qemu_cmd);
 
     Ok((qemu_cmd, ssh_fwd_port))
 }
