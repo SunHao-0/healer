@@ -3,7 +3,7 @@ use bytes::BufMut;
 use hlang::ast::{BinFmt, Call, Dir, Prog, ResValue, ResValueKind, Value, ValueKind};
 use iota::iota;
 use rustc_hash::FxHashMap;
-use std::fmt;
+use thiserror::Error;
 
 iota! {
     const EXEC_INSTR_EOF : u64 = (u64::MAX) ^ (iota);
@@ -30,26 +30,26 @@ iota! {
 
 const EXEC_NO_COPYOUT: u64 = u64::MAX;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SerializeError {
+    #[error("buffer two small to serialize the prog, provided size: {provided} bytes")]
     BufferTooSmall { provided: usize },
 }
 
-impl fmt::Display for SerializeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SerializeError::BufferTooSmall { provided } => write!(
-                f,
-                "buffer two small to serialize the prog, provided size: {} bytes",
-                *provided
-            ),
-        }
-    }
-}
+// impl fmt::Display for SerializeError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             SerializeError::BufferTooSmall { provided } => write!(
+//                 f,
+//                 "buffer two small to serialize the prog, provided size: {} bytes",
+//                 *provided
+//             ),
+//         }
+//     }
+// }
 
 /// Serialize a prog into packed binary format.
-pub fn serialize<T: AsMut<[u8]>>(t: &Target, p: Prog, mut buf: T) -> Result<usize, SerializeError> {
-    let buf = buf.as_mut();
+pub fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, SerializeError> {
     let mut ctx = ExecCtx {
         target: t,
         buf,

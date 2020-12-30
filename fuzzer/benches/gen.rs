@@ -22,7 +22,7 @@ pub fn bench_serialize(c: &mut Criterion) {
     c.bench_function("Serialize", |b| {
         b.iter_batched(
             || gen(&target, &pool),
-            |p| serialize(&target, p, unsafe { BUF.as_mut() }),
+            |p| serialize(&target, &p, unsafe { BUF.as_mut() }),
             BatchSize::SmallInput,
         )
     });
