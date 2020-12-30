@@ -2,11 +2,12 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::{Mutex, Once};
-use std::{fmt, thread::sleep, time::Duration};
 use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
 };
+use std::{thread::sleep, time::Duration};
+use thiserror::Error;
 
 use super::ssh;
 use crate::bg_task::Reader;
@@ -28,8 +29,12 @@ impl Drop for QemuHandle {
 }
 
 impl QemuHandle {
-    pub fn ssh_addr(&self) -> String {
-        format!("{}:{}", self.ssh_ip, self.ssh_port)
+    pub fn ssh_ip(&self) -> &str {
+        &self.ssh_ip
+    }
+
+    pub fn ssh_port(&self) -> u16 {
+        self.ssh_port
     }
 
     pub fn output(mut self) -> (Vec<u8>, Vec<u8>) {
@@ -63,27 +68,14 @@ impl QemuHandle {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum BootError {
+    #[error("config: {0}")]
     Config(String),
-    Spawn(std::io::Error),
+    #[error("spawn: {0}")]
+    Spawn(#[from] std::io::Error),
+    #[error("no port to spawn qemu")]
     NoFreePort,
-}
-
-impl fmt::Display for BootError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BootError::Config(ref err) => write!(f, "config: {}", err),
-            BootError::Spawn(ref err) => write!(f, "spawn: {}", err),
-            BootError::NoFreePort => write!(f, "no port to spawn qemu"),
-        }
-    }
-}
-
-impl From<std::io::Error> for BootError {
-    fn from(err: std::io::Error) -> Self {
-        BootError::Spawn(err)
-    }
 }
 
 #[derive(Debug)]
@@ -401,10 +393,8 @@ fn get_free_port() -> Option<PortGuard> {
 
     let mut g = unsafe { PORTS.as_ref().unwrap().lock().unwrap() };
     for p in 1025..65535 {
-        if TcpListener::bind((Ipv4Addr::LOCALHOST, p)).is_ok() {
-            if g.insert(p) {
-                return Some(PortGuard(p));
-            }
+        if TcpListener::bind((Ipv4Addr::LOCALHOST, p)).is_ok() && g.insert(p) {
+            return Some(PortGuard(p));
         }
     }
     None

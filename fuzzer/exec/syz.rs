@@ -3,47 +3,30 @@
 use hlang::ast::Prog;
 use iota::iota;
 use std::{
-    fmt,
+    error::Error,
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Stdio},
 };
+use thiserror::Error;
 
 use super::{
-    comm::handshake,
+    serialize::serialize,
     ssh::{scp, ssh_basic_cmd, ScpError},
-    ExecResult,
+    CallExecInfo,
 };
-use crate::bg_task::Reader;
+use crate::{bg_task::Reader, target::Target};
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SyzSpawnError {
+    #[error("config: {0}")]
     Config(String),
-    Spawn(std::io::Error),
-    Scp(ScpError),
+    #[error("spawn: {0}")]
+    Spawn(#[from] std::io::Error),
+    #[error("copy syz-executor: {0}")]
+    Scp(#[from] ScpError),
+    #[error("waiting handshake: {0}")]
     HandShake(String),
-}
-
-impl fmt::Display for SyzSpawnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SyzSpawnError::Config(ref err) => write!(f, "config: {}", err),
-            SyzSpawnError::Spawn(ref err) => write!(f, "spawn: {}", err),
-            SyzSpawnError::Scp(ref err) => write!(f, "copy syz-executor: {}", err),
-            SyzSpawnError::HandShake(ref err) => write!(f, "waiting handshake: {}", err),
-        }
-    }
-}
-
-impl From<std::io::Error> for SyzSpawnError {
-    fn from(err: std::io::Error) -> Self {
-        SyzSpawnError::Spawn(err)
-    }
-}
-
-impl From<ScpError> for SyzSpawnError {
-    fn from(err: ScpError) -> Self {
-        SyzSpawnError::Scp(err)
-    }
 }
 
 /// Env flags to executor.
@@ -74,10 +57,17 @@ pub struct SyzHandleBuilder {
     executor: Option<Box<Path>>,
     env_flags: EnvFlags,
     use_forksrv: bool,
+    use_shm: bool,
     copy_bin: bool,
     extra_args: Vec<String>,
     scp_path: Option<Box<Path>>,
     pid: Option<u64>,
+}
+
+impl Default for SyzHandleBuilder {
+    fn default() -> SyzHandleBuilder {
+        SyzHandleBuilder::new()
+    }
 }
 
 impl SyzHandleBuilder {
@@ -90,6 +80,7 @@ impl SyzHandleBuilder {
             executor: None,
             env_flags: FLAG_SIGNAL,
             use_forksrv: true,
+            use_shm: true,
             copy_bin: true,
             extra_args: Vec::new(),
             scp_path: None,
@@ -109,6 +100,11 @@ impl SyzHandleBuilder {
         self
     }
 
+    pub fn env_flags(mut self, flag: u64) -> Self {
+        self.env_flags = flag;
+        self
+    }
+
     pub fn executor(mut self, p: Box<Path>) -> Self {
         self.executor = Some(p);
         self
@@ -116,6 +112,11 @@ impl SyzHandleBuilder {
 
     pub fn use_forksrv(mut self, u: bool) -> Self {
         self.use_forksrv = u;
+        self
+    }
+
+    pub fn user_shm(mut self, u: bool) -> Self {
+        self.use_shm = true;
         self
     }
 
@@ -146,7 +147,9 @@ impl SyzHandleBuilder {
     }
 
     pub fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
-        let pid = self.pid.ok_or(SyzSpawnError::Config(format!("need pid")))?;
+        let pid = self
+            .pid
+            .ok_or_else(|| SyzSpawnError::Config("need pid".to_string()))?;
         let mut syz = self.spawn_remote()?;
         let stdin = syz.stdin.take().unwrap();
         let stdout = syz.stdout.take().unwrap();
@@ -157,15 +160,12 @@ impl SyzHandleBuilder {
             stdout,
             pid,
             bg_stderr: stderr,
+            use_shm: self.use_shm,
+            env_flags: self.env_flags,
         };
 
         if self.use_forksrv {
-            if let Err(e) = handshake(
-                &mut syz_handle.stdin,
-                &mut syz_handle.stdout,
-                self.env_flags,
-                pid,
-            ) {
+            if let Err(e) = syz_handle.handshake() {
                 let stderr = String::from_utf8(syz_handle.output()).unwrap_or_default();
                 return Err(SyzSpawnError::HandShake(format!(
                     "{}\nSTDERR:\n{}",
@@ -183,11 +183,10 @@ impl SyzHandleBuilder {
         let from = self
             .executor
             .as_deref()
-            .ok_or(SyzSpawnError::Config(format!("need executable file")))?;
-        let bin = from.file_name().ok_or(SyzSpawnError::Config(format!(
-            "bad executable file path: {}",
-            from.display()
-        )))?;
+            .ok_or_else(|| SyzSpawnError::Config("need executable file".to_string()))?;
+        let bin = from.file_name().ok_or_else(|| {
+            SyzSpawnError::Config(format!("bad executable file path: {}", from.display()))
+        })?;
         let mut to = if let Some(p) = self.scp_path.as_ref() {
             p.to_path_buf()
         } else {
@@ -198,14 +197,14 @@ impl SyzHandleBuilder {
         let ssh_ip = self
             .ssh_ip
             .as_deref()
-            .ok_or(SyzSpawnError::Config(format!("need ssh ip")))?;
+            .ok_or_else(|| SyzSpawnError::Config("need ssh ip".to_string()))?;
         let ssh_port = self
             .ssh_port
-            .ok_or(SyzSpawnError::Config(format!("need ssh port")))?;
+            .ok_or_else(|| SyzSpawnError::Config("need ssh port".to_string()))?;
         let ssh_key = self
             .ssh_key
             .as_ref()
-            .ok_or(SyzSpawnError::Config(format!("need key")))?;
+            .ok_or_else(|| SyzSpawnError::Config("need key".to_string()))?;
         let ssh_user = self.ssh_user.as_deref().unwrap_or("root");
 
         if self.copy_bin {
@@ -238,22 +237,78 @@ iota! {
 
 pub struct ExecOpt {
     pub(crate) flags: ExecFlags,
-    pub(crate) use_shm: bool,
     pub(crate) fault_call: i32,
     pub(crate) fault_nth: i32,
 }
 
 pub struct SyzHandle {
-    syz: Child,
-    stdin: ChildStdin,
-    stdout: ChildStdout,
-    bg_stderr: Reader,
-    pid: u64,
+    pub(crate) syz: Child,
+    pub(crate) stdin: ChildStdin,
+    pub(crate) stdout: ChildStdout,
+    pub(crate) bg_stderr: Reader,
+    pub(crate) pid: u64,
+    pub(crate) use_shm: bool,
+    pub(crate) env_flags: EnvFlags,
+}
+
+pub enum SyzExecResult {
+    Ok(Vec<CallExecInfo>),
+    Failed {
+        info: Vec<CallExecInfo>,
+        err: Box<dyn Error + 'static>,
+    },
+    Internal(Box<dyn Error + 'static>),
 }
 
 impl SyzHandle {
-    pub fn exec(&mut self, _: &Prog, flags: ExecFlags) -> Result<ExecResult, ()> {
-        todo!()
+    pub fn exec(
+        &mut self,
+        t: &Target,
+        p: &Prog,
+        opt: ExecOpt,
+        in_buf: &mut [u8],
+        out_buf: &mut [u8],
+    ) -> SyzExecResult {
+        const SYZ_STATUS_INTERNAL_ERROR: i32 = 67;
+
+        let prog_sz = match serialize(t, p, in_buf) {
+            Ok(left_sz) => in_buf.len() - left_sz,
+            Err(e) => return SyzExecResult::Internal(Box::new(e)),
+        };
+
+        let mut failed = false;
+        let mut err = String::new();
+        out_buf[0..4].iter_mut().for_each(|v| *v = 0);
+        if let Err(e) = self.exec_inner(opt, &in_buf[0..prog_sz], out_buf) {
+            let exit_status = match self.syz.kill() {
+                Ok(_) => self.syz.wait().unwrap().code().unwrap_or(-1),
+                Err(e) if e.kind() == ErrorKind::InvalidInput => {
+                    self.syz.wait().unwrap().code().unwrap_or(-1)
+                }
+                Err(e) => panic!("unexpected error {}", e),
+            };
+            let stderr = self.bg_stderr.recv.recv().unwrap();
+            let std_err_str = String::from_utf8(stderr).unwrap_or_default();
+            if exit_status == SYZ_STATUS_INTERNAL_ERROR {
+                return SyzExecResult::Internal(std_err_str.into());
+            } else {
+                err = format!("exec error: {}\nsyz stderr: {}", e, std_err_str);
+            }
+            failed = true;
+        }
+        match self.parse_output(p, out_buf) {
+            Ok(info) => {
+                if failed {
+                    SyzExecResult::Failed {
+                        info,
+                        err: err.into(),
+                    }
+                } else {
+                    SyzExecResult::Ok(info)
+                }
+            }
+            Err(e) => SyzExecResult::Internal(Box::new(e)),
+        }
     }
 
     pub fn output(mut self) -> Vec<u8> {

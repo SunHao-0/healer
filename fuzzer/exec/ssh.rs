@@ -1,11 +1,13 @@
-use std::fmt;
 use std::path::Path;
 use std::process::Command;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct SshConf {
     pub ssh_key: Box<Path>,
     pub ssh_user: Option<String>, // root for default
+    pub ip: Option<String>,
+    pub port: Option<u16>,
 }
 
 pub fn ssh_basic_cmd<T: AsRef<str>>(
@@ -28,25 +30,12 @@ pub fn ssh_basic_cmd<T: AsRef<str>>(
     ssh_cmd
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ScpError {
+    #[error("scp: {0}")]
     Scp(String),
-    Spawn(std::io::Error),
-}
-
-impl fmt::Display for ScpError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ScpError::Scp(ref err) => write!(f, "scp: {}", err),
-            ScpError::Spawn(ref err) => write!(f, "spawn: {}", err),
-        }
-    }
-}
-
-impl From<std::io::Error> for ScpError {
-    fn from(err: std::io::Error) -> Self {
-        ScpError::Spawn(err)
-    }
+    #[error("spawn: {0}")]
+    Spawn(#[from] std::io::Error),
 }
 
 pub fn scp<T: AsRef<str>, P: AsRef<Path>>(
