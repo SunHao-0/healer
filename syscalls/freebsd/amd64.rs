@@ -1626,4 +1626,8 @@ fn types() -> Vec<Rc<Type>>{
 	tys
 }
 
+<<<<<<< HEAD
 pub const REVISION : &str = "3fd1a46c965392aca9a6851d82322f5273dee532";
+=======
+pub static REVISION : &str = "3fd1a46c965392aca9a6851d82322f5273dee532";
+>>>>>>> c192c66fffcb9fde807056189ec6eee68c7e93ba
