@@ -30,8 +30,8 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn new(syscalls: Vec<Syscall>, mut tys: Vec<Rc<Type>>, re: &str) -> Self {
-        let mut syscalls = syscalls.into_iter().map(Rc::new).collect::<Vec<_>>();
+    pub fn new(calls: Vec<Syscall>, mut tys: Vec<Rc<Type>>, re: &str) -> Self {
+        let mut calls = calls.into_iter().map(Rc::new).collect::<Vec<_>>();
 
         Self::restore_typeref(&mut tys);
         let mut res_tys = tys
@@ -43,21 +43,20 @@ impl Target {
             .collect::<Vec<_>>();
         let mut res_eq_class = Self::cal_res_eq_class(&res_tys);
         assert!(res_tys.iter().all(|ty| ty.is_res_kind()));
-        Self::analyze_syscall_inout_res(&mut syscalls, &mut tys);
-        Self::complete_res_ty_info(&mut res_tys, &syscalls);
+        Self::analyze_syscall_inout_res(&mut calls, &mut tys);
+        Self::complete_res_ty_info(&mut res_tys, &calls);
         Self::filter_unreachable_res(&mut res_tys, &mut res_eq_class);
 
         Target {
-            // TODO fix these hard coded value.
-            os: "linux".to_string().into_boxed_str(),
-            arch: "amd64".to_string().into_boxed_str(),
-            revision: re.to_string().into_boxed_str(),
-            ptr_sz: 8,
-            page_sz: 4096,
-            page_num: 4096,
-            data_offset: 0xFFFF,
-            le_endian: true,
-            syscalls,
+            os: syscalls::OS.to_string().into_boxed_str(),
+            arch: syscalls::ARCH.to_string().into_boxed_str(),
+            revision: syscalls::REVISION.to_string().into_boxed_str(),
+            ptr_sz: syscalls::PTR_SIZE as u64,
+            page_sz: syscalls::PARGE_SIZE as u64,
+            page_num: syscalls::NUM_PARGS as u64,
+            data_offset: syscalls::DATA_OFFSET as u64,
+            le_endian: syscalls::LITTLE_ENDIAN,
+            syscalls: calls,
             tys,
             res_tys,
             res_eq_class,
