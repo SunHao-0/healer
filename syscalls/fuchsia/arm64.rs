@@ -3,6 +3,15 @@
 use std::rc::Rc;
 use hlang::ast::*;
 
+
+pub const OS: &str = "fuchsia";
+pub const ARCH: &str = "arm64";
+pub const PTR_SIZE: usize = 8;
+pub const PARGE_SIZE: usize = 4096;
+pub const NUM_PARGS: usize = 4096;
+pub const DATA_OFFSET: usize = 536870912;
+pub const LITTLE_ENDIAN: bool = true;
+
 fn syscalls_0(calls: &mut Vec<Syscall>, tys: &[Rc<Type>]){
 	calls.push(Syscall::new(0, 0, "chdir", "chdir", 0, vec![Param::new("dir", tys[273].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
 	calls.push(Syscall::new(1, 0, "chmod", "chmod", 0, vec![Param::new("file", tys[273].clone(), None), Param::new("mode", tys[232].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
@@ -458,17 +467,17 @@ fn types_0(tys: &mut Vec<Rc<Type>>){
 	tys.push(Rc::new(Type::new(48, "array", 65536, 1, false, false, TypeKind::new_buffer(BufferKind::BlobRange(65536, 65536), ""))));
 	tys.push(Rc::new(Type::new(49, "filename", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_fname(vec![], false),""))));
 	tys.push(Rc::new(Type::new(50, "string", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_str(vec![], false), ""))));
-	tys.push(Rc::new(Type::new(51, "string", 28, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.net.NameLookup\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(52, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.net.Connectivity\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(53, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.process.Launcher\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(54, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.process.Resolver\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(55, "string", 31, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.cobalt.Controller\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(56, "string", 34, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.cobalt.LoggerFactory\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(57, "string", 35, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.scpi.SystemController\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(58, "string", 38, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.cobalt.SystemDataUpdater\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(59, "string", 45, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.cobalt.MetricEventLoggerFactory\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(60, "string", 50, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/fuchsia.devicesettings.DeviceSettingsManager\x00"#, ], false), ""))));
-	tys.push(Rc::new(Type::new(61, "string", 6, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br#"/svc/\x00"#, ], false), ""))));
+	tys.push(Rc::new(Type::new(51, "string", 28, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.net.NameLookup\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(52, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.net.Connectivity\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(53, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.process.Launcher\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(54, "string", 30, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.process.Resolver\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(55, "string", 31, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.cobalt.Controller\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(56, "string", 34, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.cobalt.LoggerFactory\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(57, "string", 35, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.scpi.SystemController\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(58, "string", 38, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.cobalt.SystemDataUpdater\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(59, "string", 45, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.cobalt.MetricEventLoggerFactory\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(60, "string", 50, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/fuchsia.devicesettings.DeviceSettingsManager\x00"##, ], false), ""))));
+	tys.push(Rc::new(Type::new(61, "string", 6, 1, false, false, TypeKind::new_buffer(BufferKind::new_str(vec![br##"/svc/\x00"##, ], false), ""))));
 	tys.push(Rc::new(Type::new(62, "stringnoz", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_str(vec![], true), ""))));
 	tys.push(Rc::new(Type::new(63, "text", 0, 1, false, true, TypeKind::new_buffer(BufferKind::Text(TextKind::Target),""))));
 }
@@ -2333,4 +2342,4 @@ fn types() -> Vec<Rc<Type>>{
 	tys
 }
 
-pub static REVISION : &str = "1113de547965ab3829ff9db84cd536b25291f592";
+pub const REVISION : &str = "1113de547965ab3829ff9db84cd536b25291f592";

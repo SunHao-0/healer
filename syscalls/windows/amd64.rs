@@ -3,6 +3,15 @@
 use std::rc::Rc;
 use hlang::ast::*;
 
+
+pub const OS: &str = "windows";
+pub const ARCH: &str = "amd64";
+pub const PTR_SIZE: usize = 8;
+pub const PARGE_SIZE: usize = 4096;
+pub const NUM_PARGS: usize = 4096;
+pub const DATA_OFFSET: usize = 536870912;
+pub const LITTLE_ENDIAN: bool = true;
+
 fn syscalls_0(calls: &mut Vec<Syscall>, tys: &[Rc<Type>]){
 	calls.push(Syscall::new(0, 0, "AbortDoc", "AbortDoc", 0, vec![Param::new("hdc", tys[26].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
 	calls.push(Syscall::new(1, 0, "AbortPath", "AbortPath", 0, vec![Param::new("hdc", tys[26].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
@@ -3169,4 +3178,4 @@ fn types() -> Vec<Rc<Type>>{
 	tys
 }
 
-pub static REVISION : &str = "eff0528f457e685691b4f2456a12ff26fe2b49f9";
+pub const REVISION : &str = "eff0528f457e685691b4f2456a12ff26fe2b49f9";
