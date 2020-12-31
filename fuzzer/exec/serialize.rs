@@ -31,25 +31,13 @@ iota! {
 const EXEC_NO_COPYOUT: u64 = u64::MAX;
 
 #[derive(Debug, Error)]
-pub enum SerializeError {
+pub(crate) enum SerializeError {
     #[error("buffer two small to serialize the prog, provided size: {provided} bytes")]
     BufferTooSmall { provided: usize },
 }
 
-// impl fmt::Display for SerializeError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         match self {
-//             SerializeError::BufferTooSmall { provided } => write!(
-//                 f,
-//                 "buffer two small to serialize the prog, provided size: {} bytes",
-//                 *provided
-//             ),
-//         }
-//     }
-// }
-
 /// Serialize a prog into packed binary format.
-pub fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, SerializeError> {
+pub(crate) fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, SerializeError> {
     let mut ctx = ExecCtx {
         target: t,
         buf,

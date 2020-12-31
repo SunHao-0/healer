@@ -2,50 +2,59 @@ use std::path::{Path, PathBuf};
 
 use hlang::ast::Prog;
 use iota::iota;
-use qemu::{QemuConf, QemuHandle};
+use qemu::QemuHandle;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
-use ssh::SshConf;
-use syz::{EnvFlags, SyzHandle, SyzHandleBuilder};
+use syz::{SyzHandle, SyzHandleBuilder};
 use thiserror::Error;
 
 use crate::target::Target;
 
-use self::syz::ExecOpt;
-
 /// Communication with syz-executor.
-pub mod comm;
+mod comm;
 /// Spawning qemu.
-pub mod qemu;
+mod qemu;
 /// Prog Serialization.
-pub mod serialize;
+mod serialize;
 /// Invoking ssh.
-pub mod ssh;
+mod ssh;
 /// Syz-executor handling.
-pub mod syz;
+mod syz;
 
+/// Possible result of one execution.
 pub enum ExecResult {
+    /// Prog was executed successfully without crashing kernel or executor.
     Normal(Vec<CallExecInfo>),
+    /// Prog was executed partially(executor hang or exited) without crashing kernel.
     Failed {
         info: Vec<CallExecInfo>,
         err: Box<dyn std::error::Error + 'static>,
     },
+    /// Prog caused kernel panic.
     Crash(CrashInfo), // TODO use structural crash information.
 }
 
+/// Internal error of one execution.
 #[derive(Debug, Error)]
 pub enum ExecError {
+    /// Internal error of executor implementation.
     #[error("syz-executor: {0}")]
     SyzInternal(Box<dyn std::error::Error + 'static>),
+    /// Spawning error due to system error.
     #[error("spawn: {0}")]
     Spawn(#[from] SpawnError),
 }
 
+/// Raw crash information.
 pub struct CrashInfo {
+    /// Stdout of qemu.
     qemu_stdout: Vec<u8>,
+    /// Stdin of qemu.
     qemu_stderr: Vec<u8>,
+    /// stderr of inner executor.
     syz_out: String,
 }
 
+/// Flag for execution result of one call.
 pub type CallFlags = u32;
 
 iota! {
@@ -55,37 +64,68 @@ iota! {
     , CALL_FAULT_INJECTED                          // fault was injected into this call
 }
 
+/// Execution of one call.
 #[derive(Debug, Default, Clone)]
 pub struct CallExecInfo {
     pub(crate) flags: CallFlags,
+    /// Branch coverage.
     pub(crate) branches: Vec<u32>,
+    /// Block converage.
     pub(crate) blocks: Vec<u32>,
+    /// Syscall errno, indicating the success or failure.
     pub(crate) errno: i32,
 }
 
-pub struct ExecConf {
-    pub executor: Box<Path>,
-    pub use_shm: bool,
-    pub use_forksrv: bool,
+/// Flag for controlling execution behavior.
+pub type ExecFlags = u64;
+
+iota! {
+    pub const FLAG_COLLECT_COVER : ExecFlags = 1 << (iota);       // collect coverage
+    , FLAG_DEDUP_COVER                                 // deduplicate coverage in executor
+    , FLAG_INJECT_FAULT                                // inject a fault in this execution (see ExecOpts)
+    , FLAG_COLLECT_COMPS                               // collect KCOV comparisons
+    , FLAG_THREADED                                    // use multiple threads to mitigate blocked syscalls
+    , FLAG_COLLIDE                                     // collide syscalls to provoke data races
+    , FLAG_ENABLE_COVERAGE_FILTER                      // setup and use bitmap to do coverage filter
 }
 
+/// Option for controlling execution behavior.
+pub struct ExecOpt {
+    pub flags: ExecFlags,
+    /// Inject fault for 'fault_call'.
+    pub fault_call: i32,
+    /// Inject fault 'nth' for 'fault_call'
+    pub fault_nth: i32,
+}
+
+/// Hign-level controller of inner executor and qemu.
 pub struct ExecHandle {
+    /// Inner qemu driver, handling qemu boot, interactive stuff.
     qemu: Option<QemuHandle>,
+    /// Inner executor driver, handling spawn, communication stuff.
     syz: Option<SyzHandle>,
-
+    /// Input shared memory for inner executor. Value is None if use_shm is false.
     in_shm: Option<Shmem>,
+    /// Output shared memory for inner executor. Value is None if use_shm is false.
     out_shm: Option<Shmem>,
+    /// Input buffer for inner executor. Value is None if use shm.
     in_mem: Option<Box<[u8]>>,
+    /// Input shared memory for inner executor. Value is None if use shm.
     out_mem: Option<Box<[u8]>>,
-
+    /// Configuration of qemu, such as image path, boot target.
     qemu_conf: QemuConf,
+    /// Configuration of ssh, such as addr, identity.
     ssh_conf: SshConf,
+    /// Configuration of executor, such as executor path.
     exec_conf: ExecConf,
+    /// Env configuration of inner executor.
     env: EnvFlags,
+    /// Unique id for inner executor, not process id(linux pid).
     pid: u64,
 }
 
 impl ExecHandle {
+    /// Execute one prog with specific option.
     pub fn exec(&mut self, t: &Target, p: &Prog, opt: ExecOpt) -> Result<ExecResult, ExecError> {
         if self.syz.is_none() {
             self.spawn_syz()?;
@@ -126,7 +166,11 @@ impl ExecHandle {
                     Ok(ExecResult::Failed { info, err })
                 }
             }
-            syz::SyzExecResult::Internal(e) => Err(ExecError::SyzInternal(e)),
+            syz::SyzExecResult::Internal(e) => {
+                let syz = self.syz.take().unwrap();
+                drop(syz);
+                Err(ExecError::SyzInternal(e))
+            }
         }
     }
 
@@ -167,13 +211,89 @@ pub enum SpawnError {
     IO(#[from] std::io::Error),
 }
 
+/// Env flags to executor.
+type EnvFlags = u64; // TODO this should only be public to super module, but iota crate doesn't support pub(crate) token.
+
+iota! {
+    const FLAG_DEBUG: EnvFlags = 1 << (iota);             // debug output from executor
+    , FLAG_SIGNAL                                    // collect feedback signals (coverage)
+    , FLAG_SANDBOX_SETUID                            // impersonate nobody user
+    , FLAG_SANDBOX_NAMESPACE                         // use namespaces for sandboxing
+    , FLAG_SANDBOX_ANDROID                           // use Android sandboxing for the untrusted_app domain
+    , FLAG_EXTRA_COVER                               // collect extra coverage
+    , FLAG_ENABLE_TUN                                // setup and use /dev/tun for packet injection
+    , FLAG_ENABLE_NETDEV                             // setup more network devices for testing
+    , FLAG_ENABLE_NETRESET                           // reset network namespace between programs
+    , FLAG_ENABLE_CGROUPS                            // setup cgroups for testing
+    , FLAG_ENABLE_CLOSEFDS                          // close fds after each program
+    , FLAG_ENABLE_DEVLINKPCI                         // setup devlink PCI device
+    , FLAG_ENABLE_VHCI_INJECTION                     // setup and use /dev/vhci for hci packet injection
+    , FLAG_ENABLE_WIFI                               // setup and use mac80211_hwsim for wifi emulation
+}
+
+/// Configuration of executor.
+#[derive(Debug, Clone)]
+pub struct ExecConf {
+    /// Path to inner executor executable file.
+    pub executor: Box<Path>,
+    /// Use shared memory or not, default is true.
+    pub use_shm: bool,
+    /// Use fork server or not, default is true.
+    pub use_forksrv: bool,
+}
+
+/// Configuration of booting qemu.
+#[derive(Debug, Clone)]
+pub struct QemuConf {
+    /// Booting target, such as linux/amd64, see qemu.rs for all supported target.
+    pub target: String,
+    /// Path tp disk image to boot, default is "stretch.img".
+    pub img_path: Box<Path>,
+    /// Optional Path to kernel bzImage.
+    pub kernel_path: Option<Box<Path>>,
+    /// Smp, default is 2.
+    pub smp: Option<u8>,
+    /// Mem size in megabyte.
+    pub mem: Option<u8>,
+    /// Optional shared memory device file path, creadted automatically if use qemu ivshm.
+    mem_backend_files: Vec<(Box<Path>, usize)>,
+}
+
+impl Default for QemuConf {
+    fn default() -> Self {
+        Self {
+            target: "linux/amd64".to_string(),
+            kernel_path: None,
+            img_path: PathBuf::from("./stretch.img").into_boxed_path(),
+            smp: None,
+            mem: None,
+            mem_backend_files: Vec::new(),
+        }
+    }
+}
+
+/// Configuration of ssh.
+#[derive(Debug)]
+pub struct SshConf {
+    /// Path to temporary secret key, for ssh -i option.
+    pub ssh_key: Box<Path>,
+    /// Ssh user, default is root.
+    pub ssh_user: Option<String>,
+
+    // not used yet.
+    /// Ip addr of remote mechine.
+    ip: Option<String>,
+    /// Port addr of remote machine
+    port: Option<u16>,
+}
+
+/// Boot qemu with 'qemu_conf' and 'ssh_conf', then spawn inner executor in it.
 pub fn spawn_in_qemu(
     conf: ExecConf,
     mut qemu_conf: QemuConf,
     mut ssh_conf: SshConf,
     pid: u64,
 ) -> Result<ExecHandle, SpawnError> {
-    use syz::*;
     const ENV: u64 = FLAG_SIGNAL | FLAG_ENABLE_TUN | FLAG_ENABLE_NETDEV | FLAG_ENABLE_CGROUPS;
     const IN_MEM_SIZE: usize = 4 << 20;
     const OUT_MEM_SIZE: usize = 16 << 20;
@@ -198,12 +318,12 @@ pub fn spawn_in_qemu(
         in_mem = Some(boxed_buf(IN_MEM_SIZE));
         out_mem = Some(boxed_buf(OUT_MEM_SIZE));
     }
-    let qemu = qemu::boot(&qemu_conf, &ssh_conf)?;
     if ssh_conf.ssh_user.is_none() {
         let u = "root".to_string();
         ssh_conf.ssh_user = Some(u);
     };
 
+    let qemu = qemu::boot(&qemu_conf, &ssh_conf)?;
     let mut handle = ExecHandle {
         qemu: Some(qemu),
         syz: None,

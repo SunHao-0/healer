@@ -2,15 +2,7 @@ use std::path::Path;
 use std::process::Command;
 use thiserror::Error;
 
-#[derive(Debug)]
-pub struct SshConf {
-    pub ssh_key: Box<Path>,
-    pub ssh_user: Option<String>, // root for default
-    pub ip: Option<String>,
-    pub port: Option<u16>,
-}
-
-pub fn ssh_basic_cmd<T: AsRef<str>>(
+pub(super) fn ssh_basic_cmd<T: AsRef<str>>(
     ip: T,
     port: u16,
     key: T, // use key instead of password
@@ -38,7 +30,7 @@ pub enum ScpError {
     Spawn(#[from] std::io::Error),
 }
 
-pub fn scp<T: AsRef<str>, P: AsRef<Path>>(
+pub(super) fn scp<T: AsRef<str>, P: AsRef<Path>>(
     ip: T,
     port: u16,
     key: T, // use key instead of password

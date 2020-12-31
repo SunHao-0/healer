@@ -1,7 +1,6 @@
 //! Start, interactive with syz-executor
 
 use hlang::ast::Prog;
-use iota::iota;
 use std::{
     error::Error,
     io::ErrorKind,
@@ -13,7 +12,7 @@ use thiserror::Error;
 use super::{
     serialize::serialize,
     ssh::{scp, ssh_basic_cmd, ScpError},
-    CallExecInfo,
+    CallExecInfo, EnvFlags, ExecOpt,
 };
 use crate::{bg_task::Reader, target::Target};
 
@@ -29,27 +28,7 @@ pub enum SyzSpawnError {
     HandShake(String),
 }
 
-/// Env flags to executor.
-pub type EnvFlags = u64;
-
-iota! {
-    pub const FLAG_DEBUG: EnvFlags = 1 << (iota);             // debug output from executor
-    , FLAG_SIGNAL                                    // collect feedback signals (coverage)
-    , FLAG_SANDBOX_SETUID                            // impersonate nobody user
-    , FLAG_SANDBOX_NAMESPACE                         // use namespaces for sandboxing
-    , FLAG_SANDBOX_ANDROID                           // use Android sandboxing for the untrusted_app domain
-    , FLAG_EXTRA_COVER                               // collect extra coverage
-    , FLAG_ENABLE_TUN                                // setup and use /dev/tun for packet injection
-    , FLAG_ENABLE_NETDEV                             // setup more network devices for testing
-    , FLAG_ENABLE_NETRESET                           // reset network namespace between programs
-    , FLAG_ENABLE_CGROUPS                            // setup cgroups for testing
-    , FLAG_ENABLE_CLOSEFDS                          // close fds after each program
-    , FLAG_ENABLE_DEVLINKPCI                         // setup devlink PCI device
-    , FLAG_ENABLE_VHCI_INJECTION                     // setup and use /dev/vhci for hci packet injection
-    , FLAG_ENABLE_WIFI                               // setup and use mac80211_hwsim for wifi emulation
-}
-
-pub struct SyzHandleBuilder {
+pub(super) struct SyzHandleBuilder {
     ssh_key: Option<String>,
     ssh_user: Option<String>,
     ssh_ip: Option<String>,
@@ -71,14 +50,14 @@ impl Default for SyzHandleBuilder {
 }
 
 impl SyzHandleBuilder {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             ssh_key: None,
             ssh_user: None,
             ssh_ip: None,
             ssh_port: None,
             executor: None,
-            env_flags: FLAG_SIGNAL,
+            env_flags: super::FLAG_SIGNAL,
             use_forksrv: true,
             use_shm: true,
             copy_bin: true,
@@ -88,65 +67,68 @@ impl SyzHandleBuilder {
         }
     }
 
-    pub fn ssh_addr<T: Into<String>>(mut self, ip: T, port: u16) -> Self {
+    pub(super) fn ssh_addr<T: Into<String>>(mut self, ip: T, port: u16) -> Self {
         self.ssh_ip = Some(ip.into());
         self.ssh_port = Some(port);
         self
     }
 
-    pub fn ssh_identity<T: Into<String>>(mut self, key: T, user: T) -> Self {
+    pub(super) fn ssh_identity<T: Into<String>>(mut self, key: T, user: T) -> Self {
         self.ssh_user = Some(user.into());
         self.ssh_key = Some(key.into());
         self
     }
 
-    pub fn env_flags(mut self, flag: u64) -> Self {
+    pub(super) fn env_flags(mut self, flag: u64) -> Self {
         self.env_flags = flag;
         self
     }
 
-    pub fn executor(mut self, p: Box<Path>) -> Self {
+    pub(super) fn executor(mut self, p: Box<Path>) -> Self {
         self.executor = Some(p);
         self
     }
 
-    pub fn use_forksrv(mut self, u: bool) -> Self {
+    pub(super) fn use_forksrv(mut self, u: bool) -> Self {
         self.use_forksrv = u;
         self
     }
 
-    pub fn user_shm(mut self, u: bool) -> Self {
+    pub(super) fn user_shm(mut self, u: bool) -> Self {
         self.use_shm = true;
         self
     }
 
-    pub fn copy_bin(mut self, u: bool) -> Self {
+    pub(super) fn copy_bin(mut self, u: bool) -> Self {
         self.copy_bin = u;
         self
     }
 
-    pub fn pid(mut self, pid: u64) -> Self {
+    pub(super) fn pid(mut self, pid: u64) -> Self {
         self.pid = Some(pid);
         self
     }
 
-    pub fn extra_arg<T: Into<String>>(mut self, arg: T) -> Self {
+    pub(super) fn extra_arg<T: Into<String>>(mut self, arg: T) -> Self {
         self.extra_args.push(arg.into());
         self
     }
 
-    pub fn extra_args<T: IntoIterator<Item = F>, F: Into<String>>(mut self, args: T) -> Self {
+    pub(super) fn extra_args<T: IntoIterator<Item = F>, F: Into<String>>(
+        mut self,
+        args: T,
+    ) -> Self {
         self.extra_args
             .extend(args.into_iter().map(|arg| arg.into()));
         self
     }
 
-    pub fn scp_path(mut self, p: Box<Path>) -> Self {
+    pub(super) fn scp_path(mut self, p: Box<Path>) -> Self {
         self.scp_path = Some(p);
         self
     }
 
-    pub fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
+    pub(super) fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
         let pid = self
             .pid
             .ok_or_else(|| SyzSpawnError::Config("need pid".to_string()))?;
@@ -223,24 +205,6 @@ impl SyzHandleBuilder {
     }
 }
 
-pub type ExecFlags = u64;
-
-iota! {
-    pub const FLAG_COLLECT_COVER : ExecFlags = 1 << (iota);       // collect coverage
-    , FLAG_DEDUP_COVER                                 // deduplicate coverage in executor
-    , FLAG_INJECT_FAULT                                // inject a fault in this execution (see ExecOpts)
-    , FLAG_COLLECT_COMPS                               // collect KCOV comparisons
-    , FLAG_THREADED                                    // use multiple threads to mitigate blocked syscalls
-    , FLAG_COLLIDE                                     // collide syscalls to provoke data races
-    , FLAG_ENABLE_COVERAGE_FILTER                      // setup and use bitmap to do coverage filter
-}
-
-pub struct ExecOpt {
-    pub(crate) flags: ExecFlags,
-    pub(crate) fault_call: i32,
-    pub(crate) fault_nth: i32,
-}
-
 pub struct SyzHandle {
     pub(crate) syz: Child,
     pub(crate) stdin: ChildStdin,
@@ -251,7 +215,7 @@ pub struct SyzHandle {
     pub(crate) env_flags: EnvFlags,
 }
 
-pub enum SyzExecResult {
+pub(super) enum SyzExecResult {
     Ok(Vec<CallExecInfo>),
     Failed {
         info: Vec<CallExecInfo>,
@@ -261,7 +225,7 @@ pub enum SyzExecResult {
 }
 
 impl SyzHandle {
-    pub fn exec(
+    pub(super) fn exec(
         &mut self,
         t: &Target,
         p: &Prog,
@@ -311,7 +275,7 @@ impl SyzHandle {
         }
     }
 
-    pub fn output(mut self) -> Vec<u8> {
+    fn output(mut self) -> Vec<u8> {
         self.kill();
         self.bg_stderr.recv.recv().unwrap()
     }

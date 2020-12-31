@@ -1,7 +1,4 @@
-use super::{
-    syz::{ExecOpt, SyzHandle},
-    CallExecInfo,
-};
+use super::{syz::SyzHandle, CallExecInfo, ExecOpt};
 use bytes::{Buf, BufMut};
 use hlang::ast::Prog;
 use std::io::{Read, Write};
@@ -9,7 +6,7 @@ use std::{mem, slice};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ExecInnerError {
+pub(super) enum ExecInnerError {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("handshake: {0}")]
@@ -70,7 +67,7 @@ struct CallReply {
 }
 
 impl SyzHandle {
-    pub fn handshake(&mut self) -> Result<(), ExecInnerError> {
+    pub(super) fn handshake(&mut self) -> Result<(), ExecInnerError> {
         let req = HandshakeReq {
             magic: IN_MAGIC,
             env_flags: self.env_flags,
@@ -89,7 +86,7 @@ impl SyzHandle {
         }
     }
 
-    pub fn exec_inner(
+    pub(super) fn exec_inner(
         &mut self,
         opt: ExecOpt,
         in_buf: &[u8], /* stores the serialized prog */
@@ -138,7 +135,7 @@ impl SyzHandle {
         }
     }
 
-    pub(crate) fn parse_output(
+    pub(super) fn parse_output(
         &self,
         p: &Prog,
         mut out_buf: &[u8],

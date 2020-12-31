@@ -1,18 +1,15 @@
 //! Boot up and manage virtual machine
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, Once};
-use std::{
-    path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-};
 use std::{thread::sleep, time::Duration};
 use thiserror::Error;
 
-use super::ssh;
+use super::{ssh, QemuConf, SshConf};
 use crate::bg_task::Reader;
 
-pub struct QemuHandle {
+pub(super) struct QemuHandle {
     qemu: Child,
     stdout: Reader,
     stderr: Reader,
@@ -29,15 +26,15 @@ impl Drop for QemuHandle {
 }
 
 impl QemuHandle {
-    pub fn ssh_ip(&self) -> &str {
+    pub(super) fn ssh_ip(&self) -> &str {
         &self.ssh_ip
     }
 
-    pub fn ssh_port(&self) -> u16 {
+    pub(super) fn ssh_port(&self) -> u16 {
         self.ssh_port
     }
 
-    pub fn output(mut self) -> (Vec<u8>, Vec<u8>) {
+    pub(super) fn output(mut self) -> (Vec<u8>, Vec<u8>) {
         self.kill_qemu();
 
         let stdout = self.stdout.recv.recv().unwrap();
@@ -51,7 +48,7 @@ impl QemuHandle {
         }
     }
 
-    pub fn is_alive(&self) -> Result<bool, std::io::Error> {
+    pub(super) fn is_alive(&self) -> Result<bool, std::io::Error> {
         let mut ssh_cmd = ssh::ssh_basic_cmd(
             &self.ssh_ip,
             self.ssh_port,
@@ -78,30 +75,7 @@ pub enum BootError {
     NoFreePort,
 }
 
-#[derive(Debug)]
-pub struct QemuConf {
-    pub target: String, // os/arch
-    pub kernel_path: Option<Box<Path>>,
-    pub img_path: Box<Path>,
-    pub smp: Option<u8>,
-    pub mem: Option<u8>,
-    pub mem_backend_files: Vec<(Box<Path>, usize)>,
-}
-
-impl Default for QemuConf {
-    fn default() -> Self {
-        Self {
-            target: "linux/amd64".to_string(),
-            kernel_path: None,
-            img_path: PathBuf::from("./test.img").into_boxed_path(),
-            smp: None,
-            mem: None,
-            mem_backend_files: Vec::new(),
-        }
-    }
-}
-
-pub fn boot(conf: &QemuConf, ssh_conf: &ssh::SshConf) -> Result<QemuHandle, BootError> {
+pub(super) fn boot(conf: &QemuConf, ssh_conf: &SshConf) -> Result<QemuHandle, BootError> {
     let (mut qemu_cmd, ssh_fwd_port) = build_qemu_command(conf)?;
     qemu_cmd
         .stdin(Stdio::null())
