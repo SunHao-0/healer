@@ -3,6 +3,15 @@
 use std::rc::Rc;
 use hlang::ast::*;
 
+
+const OS: &str = "trusty";
+const ARCH: &str = "arm";
+const PTR_SIZE: usize = 4;
+const PARGE_SIZE: usize = 4096;
+const NUM_PARGS: usize = 4096;
+const DATA_OFFSET: usize = 536870912;
+const LITTLE_ENDIAN: bool = true;
+
 fn syscalls_0(calls: &mut Vec<Syscall>, tys: &[Rc<Type>]){
 	calls.push(Syscall::new(0, 18, "accept", "accept", 0, vec![Param::new("handle_id", tys[3].clone(), None), Param::new("peer_uuid", tys[17].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
 	calls.push(Syscall::new(1, 2, "brk", "brk", 0, vec![Param::new("brk", tys[3].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));

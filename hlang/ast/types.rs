@@ -496,4 +496,5 @@ pub enum TextKind {
     X86bit32,
     X86bit64,
     Arm64,
+    Ppc64,
 }

@@ -3,6 +3,15 @@
 use std::rc::Rc;
 use hlang::ast::*;
 
+
+const OS: &str = "windows";
+const ARCH: &str = "amd64";
+const PTR_SIZE: usize = 8;
+const PARGE_SIZE: usize = 4096;
+const NUM_PARGS: usize = 4096;
+const DATA_OFFSET: usize = 536870912;
+const LITTLE_ENDIAN: bool = true;
+
 fn syscalls_0(calls: &mut Vec<Syscall>, tys: &[Rc<Type>]){
 	calls.push(Syscall::new(0, 0, "AbortDoc", "AbortDoc", 0, vec![Param::new("hdc", tys[26].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
 	calls.push(Syscall::new(1, 0, "AbortPath", "AbortPath", 0, vec![Param::new("hdc", tys[26].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));

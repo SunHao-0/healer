@@ -3,6 +3,15 @@
 use std::rc::Rc;
 use hlang::ast::*;
 
+
+const OS: &str = "netbsd";
+const ARCH: &str = "amd64";
+const PTR_SIZE: usize = 8;
+const PARGE_SIZE: usize = 4096;
+const NUM_PARGS: usize = 4096;
+const DATA_OFFSET: usize = 536870912;
+const LITTLE_ENDIAN: bool = true;
+
 fn syscalls_0(calls: &mut Vec<Syscall>, tys: &[Rc<Type>]){
 	calls.push(Syscall::new(0, 429, "__clock_getres50", "__clock_getres50", 0, vec![Param::new("id", tys[135].clone(), None), Param::new("res", tys[365].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
 	calls.push(Syscall::new(1, 427, "__clock_gettime50", "__clock_gettime50", 0, vec![Param::new("id", tys[135].clone(), None), Param::new("tp", tys[394].clone(), None), ], None,SyscallAttr{ disable: false, timeout: 0, prog_tmout: 0, ignore_ret: false, brk_ret: false}));
@@ -388,7 +397,7 @@ fn types_0(tys: &mut Vec<Rc<Type>>){
 	tys.push(Rc::new(Type::new(51, "array", 32, 1, false, false, TypeKind::new_buffer(BufferKind::BlobRange(32, 32), ""))));
 	tys.push(Rc::new(Type::new(52, "array", 90, 1, false, false, TypeKind::new_buffer(BufferKind::BlobRange(90, 90), ""))));
 	tys.push(Rc::new(Type::new(53, "filename", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_fname(vec![], false),""))));
-	tys.push(Rc::new(Type::new(54, "string", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_str(vec![br#"ffs\x00"#, br#"nfs\x00"#, br#"mfs\x00"#, br#"msdos\x00"#, br#"lfs\x00"#, br#"fdesc\x00"#, br#"null\x00"#, br#"overlay\x00"#, br#"umap\x00"#, br#"kernfs\x00"#, br#"procfs\x00"#, br#"afs\x00"#, br#"cd9660\x00"#, br#"union\x00"#, br#"adosfs\x00"#, br#"ext2fs\x00"#, br#"coda\x00"#, br#"filecore\x00"#, br#"ntfs\x00"#, br#"smbfs\x00"#, br#"ptyfs\x00"#, br#"tmpfs\x00"#, br#"udf\x00"#, br#"sysvbfs\x00"#, br#"puffs\x00"#, br#"hfs\x00"#, br#"efs\x00"#, br#"zfs\x00"#, br#"nilfs\x00"#, br#"rumpfs\x00"#, br#"v7fs\x00"#, br#"autofs\x00"#, ], false), "filesystem_types"))));
+	tys.push(Rc::new(Type::new(54, "string", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_str(vec![br##"ffs\x00"##, br##"nfs\x00"##, br##"mfs\x00"##, br##"msdos\x00"##, br##"lfs\x00"##, br##"fdesc\x00"##, br##"null\x00"##, br##"overlay\x00"##, br##"umap\x00"##, br##"kernfs\x00"##, br##"procfs\x00"##, br##"afs\x00"##, br##"cd9660\x00"##, br##"union\x00"##, br##"adosfs\x00"##, br##"ext2fs\x00"##, br##"coda\x00"##, br##"filecore\x00"##, br##"ntfs\x00"##, br##"smbfs\x00"##, br##"ptyfs\x00"##, br##"tmpfs\x00"##, br##"udf\x00"##, br##"sysvbfs\x00"##, br##"puffs\x00"##, br##"hfs\x00"##, br##"efs\x00"##, br##"zfs\x00"##, br##"nilfs\x00"##, br##"rumpfs\x00"##, br##"v7fs\x00"##, br##"autofs\x00"##, ], false), "filesystem_types"))));
 	tys.push(Rc::new(Type::new(55, "string", 0, 1, false, true, TypeKind::new_buffer(BufferKind::new_str(vec![], false), ""))));
 	tys.push(Rc::new(Type::new(56, "text", 0, 1, false, true, TypeKind::new_buffer(BufferKind::Text(TextKind::Target),""))));
 	tys.push(Rc::new(Type::new(57, "void", 0, 1, false, false, TypeKind::new_buffer(BufferKind::BlobRange(0, 0), ""))));
