@@ -161,10 +161,9 @@ impl Type {
 
     pub fn is_readable_date_type(&self) -> bool {
         match &self.kind {
-            TypeKind::Buffer { kind, .. } => match kind {
-                BufferKind::String { .. } | BufferKind::Filename { .. } => true,
-                _ => false,
-            },
+            TypeKind::Buffer { kind, .. } => {
+                matches!(kind, BufferKind::String { .. } | BufferKind::Filename { .. })
+            }
             _ => false,
         }
     }
