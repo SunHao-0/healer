@@ -1,4 +1,8 @@
-use std::{path::PathBuf, process::exit, time::{Duration, Instant}};
+use std::{
+    path::PathBuf,
+    process::exit,
+    time::{Duration, Instant},
+};
 
 use hl_fuzzer::gen::gen;
 use hl_fuzzer::target::Target;
@@ -45,10 +49,10 @@ pub fn main() {
     let mut failed_cnt = 0;
     let mut crash_cnt = 0;
     println!("[+] Let the fuzz begin!");
-    
+
     let mut last_run = Instant::now();
     let log_duration = Duration::from_secs(10);
-    
+
     loop {
         let p = gen(&target, &pool);
         // println!("{}", p);
@@ -88,7 +92,7 @@ pub fn main() {
                 println!("Error: {}", e);
             }
         }
-        if last_run.elapsed() > log_duration{
+        if last_run.elapsed() > log_duration {
             println!(
                 "bk: {}, br: {}, succ: {}, fail: {}, crash: {}",
                 bks.len(),

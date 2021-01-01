@@ -4,15 +4,15 @@ use std::rc::Rc;
 
 /// Select a syscall to fuzz based on resource usage.
 pub(super) fn select_syscall(ctx: &GenContext) -> Rc<Syscall> {
-    loop{
+    loop {
         let call = if should_try_gen_res(ctx) {
             let res_ty = select_res(&ctx.target.res_tys);
             select_res_producer(ctx.target, res_ty)
         } else {
             select_syscall_rand(ctx)
         };
-        if !call.attr.disable{
-            return call
+        if !call.attr.disable {
+            return call;
         }
     }
 }

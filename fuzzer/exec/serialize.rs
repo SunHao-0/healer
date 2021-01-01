@@ -109,7 +109,7 @@ impl ExecCtx<'_, '_> {
             } else {
                 self.write_u64(EXEC_NO_COPYOUT);
             }
-        }else {
+        } else {
             self.write_u64(EXEC_NO_COPYOUT);
         }
         self.write_u64(c.args.len() as u64);
