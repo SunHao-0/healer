@@ -76,7 +76,7 @@ impl Reader {
         let (cancel_sender, cancel_recv) = channel::<()>();
 
         runtime().spawn(async move {
-            let mut buf: [(Vec<u8>, usize); 2] = [(vec![0; 2048], 0), (vec![0; 2048], 0)];
+            let mut buf: [(Vec<u8>, usize); 2] = [(vec![0; 4 >> 10], 0), (vec![0; 4 >> 10], 0)];
             loop {
                 if let Err(e) = cancel_recv.try_recv() {
                     if e != TryRecvError::Empty {

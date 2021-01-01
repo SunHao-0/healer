@@ -1,7 +1,9 @@
 use std::{
-    path::PathBuf,
-    process::exit,
+    fs::{create_dir, write},
+    path::{Path, PathBuf},
+    process::{exit, id},
     time::{Duration, Instant},
+    writeln,
 };
 
 use hl_fuzzer::gen::gen;
@@ -48,8 +50,8 @@ pub fn main() {
     }
     println!("[+] Bind to cpu-{}", cpu_id);
 
+    let workdir = build_workdir();
     let exec_opt = ExecOpt::default();
-    let mut bks: FxHashSet<u32> = FxHashSet::default();
     let mut brs: FxHashSet<u32> = FxHashSet::default();
     let mut success_cnt = 0;
     let mut failed_cnt = 0;
@@ -66,42 +68,48 @@ pub fn main() {
             Ok(ret) => match ret {
                 ExecResult::Normal(info) => {
                     for i in &info {
-                        bks.extend(&i.blocks);
                         brs.extend(&i.branches);
                     }
                     success_cnt += 1;
                 }
                 ExecResult::Failed { info, err } => {
                     for i in &info {
-                        bks.extend(&i.blocks);
                         brs.extend(&i.branches);
                     }
                     failed_cnt += 1;
                     println!("Failed: {}", err);
                 }
                 ExecResult::Crash(c) => {
-                    crash_cnt += 1;
+                    use std::fmt::Write;
                     let stdout = String::from_utf8(c.qemu_stdout).unwrap_or_default();
                     let stderr = String::from_utf8(c.qemu_stderr).unwrap_or_default();
-                    println!("============== CRASHED ================");
-                    println!("============== QEMU STDOUT ==============");
-                    println!("{}", stdout);
-                    println!("============== QEMU STDERR ==============");
-                    println!("{}", stderr);
-                    println!("============== SYZ STDERR ==============");
+                    let mut log = String::new();
+                    writeln!(log, "============== QEMU STDOUT ================").unwrap();
+                    writeln!(log, "{}", stdout).unwrap();
+                    writeln!(log, "============== QEMU STDERR ================").unwrap();
+                    writeln!(log, "{}", stderr).unwrap();
+                    writeln!(log, "============== SYZ LOG ================").unwrap();
+                    writeln!(log, "{}", c.syz_out).unwrap();
+                    // print first.
+                    println!("{}", log);
+                    println!("============== PROG ================");
                     println!("{}", c.syz_out);
-                    println!("============== PROG ==============");
-                    println!("{}", p);
+
+                    let crash_dir = workdir.join(crash_cnt.to_string());
+                    create_dir(&crash_dir).unwrap();
+                    write(crash_dir.join("qemu-log"), &log).unwrap();
+                    write(crash_dir.join("prog"), p.to_string()).unwrap();
+
+                    crash_cnt += 1;
                 }
             },
             Err(e) => {
-                println!("Error: {}", e);
+                eprintln!("Error: {}", e);
             }
         }
         if last_run.elapsed() > log_duration {
             println!(
-                "bk: {}, br: {}, succ: {}, fail: {}, crash: {}",
-                bks.len(),
+                "br: {}, succ: {}, fail: {}, crash: {}",
                 brs.len(),
                 success_cnt,
                 failed_cnt,
@@ -110,4 +118,12 @@ pub fn main() {
             last_run = Instant::now();
         }
     }
+}
+
+fn build_workdir() -> Box<Path> {
+    let d = PathBuf::from(format!("hl-workdir-{}", id()));
+    create_dir(&d).unwrap_or_else(|e| {
+        eprintln!("failed to create workdir {}: {}", d.display(), e);
+    });
+    d.into_boxed_path()
 }
