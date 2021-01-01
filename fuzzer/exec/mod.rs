@@ -47,11 +47,11 @@ pub enum ExecError {
 /// Raw crash information.
 pub struct CrashInfo {
     /// Stdout of qemu.
-    qemu_stdout: Vec<u8>,
+    pub qemu_stdout: Vec<u8>,
     /// Stdin of qemu.
-    qemu_stderr: Vec<u8>,
+    pub qemu_stderr: Vec<u8>,
     /// stderr of inner executor.
-    syz_out: String,
+    pub syz_out: String,
 }
 
 /// Flag for execution result of one call.
@@ -67,13 +67,13 @@ iota! {
 /// Execution of one call.
 #[derive(Debug, Default, Clone)]
 pub struct CallExecInfo {
-    pub(crate) flags: CallFlags,
+    pub flags: CallFlags,
     /// Branch coverage.
-    pub(crate) branches: Vec<u32>,
+    pub branches: Vec<u32>,
     /// Block converage.
-    pub(crate) blocks: Vec<u32>,
+    pub blocks: Vec<u32>,
     /// Syscall errno, indicating the success or failure.
-    pub(crate) errno: i32,
+    pub errno: i32,
 }
 
 /// Flag for controlling execution behavior.
@@ -90,12 +90,23 @@ iota! {
 }
 
 /// Option for controlling execution behavior.
+#[derive(Debug, Clone)]
 pub struct ExecOpt {
     pub flags: ExecFlags,
     /// Inject fault for 'fault_call'.
     pub fault_call: i32,
     /// Inject fault 'nth' for 'fault_call'
     pub fault_nth: i32,
+}
+
+impl Default for ExecOpt {
+    fn default() -> Self {
+        Self {
+            flags: FLAG_COLLECT_COVER | FLAG_DEDUP_COVER | FLAG_THREADED | FLAG_COLLIDE,
+            fault_call: 0,
+            fault_nth: 0,
+        }
+    }
 }
 
 /// Hign-level controller of inner executor and qemu.
@@ -122,6 +133,8 @@ pub struct ExecHandle {
     env: EnvFlags,
     /// Unique id for inner executor, not process id(linux pid).
     pid: u64,
+    /// Copy inner executor executable file or not.
+    copy_bin: bool,
 }
 
 impl ExecHandle {
@@ -190,11 +203,12 @@ impl ExecHandle {
             .use_forksrv(conf.use_forksrv)
             .user_shm(conf.use_shm)
             .executor(conf.executor.clone())
-            .copy_bin(true)
+            .copy_bin(self.copy_bin)
             .pid(self.pid)
             .env_flags(self.env)
             .spawn()?;
         self.syz = Some(syz);
+        self.copy_bin = false;
         Ok(())
     }
 }
@@ -242,6 +256,16 @@ pub struct ExecConf {
     pub use_forksrv: bool,
 }
 
+impl Default for ExecConf {
+    fn default() -> Self {
+        Self {
+            executor: PathBuf::from("./syz-executor").into_boxed_path(),
+            use_forksrv: true,
+            use_shm: true,
+        }
+    }
+}
+
 /// Configuration of booting qemu.
 #[derive(Debug, Clone)]
 pub struct QemuConf {
@@ -285,6 +309,17 @@ pub struct SshConf {
     ip: Option<String>,
     /// Port addr of remote machine
     port: Option<u16>,
+}
+
+impl Default for SshConf {
+    fn default() -> Self {
+        Self {
+            ssh_key: PathBuf::from("./stretch.id_rsa").into_boxed_path(),
+            ssh_user: Some("root".to_string()),
+            ip: None,
+            port: None,
+        }
+    }
 }
 
 /// Boot qemu with 'qemu_conf' and 'ssh_conf', then spawn inner executor in it.
@@ -336,6 +371,7 @@ pub fn spawn_in_qemu(
         in_shm,
         out_shm,
         pid,
+        copy_bin: true,
     };
     handle.spawn_syz()?;
 

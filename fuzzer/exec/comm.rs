@@ -17,7 +17,7 @@ pub(super) enum ExecInnerError {
     Parse(String),
 }
 
-const IN_MAGIC: u64 = 0xBABC0FFEEBADFACE;
+const IN_MAGIC: u64 = 0xBADC0FFEEBADFACE;
 const OUT_MAGIC: u32 = 0xBADF00D;
 
 #[repr(C)]
@@ -219,7 +219,7 @@ impl SyzHandle {
 
 fn read_u32(buf: &mut &[u8]) -> Option<u32> {
     if buf.remaining() >= 4 {
-        Some(buf.get_u32())
+        Some(buf.get_u32_le())
     } else {
         None
     }
