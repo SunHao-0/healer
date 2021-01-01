@@ -81,7 +81,6 @@ pub(super) fn boot(conf: &QemuConf, ssh_conf: &SshConf) -> Result<QemuHandle, Bo
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    log::debug!("{:?}", qemu_cmd);
     let mut child = qemu_cmd.spawn()?;
 
     let stdout_reader = Reader::new(child.stdout.take().unwrap());

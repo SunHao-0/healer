@@ -70,13 +70,14 @@ impl Reader {
 
     fn read_to_end_inner(f: File) -> (Sender<()>, Receiver<Vec<u8>>) {
         use tokio::io::AsyncReadExt;
+        const BUF_SZ: usize = 4 << 10;
 
         let mut f = tokio::fs::File::from_std(f);
         let (data_sender, data_recv) = channel::<Vec<u8>>();
         let (cancel_sender, cancel_recv) = channel::<()>();
 
         runtime().spawn(async move {
-            let mut buf: [(Vec<u8>, usize); 2] = [(vec![0; 4 >> 10], 0), (vec![0; 4 >> 10], 0)];
+            let mut buf: [(Vec<u8>, usize); 2] = [(vec![0; BUF_SZ], 0), (vec![0; BUF_SZ], 0)];
             loop {
                 if let Err(e) = cancel_recv.try_recv() {
                     if e != TryRecvError::Empty {
@@ -91,7 +92,7 @@ impl Reader {
                 let current_buf = &mut buf[0].0[..];
                 let mut eof = false;
                 let mut len = 0;
-                while len != 2048 {
+                while len != BUF_SZ {
                     match f.read(&mut current_buf[len..]).await {
                         Ok(0) => {
                             eof = true;
@@ -127,7 +128,7 @@ impl Reader {
                 .collect::<Vec<_>>();
 
             if let Err(e) = data_sender.send(ret) {
-                log::debug!("failed to send: {}", e);
+                eprintln!("failed to send: {}", e);
             }
         });
         (cancel_sender, data_recv)
