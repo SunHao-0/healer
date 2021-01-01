@@ -205,9 +205,10 @@ fn build_qemu_command(conf: &QemuConf) -> Result<(Command, PortGuard), BootError
         let obj = vec![
             "-object".to_string(),
             format!(
-                "memory-backend-file,size={}M,share,mem-path={}",
+                "memory-backend-file,size={}M,share,mem-path={},id=hostmem{}",
                 sz,
-                f.display()
+                f.display(),
+                i
             ),
         ];
         inshm.extend(dev);
