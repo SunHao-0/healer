@@ -11,7 +11,7 @@ name = "hl_fuzzer"
 path = "lib.rs"
 
 [[bin]]
-name = "hl_fuzzer"
+name = "hl-fuzzer"
 path = "main.rs"
 
 [dependencies]
@@ -25,8 +25,8 @@ iota = "0.2"       # for constant calculation.
 tokio = {version = "1.0", features = ["rt", "fs", "io-util"]} # for background io.
 shared_memory = "0.11" # for qemu ivshmem.
 log = "0.4" 
-pretty_env_logger = "0.4"
 thiserror = "1.0"
+affinity = "0.1"
 
 [dev-dependencies]  
 criterion = "0.3"

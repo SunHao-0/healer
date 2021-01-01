@@ -15,11 +15,10 @@ use rustc_hash::FxHashSet;
 use std::env::args;
 
 pub fn main() {
-    pretty_env_logger::init_timed();
     let args = args().skip(1).collect::<Vec<_>>();
 
     let (sys, ty) = syscalls::syscalls();
-    let target = Target::new(sys, ty, syscalls::REVISION);
+    let target = Target::new(sys, ty);
     let pool = ValuePool::default();
     init_runtime();
     println!("[+] Target loaded.");
@@ -33,6 +32,9 @@ pub fn main() {
 
     let mut exec_conf = ExecConf::default();
     exec_conf.executor = PathBuf::from(&args[3]).into_boxed_path();
+
+    let cpu_id: usize = args[4].parse().unwrap();
+
     println!("[+] Booting");
     let now = Instant::now();
     let mut handle = spawn_in_qemu(exec_conf, qemu_conf, ssh_conf, 1).unwrap_or_else(|e| {
@@ -41,8 +43,12 @@ pub fn main() {
     });
     println!("[+] Boot finished, cost {}s", now.elapsed().as_secs());
 
-    let exec_opt = ExecOpt::default();
+    if let Err(e) = affinity::set_thread_affinity(&[cpu_id]) {
+        eprintln!("[-] Failed to bind to cpu-{}: {}", cpu_id, e);
+    }
+    println!("[+] Bind to cpu-{}", cpu_id);
 
+    let exec_opt = ExecOpt::default();
     let mut bks: FxHashSet<u32> = FxHashSet::default();
     let mut brs: FxHashSet<u32> = FxHashSet::default();
     let mut success_cnt = 0;

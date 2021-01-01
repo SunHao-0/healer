@@ -30,7 +30,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn new(calls: Vec<Syscall>, mut tys: Vec<Rc<Type>>, re: &str) -> Self {
+    pub fn new(calls: Vec<Syscall>, mut tys: Vec<Rc<Type>>) -> Self {
         let mut calls = calls.into_iter().map(Rc::new).collect::<Vec<_>>();
 
         Self::restore_typeref(&mut tys);

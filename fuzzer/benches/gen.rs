@@ -5,7 +5,7 @@ use hl_fuzzer::target::Target;
 
 pub fn bench_gen(c: &mut Criterion) {
     let (sys, ty) = syscalls::syscalls();
-    let target = Target::new(sys, ty, syscalls::REVISION);
+    let target = Target::new(sys, ty);
     let pool = ValuePool::default();
     c.bench_function("Gen", |b| b.iter(|| gen(&target, &pool)));
 }

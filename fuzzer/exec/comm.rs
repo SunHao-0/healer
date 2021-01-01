@@ -209,7 +209,7 @@ impl SyzHandle {
                         },
                     )?;
                     // TODO do not copy.
-                    call_info.branches.extend(bk);
+                    call_info.blocks.extend(bk);
                 }
             }
         }

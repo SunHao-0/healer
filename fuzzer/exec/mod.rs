@@ -102,7 +102,7 @@ pub struct ExecOpt {
 impl Default for ExecOpt {
     fn default() -> Self {
         Self {
-            flags: FLAG_COLLECT_COVER | FLAG_DEDUP_COVER | FLAG_THREADED | FLAG_COLLIDE,
+            flags: FLAG_DEDUP_COVER | FLAG_THREADED | FLAG_COLLIDE,
             fault_call: 0,
             fault_nth: 0,
         }
@@ -168,6 +168,7 @@ impl ExecHandle {
                     .map_err(SpawnError::IO)?
                 {
                     let qemu = self.qemu.take().unwrap();
+                    self.copy_bin = true; // -snapshot is enabled.
                     let (stdout, stderr) = qemu.output();
                     let crash_info = CrashInfo {
                         qemu_stderr: stderr,
@@ -297,7 +298,7 @@ impl Default for QemuConf {
 }
 
 /// Configuration of ssh.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SshConf {
     /// Path to temporary secret key, for ssh -i option.
     pub ssh_key: Box<Path>,
@@ -336,8 +337,8 @@ pub fn spawn_in_qemu(
     let (mut in_shm, mut out_shm) = (None, None);
     let (mut in_mem, mut out_mem) = (None, None);
     if conf.use_shm {
-        let in_shm_id = format!("healer-in_shm-{}", pid);
-        let out_shm_id = format!("healer-out_shm_{}", pid);
+        let in_shm_id = format!("healer-in_shm-{}-{}", pid, std::process::id());
+        let out_shm_id = format!("healer-out_shm_{}-{}", pid, std::process::id());
         let shm_dev = PathBuf::from("/dev/shm");
         in_shm = Some(shm(&in_shm_id, IN_MEM_SIZE)?);
         out_shm = Some(shm(&out_shm_id, OUT_MEM_SIZE)?);
@@ -381,7 +382,10 @@ pub fn spawn_in_qemu(
 fn shm<T: AsRef<str>>(id: T, sz: usize) -> Result<Shmem, ShmemError> {
     let id = id.as_ref();
     match ShmemConf::new().os_id(id).size(sz).create() {
-        Ok(shm) => Ok(shm),
+        Ok(mut shm) => {
+            shm.set_owner(true);
+            Ok(shm)
+        }
         Err(ShmemError::MappingIdExists) => ShmemConf::new().os_id(id).size(sz).open(),
         Err(e) => Err(e),
     }
