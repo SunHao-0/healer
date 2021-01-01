@@ -43,12 +43,13 @@ pub(crate) fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, S
         buf,
         res_args: FxHashMap::default(),
         copyout_seq: 0,
+        eof: false,
     };
     for call in &p.calls {
         ctx.serialize_call(call);
     }
     ctx.write_u64(EXEC_INSTR_EOF);
-    if !ctx.buf.has_remaining_mut() {
+    if !ctx.buf.has_remaining_mut() || ctx.eof {
         Err(SerializeError::BufferTooSmall {
             provided: buf.len(),
         })
@@ -62,6 +63,7 @@ struct ExecCtx<'a, 'b> {
     buf: &'b mut [u8],
     res_args: FxHashMap<*const ResValue, ArgInfo>,
     copyout_seq: u64,
+    eof: bool,
 }
 #[derive(Clone)]
 struct ArgInfo {
@@ -107,6 +109,8 @@ impl ExecCtx<'_, '_> {
             } else {
                 self.write_u64(EXEC_NO_COPYOUT);
             }
+        }else {
+            self.write_u64(EXEC_NO_COPYOUT);
         }
         self.write_u64(c.args.len() as u64);
         for val in &c.args {
@@ -184,6 +188,7 @@ impl ExecCtx<'_, '_> {
                 ResValueKind::Ref { src } => {
                     self.write_u64(EXEC_ARG_RESULT);
                     let meta = val.size() | (val.ty.bin_fmt() as u64) << 8;
+                    self.write_u64(meta);
                     self.write_u64(self.res_args[&(&**src as *const _)].idx);
                     self.write_u64(src.op_div);
                     self.write_u64(src.op_add);
@@ -238,14 +243,22 @@ impl ExecCtx<'_, '_> {
     }
 
     fn write_u64(&mut self, val: u64) {
-        if self.buf.has_remaining_mut() {
-            self.buf.put_u64(val);
+        if self.buf.len() >= 8 {
+            if self.target.le_endian {
+                self.buf.put_u64_le(val);
+            } else {
+                self.buf.put_u64(val);
+            }
+        } else {
+            self.eof = true;
         }
     }
 
     fn write_slice<T: AsRef<[u8]>>(&mut self, slice: T) {
-        if self.buf.has_remaining_mut() {
-            self.buf.put_slice(slice.as_ref())
+        if self.buf.len() >= slice.as_ref().len() {
+            self.buf.put_slice(slice.as_ref());
+        } else {
+            self.eof = true;
         }
     }
 
