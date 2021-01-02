@@ -1,5 +1,5 @@
 # Experiment setting
-So, I have completed some prog generation algorithms and prog execution modules by now. As a simple integration test, I wrote a very simple fuzz driver that doesn't use any feedback analysis, and then used the driver to test the three versions of the kernel for 24 hours. 
+So, I have completed some prog generation algorithms and prog execution modules by now. As a simple integration test, I wrote a very simple fuzz driver that doesn't use any feedback analysis, and then used the driver to test the four versions of the kernel for 24 hours. 
 As a result, the driver crashed the kernel hundreds of times and found dozens of effective vulnerabilities, which looks great.
 
 # Partial Result
