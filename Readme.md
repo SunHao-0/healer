@@ -3,7 +3,7 @@
 **NOTE, REFACTORING.**
 
 ## Partial Experiment Result.
-Confusion of experiment data makes integration difficult. The rough statistics are shown below. [see more](./docs/crahes)
+Confusion of experiment data makes integration difficult. The rough statistics are shown below. [see more](./docs/crashes)
 
 | kernel version | bug number |
 |----------------|------------|
