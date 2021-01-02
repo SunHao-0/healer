@@ -1,0 +1,115 @@
+============== QEMU STDOUT ================
+[ 1582.529462][T11540] SELinux: unrecognized netlink message: protocol=9 nlmsg_type=13312 sclass=netlink_audit_socket pid=11540 comm=syz-executor
+[ 1582.530245][T11540] SELinux: unrecognized netlink message: protocol=9 nlmsg_type=0 sclass=netlink_audit_socket pid=11540 comm=syz-executor
+[ 1582.540748][T11542] SELinux: unrecognized netlink message: protocol=9 nlmsg_type=13312 sclass=netlink_audit_socket pid=11542 comm=syz-executor
+[ 1596.233896][T12121] BUG: unable to handle page fault for address: fffff520010be3fc
+[ 1596.233900][T12121] #PF: supervisor read access in kernel mode
+[ 1596.233902][T12121] #PF: error_code(0x0000) - not-present page
+[ 1596.233904][T12121] PGD 36fcf067 P4D 36fcf067 PUD 30d1b067 PMD 2990f067 PTE 0
+[ 1596.233915][T12121] Oops: 0000 [#1] PREEMPT SMP KASAN
+[ 1596.233921][T12121] CPU: 1 PID: 12121 Comm: syz-executor Not tainted 5.7.0-rc2+ #7
+[ 1596.233923][T12121] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 1596.233935][T12121] RIP: 0010:sys_imageblit+0x617/0x1240
+[ 1596.233939][T12121] Code: c2 83 e2 07 83 c2 03 38 ca 7c 08 84 c9 0f 85 66 0b 00 00 8b 4c 24 20 4d 8d 77 04 4c 89 fa 23 08 48 c1 ea 03 8b 44 24 14 31 c8 <42> 0f b6 0c 2a 4c 89 fa 83 e2 07 83 c2 03 38 ca 7c 08 84 c9 0f 85
+[ 1596.233941][T12121] RSP: 0018:ffffc90006a1f370 EFLAGS: 00010246
+[ 1596.233944][T12121] RAX: 0000000000000000 RBX: ffff88802e7dc490 RCX: 0000000000000000
+[ 1596.233946][T12121] RDX: 1ffff920010be3fc RSI: ffffffff83c354f7 RDI: 0000000000000005
+[ 1596.233949][T12121] RBP: 0000000000000007 R08: ffff88801eaee480 R09: 000000000000007f
+[ 1596.233951][T12121] R10: ffffffff8a89273f R11: fffffbfff15124e7 R12: 0000000000000007
+[ 1596.233953][T12121] R13: dffffc0000000000 R14: ffffc900085f1fe4 R15: ffffc900085f1fe0
+[ 1596.233956][T12121] FS:  00007f0ebc890700(0000) GS:ffff888035300000(0000) knlGS:0000000000000000
+[ 1596.233958][T12121] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1596.233961][T12121] CR2: fffff520010be3fc CR3: 000000001d173004 CR4: 0000000000760ee0
+[ 1596.233963][T12121] PKRU: 55555554
+[ 1596.233965][T12121] Call Trace:
+[ 1596.233973][T12121]  drm_fb_helper_sys_imageblit+0x1c/0x180
+[ 1596.233978][T12121]  bit_putcs+0x909/0xe10
+[ 1596.233984][T12121]  ? bit_clear+0x4d0/0x4d0
+[ 1596.233988][T12121]  ? stack_depot_save+0x254/0x450
+[ 1596.233992][T12121]  ? fb_get_color_depth.part.0+0xc6/0x1f0
+[ 1596.233998][T12121]  ? __sanitizer_cov_trace_switch+0x45/0x70
+[ 1596.234002][T12121]  fbcon_putcs+0x343/0x3f0
+[ 1596.234006][T12121]  ? bit_clear+0x4d0/0x4d0
+[ 1596.234011][T12121]  do_update_region+0x399/0x630
+[ 1596.234016][T12121]  ? con_get_trans_old+0x280/0x280
+[ 1596.234020][T12121]  ? fbcon_invert_region+0xda/0x260
+[ 1596.234025][T12121]  invert_screen+0x2a7/0x600
+[ 1596.234028][T12121]  ? vc_uniscr_copy_line+0x4c0/0x4c0
+[ 1596.234032][T12121]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[ 1596.234037][T12121]  clear_selection+0x55/0x70
+[ 1596.234040][T12121]  vc_do_resize+0xfd5/0x1340
+[ 1596.234045][T12121]  ? find_held_lock+0x2d/0x110
+[ 1596.234049][T12121]  ? mark_lock+0x129/0x16a0
+[ 1596.234052][T12121]  ? lock_downgrade+0x860/0x860
+[ 1596.234056][T12121]  ? find_held_lock+0x2d/0x110
+[ 1596.234106][T12121]  ? vc_uniscr_alloc+0xc0/0xc0
+[ 1596.234112][T12121]  ? fbcon_set_font+0x34f/0x8a0
+[ 1596.234116][T12121]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 1596.234120][T12121]  ? rcu_read_lock_any_held.part.0+0x50/0x50
+[ 1596.234124][T12121]  fbcon_do_set_font+0x4a0/0x950
+[ 1596.234129][T12121]  fbcon_set_font+0x760/0x8a0
+[ 1596.234134][T12121]  ? set_con2fb_map+0xd80/0xd80
+[ 1596.234137][T12121]  con_font_op+0xd67/0x1160
+[ 1596.234141][T12121]  ? con_write+0xe0/0xe0
+[ 1596.234145][T12121]  ? cap_capable+0x1eb/0x250
+[ 1596.234150][T12121]  ? security_capable+0x8e/0xc0
+[ 1596.234154][T12121]  vt_ioctl+0xd07/0x26f0
+[ 1596.234159][T12121]  ? tomoyo_path_number_perm+0x3b1/0x4d0
+[ 1596.234162][T12121]  ? lockdep_hardirqs_on+0x463/0x620
+[ 1596.234166][T12121]  ? complete_change_console+0x3a0/0x3a0
+[ 1596.234170][T12121]  ? tomoyo_path_number_perm+0x238/0x4d0
+[ 1596.234174][T12121]  ? do_futex+0x164/0x1ad0
+[ 1596.234178][T12121]  ? tomoyo_execute_permission+0x470/0x470
+[ 1596.234183][T12121]  ? __sanitizer_cov_trace_switch+0x45/0x70
+[ 1596.234187][T12121]  ? complete_change_console+0x3a0/0x3a0
+[ 1596.234192][T12121]  tty_ioctl+0xee3/0x1450
+[ 1596.234196][T12121]  ? tty_vhangup+0x30/0x30
+[ 1596.234200][T12121]  ? do_vfs_ioctl+0x50f/0x12d0
+[ 1596.234204][T12121]  ? ioctl_file_clone+0x180/0x180
+[ 1596.234209][T12121]  ? selinux_file_mprotect+0x610/0x610
+[ 1596.234213][T12121]  ? __fget_files+0x32f/0x500
+[ 1596.234217][T12121]  ? do_dup2+0x530/0x530
+[ 1596.234220][T12121]  ? __x64_sys_futex+0x378/0x4d0
+[ 1596.234223][T12121]  ? __x64_sys_futex+0x382/0x4d0
+[ 1596.234228][T12121]  ? tty_vhangup+0x30/0x30
+[ 1596.234232][T12121]  ksys_ioctl+0x11a/0x180
+[ 1596.234236][T12121]  __x64_sys_ioctl+0x6f/0xb0
+[ 1596.234239][T12121]  ? lockdep_hardirqs_on+0x463/0x620
+[ 1596.234244][T12121]  do_syscall_64+0xf6/0x7d0
+[ 1596.234252][T12121]  entry_SYSCALL_64_after_hwframe+0x49/0xb3
+[ 1596.234256][T12121] RIP: 0033:0x4695bd
+[ 1596.234259][T12121] Code: 02 b8 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 bc ff ff ff f7 d8 64 89 01 48
+[ 1596.234262][T12121] RSP: 002b:00007f0ebc88fc58 EFLAGS: 00000246 ORIG_RAX: 0000000000000010
+[ 1596.234265][T12121] RAX: ffffffffffffffda RBX: 000000000057bf60 RCX: 00000000004695bd
+[ 1596.234267][T12121] RDX: 0000000020000040 RSI: 0000000000004b61 RDI: 0000000000000004
+[ 1596.234269][T12121] RBP: 00000000004c572c R08: 0000000000000000 R09: 0000000000000000
+[ 1596.234271][T12121] R10: 0000000000000000 R11: 0000000000000246 R12: 000000000057bf60
+[ 1596.234274][T12121] R13: 00007ffd0904173f R14: 00007ffd090418e0 R15: 00007f0ebc88fdc0
+[ 1596.234277][T12121] Modules linked in:
+[ 1596.234283][T12121] Dumping ftrace buffer:
+[ 1596.234289][T12121]    (ftrace buffer empty)
+[ 1596.234291][T12121] CR2: fffff520010be3fc
+[ 1596.234299][T12121] ---[ end trace 02e54d73a8f608ce ]---
+[ 1596.234303][T12121] RIP: 0010:sys_imageblit+0x617/0x1240
+[ 1596.234307][T12121] Code: c2 83 e2 07 83 c2 03 38 ca 7c 08 84 c9 0f 85 66 0b 00 00 8b 4c 24 20 4d 8d 77 04 4c 89 fa 23 08 48 c1 ea 03 8b 44 24 14 31 c8 <42> 0f b6 0c 2a 4c 89 fa 83 e2 07 83 c2 03 38 ca 7c 08 84 c9 0f 85
+[ 1596.234309][T12121] RSP: 0018:ffffc90006a1f370 EFLAGS: 00010246
+[ 1596.234311][T12121] RAX: 0000000000000000 RBX: ffff88802e7dc490 RCX: 0000000000000000
+[ 1596.234314][T12121] RDX: 1ffff920010be3fc RSI: ffffffff83c354f7 RDI: 0000000000000005
+[ 1596.234316][T12121] RBP: 0000000000000007 R08: ffff88801eaee480 R09: 000000000000007f
+[ 1596.234318][T12121] R10: ffffffff8a89273f R11: fffffbfff15124e7 R12: 0000000000000007
+[ 1596.234320][T12121] R13: dffffc0000000000 R14: ffffc900085f1fe4 R15: ffffc900085f1fe0
+[ 1596.234323][T12121] FS:  00007f0ebc890700(0000) GS:ffff888035300000(0000) knlGS:0000000000000000
+[ 1596.234326][T12121] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1596.234328][T12121] CR2: fffff520010be3fc CR3: 000000001d173004 CR4: 0000000000760ee0
+[ 1596.234331][T12121] PKRU: 55555554
+[ 1596.234333][T12121] Kernel panic - not syncing: Fatal exception
+[ 1596.236408][T12121] Dumping ftrace buffer:
+[ 1596.236410][T12121]    (ftrace buffer empty)
+[ 1596.236412][T12121] Kernel Offset: disabled
+[ 1596.268919][T12121] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

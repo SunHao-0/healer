@@ -1,0 +1,105 @@
+============== QEMU STDOUT ================
+ proc_reg_llseek+0x280/0x280
+[27144.829973][    C0]  vfs_read+0x1b5/0x560
+[27144.829978][    C0]  ksys_read+0x12d/0x250
+[27144.829983][    C0]  ? vfs_write+0xa80/0xa80
+[27144.829989][    C0]  ? fpregs_assert_state_consistent+0xbc/0xe0
+[27144.829994][    C0]  ? syscall_enter_from_user_mode+0x1d/0x50
+[27144.829999][    C0]  do_syscall_64+0x2d/0x70
+[27144.830005][    C0]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[27144.830009][    C0] RIP: 0033:0x7f97122e422d
+[27144.830025][    C0] Code: c1 20 00 00 75 10 b8 00 00 00 00 0f 05 48 3d 01 f0 ff ff 73 31 c3 48 83 ec 08 e8 4e fc ff ff 48 89 04 24 b8 00 00 00 00 0f 05 <48> 8b 3c 24 48 89 c2 e8 97 fc ff ff 48 89 d0 48 83 c4 08 48 3d 01
+[27144.830031][    C0] RSP: 002b:00007f970fc80580 EFLAGS: 00000293 ORIG_RAX: 0000000000000000
+[27144.830043][    C0] RAX: ffffffffffffffda RBX: 0000000000000000 RCX: 00007f97122e422d
+[27144.830050][    C0] RDX: 0000000000001fa0 RSI: 00007f970fc80da0 RDI: 0000000000000004
+[27144.830057][    C0] RBP: 000055c127c259d0 R08: 0000000000000000 R09: 0000000004000001
+[27144.830064][    C0] R10: 0000000000000001 R11: 0000000000000293 R12: 00007f970fc80da0
+[27144.830071][    C0] R13: 0000000000001fa0 R14: 0000000000001f9f R15: 00007f970fc80df7
+[27144.835481][    C2] NMI backtrace for cpu 2
+[27144.835490][    C2] CPU: 2 PID: 9992 Comm: kworker/2:3 Not tainted 5.10.0 #94
+[27144.835500][    C2] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[27144.835505][    C2] Workqueue: usb_hub_wq hub_event
+[27144.835515][    C2] RIP: 0010:__sanitizer_cov_trace_pc+0x0/0x60
+[27144.835530][    C2] Code: ff ff eb 82 66 0f 1f 44 00 00 65 48 8b 04 25 00 f0 01 00 48 8b 80 50 14 00 00 c3 0f 1f 44 00 00 66 2e 0f 1f 84 00 00 00 00 00 <65> 48 8b 04 25 00 f0 01 00 65 8b 15 30 02 8d 7e f7 c2 00 01 ff 00
+[27144.835536][    C2] RSP: 0018:ffffc9000da8f710 EFLAGS: 00000093
+[27144.835551][    C2] RAX: ffff888027b82140 RBX: 0000000000000001 RCX: ffffffff815c9380
+[27144.835559][    C2] RDX: 0000000000000000 RSI: ffffffff815c934c RDI: 0000000000000001
+[27144.835566][    C2] RBP: 0000000000000200 R08: ffff888027b82140 R09: fffffbfff1c11d6a
+[27144.835573][    C2] R10: ffffffff8e08eb4f R11: fffffbfff1c11d69 R12: 0000000000000021
+[27144.835580][    C2] R13: 0000000000000293 R14: ffff88801446a140 R15: 0000000000000000
+[27144.835589][    C2] FS:  0000000000000000(0000) GS:ffff888063d00000(0000) knlGS:0000000000000000
+[27144.835595][    C2] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[27144.835602][    C2] CR2: 00000000004dfb30 CR3: 000000001789d000 CR4: 0000000000750ee0
+[27144.835610][    C2] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[27144.835616][    C2] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[27144.835621][    C2] PKRU: 55555554
+[27144.835625][    C2] Call Trace:
+[27144.835629][    C2]  vprintk_emit+0x273/0x3f0
+[27144.835634][    C2]  dev_vprintk_emit+0x305/0x347
+[27144.835639][    C2]  ? lock_acquire+0x6d1/0xa20
+[27144.835645][    C2]  ? __component_add.cold+0x1a/0x1a
+[27144.835649][    C2]  ? kasan_save_stack+0x32/0x40
+[27144.835654][    C2]  ? process_one_work+0x926/0x1680
+[27144.835659][    C2]  ? worker_thread+0x96/0xe20
+[27144.835664][    C2]  ? kthread+0x3b1/0x4a0
+[27144.835668][    C2]  ? ret_from_fork+0x1f/0x30
+[27144.835673][    C2]  dev_printk_emit+0xba/0xf1
+[27144.835678][    C2]  ? dev_vprintk_emit+0x347/0x347
+[27144.835683][    C2]  ? lock_acquire+0x6d1/0xa20
+[27144.835688][    C2]  ? lock_release+0x4d4/0x660
+[27144.835693][    C2]  ? usb_control_msg+0x393/0x4a0
+[27144.835698][    C2]  ? debug_check_no_obj_freed+0x273/0x430
+[27144.835703][    C2]  ? lock_downgrade+0x680/0x680
+[27144.835708][    C2]  ? rwlock_bug.part.0+0x90/0x90
+[27144.835713][    C2]  __dev_printk+0xcf/0xf5
+[27144.835717][    C2]  _dev_err+0xd7/0x109
+[27144.835722][    C2]  ? _dev_crit+0x109/0x109
+[27144.835727][    C2]  ? usb_get_device_descriptor+0xb6/0xf0
+[27144.835733][    C2]  ? __kasan_slab_free+0x115/0x140
+[27144.835738][    C2]  ? kfree+0xfa/0x490
+[27144.835742][    C2]  ? hub_port_init+0x2d68/0x2fe0
+[27144.835748][    C2]  hub_port_init.cold+0x1b4/0x1b9
+[27144.835752][    C2]  hub_event+0x1ea0/0x3f30
+[27144.835757][    C2]  ? hub_port_debounce+0x350/0x350
+[27144.835763][    C2]  ? lock_acquire+0x6d1/0xa20
+[27144.835767][    C2]  ? lock_release+0x660/0x660
+[27144.835772][    C2]  ? lock_downgrade+0x680/0x680
+[27144.835777][    C2]  ? do_raw_spin_lock+0x120/0x2e0
+[27144.835783][    C2]  ? read_word_at_a_time+0xe/0x20
+[27144.835787][    C2]  ? strscpy+0x97/0x2a0
+[27144.835792][    C2]  process_one_work+0x926/0x1680
+[27144.835797][    C2]  ? lock_release+0x660/0x660
+[27144.835803][    C2]  ? pwq_dec_nr_in_flight+0x360/0x360
+[27144.835808][    C2]  ? rwlock_bug.part.0+0x90/0x90
+[27144.835812][    C2]  worker_thread+0x96/0xe20
+[27144.835818][    C2]  ? process_one_work+0x1680/0x1680
+[27144.835822][    C2]  kthread+0x3b1/0x4a0
+[27144.835828][    C2]  ? _raw_spin_unlock_irq+0x1f/0x40
+[27144.835833][    C2]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[27144.835838][    C2]  ret_from_fork+0x1f/0x30
+[27144.869107][ T1664] Kernel panic - not syncing: hung_task: blocked tasks
+[27144.869133][ T1664] CPU: 3 PID: 1664 Comm: khungtaskd Not tainted 5.10.0 #94
+[27144.869143][ T1664] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[27144.869148][ T1664] Call Trace:
+[27144.869176][ T1664]  dump_stack+0x107/0x163
+[27144.869247][ T1664]  panic+0x393/0x7d3
+[27144.869273][ T1664]  ? print_oops_end_marker.cold+0x15/0x15
+[27144.869288][ T1664]  ? cpumask_next+0x3c/0x40
+[27144.869306][ T1664]  ? printk_safe_flush+0x127/0x1f0
+[27144.869326][ T1664]  ? watchdog.cold+0x6d/0xfc
+[27144.869340][ T1664]  ? watchdog+0xbe1/0x12b0
+[27144.869353][ T1664]  watchdog.cold+0x7e/0xfc
+[27144.869372][ T1664]  ? reset_hung_task_detector+0x30/0x30
+[27144.869387][ T1664]  kthread+0x3b1/0x4a0
+[27144.869402][ T1664]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[27144.869417][ T1664]  ret_from_fork+0x1f/0x30
+[27144.882526][ T1664] Dumping ftrace buffer:
+[27144.882566][ T1664]    (ftrace buffer empty)
+[27144.882580][ T1664] Kernel Offset: disabled
+[27145.182559][ T1664] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

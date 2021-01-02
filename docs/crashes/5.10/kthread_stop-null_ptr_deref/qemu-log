@@ -1,0 +1,86 @@
+============== QEMU STDOUT ================
+][T31040] vhci_hcd: disconnect device
+[11054.586870][T15617] vhci_hcd vhci_hcd.0: pdev(1) rhport(1) sockfd(7)
+[11054.587736][T15617] vhci_hcd vhci_hcd.0: devid(0) speed(1) speed_str(low-speed)
+[11054.605551][T15617] base_sock_release(00000000de971e7b) sk=000000006c4c477d
+[11054.638125][T15620] vhci_hcd: connection closed
+[11054.657280][T31040] ==================================================================
+[11054.658913][T31040] BUG: KASAN: null-ptr-deref in kthread_stop+0x90/0x760
+[11054.659749][T31040] Write of size 4 at addr 000000000000001c by task kworker/u8:1/31040
+[11054.660692][T31040] 
+[11054.660996][T31040] CPU: 1 PID: 31040 Comm: kworker/u8:1 Not tainted 5.10.0 #94
+[11054.661868][T31040] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[11054.663346][T31040] Workqueue: usbip_event event_handler
+[11054.664001][T31040] Call Trace:
+[11054.664439][T31040]  dump_stack+0x107/0x163
+[11054.664968][T31040]  ? kthread_stop+0x90/0x760
+[11054.665513][T31040]  ? kthread_stop+0x90/0x760
+[11054.678942][T31040]  kasan_report.cold+0x5/0x37
+[11054.679547][T31040]  ? kthread_stop+0x90/0x760
+[11054.680138][T31040]  check_memory_region+0x14e/0x1b0
+[11054.680750][T31040]  kthread_stop+0x90/0x760
+[11054.681301][T31040]  vhci_shutdown_connection+0x17f/0x360
+[11054.681993][T31040]  ? event_handler+0x14d/0x450
+[11054.682589][T31040]  ? event_handler+0x14d/0x450
+[11054.683194][T31040]  ? __kasan_slab_free+0x115/0x140
+[11054.684167][T31040]  ? kfree+0xfa/0x490
+[11054.684798][T31040]  ? trace_hardirqs_on+0x5b/0x1c0
+[11054.685438][T31040]  event_handler+0x1ee/0x450
+[11054.695898][T31040]  process_one_work+0x926/0x1680
+[11054.696788][T31040]  ? lock_release+0x660/0x660
+[11054.697395][T31040]  ? pwq_dec_nr_in_flight+0x360/0x360
+[11054.698135][T31040]  ? rwlock_bug.part.0+0x90/0x90
+[11054.698704][T31040]  worker_thread+0x96/0xe20
+[11054.699302][T31040]  ? process_one_work+0x1680/0x1680
+[11054.699969][T31040]  kthread+0x3b1/0x4a0
+[11054.700482][T31040]  ? _raw_spin_unlock_irq+0x1f/0x40
+[11054.701112][T31040]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[11054.701967][T31040]  ret_from_fork+0x1f/0x30
+[11054.702605][T31040] ==================================================================
+[11054.724124][T31040] Kernel panic - not syncing: panic_on_warn set ...
+[11054.724914][T31040] CPU: 1 PID: 31040 Comm: kworker/u8:1 Tainted: G    B             5.10.0 #94
+[11054.725994][T31040] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[11054.727452][T31040] Workqueue: usbip_event event_handler
+[11054.728078][T31040] Call Trace:
+[11054.728466][T31040]  dump_stack+0x107/0x163
+[11054.728979][T31040]  panic+0x393/0x7d3
+[11054.729447][T31040]  ? print_oops_end_marker.cold+0x15/0x15
+[11054.730101][T31040]  ? preempt_schedule_common+0x5e/0xc0
+[11054.730759][T31040]  ? kthread_stop+0x90/0x760
+[11054.731313][T31040]  ? kthread_stop+0x90/0x760
+[11054.731865][T31040]  ? preempt_schedule_thunk+0x16/0x18
+[11054.758318][T31040]  ? trace_hardirqs_on+0x51/0x1c0
+[11054.758926][T31040]  ? kthread_stop+0x90/0x760
+[11054.759510][T31040]  ? kthread_stop+0x90/0x760
+[11054.760072][T31040]  end_report+0x58/0x5e
+[11054.760585][T31040]  kasan_report.cold+0xd/0x37
+[11054.761140][T31040]  ? kthread_stop+0x90/0x760
+[11054.761697][T31040]  check_memory_region+0x14e/0x1b0
+[11054.762336][T31040]  kthread_stop+0x90/0x760
+[11054.762895][T31040]  vhci_shutdown_connection+0x17f/0x360
+[11054.763569][T31040]  ? event_handler+0x14d/0x450
+[11054.764113][T31040]  ? event_handler+0x14d/0x450
+[11054.764682][T31040]  ? __kasan_slab_free+0x115/0x140
+[11054.776345][T31040]  ? kfree+0xfa/0x490
+[11054.776861][T31040]  ? trace_hardirqs_on+0x5b/0x1c0
+[11054.777443][T31040]  event_handler+0x1ee/0x450
+[11054.777977][T31040]  process_one_work+0x926/0x1680
+[11054.778544][T31040]  ? lock_release+0x660/0x660
+[11054.779124][T31040]  ? pwq_dec_nr_in_flight+0x360/0x360
+[11054.779783][T31040]  ? rwlock_bug.part.0+0x90/0x90
+[11054.780502][T31040]  worker_thread+0x96/0xe20
+[11054.781027][T31040]  ? process_one_work+0x1680/0x1680
+[11054.781663][T31040]  kthread+0x3b1/0x4a0
+[11054.782156][T31040]  ? _raw_spin_unlock_irq+0x1f/0x40
+[11054.782790][T31040]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[11054.783443][T31040]  ret_from_fork+0x1f/0x30
+[11054.796708][T31040] Dumping ftrace buffer:
+[11054.797212][T31040]    (ftrace buffer empty)
+[11054.797750][T31040] Kernel Offset: disabled
+[11054.798241][T31040] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

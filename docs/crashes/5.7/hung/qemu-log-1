@@ -1,0 +1,158 @@
+============== QEMU STDOUT ================
+[ 2721.037259][ T4515] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[ 2721.834320][ T1133] INFO: task kworker/1:0:17 blocked for more than 143 seconds.
+[ 2721.834724][ T1133]       Not tainted 5.7.0-rc2+ #7
+[ 2721.834990][ T1133] "echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+[ 2721.835420][ T1133] kworker/1:0     D26560    17      2 0x80004000
+[ 2721.835827][ T1133] Workqueue: usb_hub_wq hub_event
+[ 2721.836091][ T1133] Call Trace:
+[ 2721.836287][ T1133]  ? __schedule+0x94a/0x2030
+[ 2721.836549][ T1133]  ? lock_downgrade+0x860/0x860
+[ 2721.836801][ T1133]  ? firmware_map_remove+0x19f/0x19f
+[ 2721.837069][ T1133]  ? lockdep_hardirqs_on+0x463/0x620
+[ 2721.837336][ T1133]  schedule+0xd0/0x2a0
+[ 2721.837546][ T1133]  usb_kill_urb+0x21b/0x2b0
+[ 2721.837777][ T1133]  ? usb_poison_urb+0x290/0x290
+[ 2721.838025][ T1133]  ? finish_wait+0x260/0x260
+[ 2721.838257][ T1133]  ? usb_submit_urb+0x6ed/0x13b0
+[ 2721.838509][ T1133]  ? lockdep_init_map_waits+0x210/0x890
+[ 2721.838791][ T1133]  usb_start_wait_urb+0x24a/0x2b0
+[ 2721.839047][ T1133]  ? sg_clean+0x230/0x230
+[ 2721.839270][ T1133]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 2721.839562][ T1133]  ? memset+0x20/0x40
+[ 2721.839771][ T1133]  usb_control_msg+0x31c/0x4a0
+[ 2721.840015][ T1133]  ? usb_start_wait_urb+0x2b0/0x2b0
+[ 2721.840275][ T1133]  ? usb_get_device_descriptor+0x5f/0xf0
+[ 2721.840559][ T1133]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 2721.840837][ T1133]  usb_get_descriptor+0xc1/0x1b0
+[ 2721.841090][ T1133]  usb_get_device_descriptor+0x81/0xf0
+[ 2721.841362][ T1133]  hub_port_init+0xb86/0x2d50
+[ 2721.841604][ T1133]  hub_event+0x1ced/0x38f0
+[ 2721.841837][ T1133]  ? hub_port_debounce+0x270/0x270
+[ 2721.842103][ T1133]  ? fork_usermode_blob+0x291/0x2b0
+[ 2721.842370][ T1133]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 2721.842649][ T1133]  ? rcu_read_lock_any_held.part.0+0x50/0x50
+[ 2721.842953][ T1133]  ? _raw_spin_unlock_irq+0x1f/0x80
+[ 2721.843221][ T1133]  process_one_work+0x965/0x16a0
+[ 2721.843478][ T1133]  ? lock_release+0x820/0x820
+[ 2721.843716][ T1133]  ? pwq_dec_nr_in_flight+0x310/0x310
+[ 2721.843990][ T1133]  ? rwlock_bug.part.0+0x90/0x90
+[ 2721.849844][ T1133]  ? schedule+0x20b/0x2a0
+[ 2721.850282][ T1133]  worker_thread+0x96/0xe20
+[ 2721.850517][ T1133]  ? process_one_work+0x16a0/0x16a0
+[ 2721.850993][ T1133]  kthread+0x388/0x470
+[ 2721.851212][ T1133]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 2721.851499][ T1133]  ret_from_fork+0x24/0x30
+[ 2721.851769][ T1133] 
+[ 2721.851769][ T1133] Showing all locks held in the system:
+[ 2721.852160][ T1133] 5 locks held by kworker/1:0/17:
+[ 2721.852410][ T1133]  #0: ffff88802eacbd38 ((wq_completion)usb_hub_wq){+.+.}-{0:0}, at: process_one_work+0x844/0x16a0
+[ 2721.852946][ T1133]  #1: ffffc9000013fdc0 ((work_completion)(&hub->events)){+.+.}-{0:0}, at: process_one_work+0x878/0x16a0
+[ 2721.853501][ T1133]  #2: ffff88802a438218 (&dev->mutex){....}-{3:3}, at: hub_event+0x1b6/0x38f0
+[ 2721.853945][ T1133]  #3: ffff88802a44c590 (&port_dev->status_lock){+.+.}-{3:3}, at: hub_event+0x1cd8/0x38f0
+[ 2721.856466][ T1133]  #4: ffff888030197d68 (hcd->address0_mutex){+.+.}-{3:3}, at: hub_port_init+0x1b6/0x2d50
+[ 2721.856985][ T1133] 1 lock held by khungtaskd/1133:
+[ 2721.857233][ T1133]  #0: ffffffff899be8c0 (rcu_read_lock){....}-{1:2}, at: debug_show_all_locks+0x53/0x260
+[ 2721.857740][ T1133] 1 lock held by systemd-udevd/3786:
+[ 2721.858006][ T1133] 1 lock held by in:imklog/5948:
+[ 2721.858253][ T1133]  #0: ffff88802e311e30 (&f->f_pos_lock){+.+.}-{3:3}, at: __fdget_pos+0xe9/0x100
+[ 2721.858745][ T1133] 
+[ 2721.858870][ T1133] =============================================
+[ 2721.858870][ T1133] 
+[ 2721.859280][ T1133] NMI backtrace for cpu 1
+[ 2721.859499][ T1133] CPU: 1 PID: 1133 Comm: khungtaskd Not tainted 5.7.0-rc2+ #7
+[ 2721.859866][ T1133] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 2721.860345][ T1133] Call Trace:
+[ 2721.860543][ T1133]  dump_stack+0x188/0x20d
+[ 2721.860772][ T1133]  nmi_cpu_backtrace.cold+0x70/0xb1
+[ 2721.861045][ T1133]  ? lapic_can_unplug_cpu.cold+0x3b/0x3b
+[ 2721.861332][ T1133]  nmi_trigger_cpumask_backtrace+0x231/0x27e
+[ 2721.861641][ T1133]  watchdog+0xa45/0xfe0
+[ 2721.861856][ T1133]  ? reset_hung_task_detector+0x30/0x30
+[ 2721.862133][ T1133]  kthread+0x388/0x470
+[ 2721.862339][ T1133]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 2721.862625][ T1133]  ret_from_fork+0x24/0x30
+[ 2721.862851][ T1133] Sending NMI from CPU 1 to CPUs 0:
+[ 2721.863377][    C0] NMI backtrace for cpu 0
+[ 2721.863380][    C0] CPU: 0 PID: 3786 Comm: systemd-udevd Not tainted 5.7.0-rc2+ #7
+[ 2721.863382][    C0] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 2721.863384][    C0] RIP: 0010:tomoyo_domain_quota_is_ok+0x2b8/0x500
+[ 2721.863388][    C0] Code: 01 00 00 45 31 e4 e8 37 ba 10 fe 44 89 e0 48 83 c4 18 5b 5d 41 5c 41 5d 41 5e 41 5f c3 41 bc 01 00 00 00 31 db e8 18 ba 10 fe <89> d9 44 89 e0 31 ff d3 f8 83 e0 01 41 89 c7 89 c6 e8 72 bb 10 fe
+[ 2721.863390][    C0] RSP: 0018:ffffc9000073f830 EFLAGS: 00000293
+[ 2721.863392][    C0] RAX: ffff88802e5ae500 RBX: 0000000000000004 RCX: ffffffff83630861
+[ 2721.863394][    C0] RDX: 0000000000000000 RSI: ffffffff83630828 RDI: 0000000000000001
+[ 2721.863396][    C0] RBP: ffff8880262a9300 R08: ffff88802e5ae500 R09: fffffbfff19021f5
+[ 2721.863398][    C0] R10: ffffffff8c810fa7 R11: fffffbfff19021f4 R12: 0000000000000001
+[ 2721.863400][    C0] R13: 0000000000000361 R14: dffffc0000000000 R15: 0000000000000000
+[ 2721.863402][    C0] FS:  00007f76aa0d98c0(0000) GS:ffff888035200000(0000) knlGS:0000000000000000
+[ 2721.863403][    C0] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 2721.863405][    C0] CR2: 000056068baf3000 CR3: 000000002a3b8005 CR4: 0000000000760ef0
+[ 2721.863406][    C0] PKRU: 55555554
+[ 2721.863407][    C0] Call Trace:
+[ 2721.863408][    C0]  tomoyo_supervisor+0x2d9/0xe80
+[ 2721.863410][    C0]  ? debug_check_no_obj_freed+0x213/0x449
+[ 2721.863411][    C0]  ? tomoyo_profile+0x50/0x50
+[ 2721.863412][    C0]  ? lock_downgrade+0x860/0x860
+[ 2721.863414][    C0]  ? tomoyo_encode2.part.0+0xec/0x3b0
+[ 2721.863415][    C0]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 2721.863416][    C0]  ? trace_hardirqs_off+0x50/0x220
+[ 2721.863418][    C0]  ? tomoyo_path_matches_pattern+0x110/0x280
+[ 2721.863419][    C0]  ? tomoyo_compare_name_union+0x4f/0xe0
+[ 2721.863421][    C0]  ? tomoyo_check_path_acl+0x8b/0x130
+[ 2721.863422][    C0]  ? tomoyo_check_acl+0x2dc/0x3d0
+[ 2721.863423][    C0]  tomoyo_path_permission+0x25c/0x360
+[ 2721.863424][    C0]  tomoyo_path_perm+0x2f6/0x400
+[ 2721.863426][    C0]  ? tomoyo_check_open_permission+0x370/0x370
+[ 2721.863427][    C0]  ? putname+0xe1/0x120
+[ 2721.863428][    C0]  ? lockdep_hardirqs_on+0x463/0x620
+[ 2721.863430][    C0]  ? strncpy_from_user+0x2af/0x3e0
+[ 2721.863431][    C0]  security_inode_getattr+0xeb/0x150
+[ 2721.863432][    C0]  vfs_getattr+0x22/0x60
+[ 2721.863433][    C0]  vfs_statx+0x142/0x1e0
+[ 2721.863434][    C0]  ? vfs_statx_fd+0xb0/0xb0
+[ 2721.863436][    C0]  ? do_raw_spin_unlock+0x171/0x260
+[ 2721.863437][    C0]  ? _raw_spin_unlock+0x24/0x40
+[ 2721.863438][    C0]  __do_sys_newlstat+0x96/0x120
+[ 2721.863439][    C0]  ? __do_sys_newstat+0x120/0x120
+[ 2721.863441][    C0]  ? __secure_computing+0x104/0x360
+[ 2721.863442][    C0]  ? syscall_trace_enter+0x41d/0xd10
+[ 2721.863443][    C0]  ? syscall_slow_exit_work+0x630/0x630
+[ 2721.863445][    C0]  ? trace_hardirqs_off_caller+0x55/0x230
+[ 2721.863446][    C0]  do_syscall_64+0xf6/0x7d0
+[ 2721.863448][    C0]  entry_SYSCALL_64_after_hwframe+0x49/0xb3
+[ 2721.863449][    C0] RIP: 0033:0x7f76a8f4c335
+[ 2721.863453][    C0] Code: 69 db 2b 00 64 c7 00 16 00 00 00 b8 ff ff ff ff c3 0f 1f 40 00 83 ff 01 48 89 f0 77 30 48 89 c7 48 89 d6 b8 06 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 03 f3 c3 90 48 8b 15 31 db 2b 00 f7 d8 64 89
+[ 2721.863454][    C0] RSP: 002b:00007ffc9b390b58 EFLAGS: 00000246 ORIG_RAX: 0000000000000006
+[ 2721.863457][    C0] RAX: ffffffffffffffda RBX: 000056068bae2440 RCX: 00007f76a8f4c335
+[ 2721.863459][    C0] RDX: 00007ffc9b390b90 RSI: 00007ffc9b390b90 RDI: 000056068bae1440
+[ 2721.863461][    C0] RBP: 00007ffc9b390c50 R08: 00007f76a920b258 R09: 0000000000001010
+[ 2721.863463][    C0] R10: 0000000000000210 R11: 0000000000000246 R12: 000056068bae1440
+[ 2721.863465][    C0] R13: 000056068bae145a R14: 000056068bac9e95 R15: 000056068bac9e9a
+[ 2721.864113][ T1133] Kernel panic - not syncing: hung_task: blocked tasks
+[ 2721.881349][ T1133] CPU: 1 PID: 1133 Comm: khungtaskd Not tainted 5.7.0-rc2+ #7
+[ 2721.881717][ T1133] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 2721.882200][ T1133] Call Trace:
+[ 2721.882371][ T1133]  dump_stack+0x188/0x20d
+[ 2721.882596][ T1133]  panic+0x2e3/0x75c
+[ 2721.882799][ T1133]  ? add_taint.cold+0x16/0x16
+[ 2721.883038][ T1133]  ? cpumask_next+0x3c/0x40
+[ 2721.883267][ T1133]  ? printk_safe_flush+0xd9/0x120
+[ 2721.883519][ T1133]  ? watchdog+0xa45/0xfe0
+[ 2721.883739][ T1133]  ? nmi_trigger_cpumask_backtrace+0x214/0x27e
+[ 2721.884044][ T1133]  watchdog+0xa56/0xfe0
+[ 2721.884259][ T1133]  ? reset_hung_task_detector+0x30/0x30
+[ 2721.884544][ T1133]  kthread+0x388/0x470
+[ 2721.884755][ T1133]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 2721.885043][ T1133]  ret_from_fork+0x24/0x30
+[ 2721.885347][ T1133] Dumping ftrace buffer:
+[ 2721.885678][ T1133]    (ftrace buffer empty)
+[ 2721.885902][ T1133] Kernel Offset: disabled
+[ 2721.893517][ T1133] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: Warning: Permanently added '[127.0.0.1]:1025' (ECDSA) to the list of known hosts.
+Connection to 127.0.0.1 closed by remote host.
+

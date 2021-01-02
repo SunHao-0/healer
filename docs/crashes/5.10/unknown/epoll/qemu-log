@@ -1,0 +1,81 @@
+============== QEMU STDOUT ================
+a 48 c1 ea 03 0f b6 14 02 48 89 d8 83 e0 07 83 c0 01 38 d0 7c 04 84 d2 75 10 0f b7 0b b8 05 00 00 00 31 db 0f 01 c1 <5b> 5d c3 48 89 df e8 d4 71 87 00 eb e6 e8 ed 71 87 00 eb b1 48 01
+[36701.248632][    C2] RSP: 0018:ffffc9000101f9b8 EFLAGS: 00000046
+[36701.248644][    C2] RAX: 0000000000000000 RBX: 0000000000000000 RCX: 0000000000000003
+[36701.248652][    C2] RDX: 0000000000000000 RSI: ffffffff8b2de738 RDI: ffffffff8b2de738
+[36701.248660][    C2] RBP: 0000000000000003 R08: dffffc0000000000 R09: fffffbfff174046d
+[36701.248679][    C2] R10: ffffffff8ba02363 R11: fffffbfff174046c R12: ffffffff8ba02360
+[36701.248689][    C2] R13: 0000000000000000 R14: 0000000000000008 R15: ffff88813ffe6000
+[36701.248696][    C2] FS:  00007fb8711648c0(0000) GS:ffff888063d00000(0000) knlGS:0000000000000000
+[36701.248704][    C2] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[36701.248711][    C2] CR2: 00007fb86c65e000 CR3: 0000000100edc000 CR4: 0000000000750ee0
+[36701.248720][    C2] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[36701.248728][    C2] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[36701.248733][    C2] PKRU: 55555554
+[36701.248737][    C2] Call Trace:
+[36701.248743][    C2]  __pv_queued_spin_unlock_slowpath+0x1a0/0x2d0
+[36701.248749][    C2]  ? devkmsg_poll+0x112/0x1d0
+[36701.248754][    C2]  ? __bpf_trace_console+0xe0/0xe0
+[36701.248762][    C2]  __raw_callee_save___pv_queued_spin_unlock_slowpath+0x11/0x20
+[36701.248768][    C2]  ? do_raw_spin_unlock+0x50/0x270
+[36701.248772][    C2]  .slowpath+0x9/0xe
+[36701.248778][    C2]  do_raw_spin_unlock+0x171/0x270
+[36701.248784][    C2]  _raw_spin_unlock+0x1a/0x40
+[36701.248789][    C2]  devkmsg_poll+0x112/0x1d0
+[36701.248794][    C2]  ep_item_poll+0x14a/0x3e0
+[36701.248800][    C2]  ? ep_eventpoll_poll+0x160/0x160
+[36701.250135][    C2]  ? stack_trace_save+0xc0/0xc0
+[36701.255614][    C2]  ? ep_scan_ready_list+0x6de/0x860
+[36701.255620][    C2]  ep_send_events_proc+0x271/0xc90
+[36701.255626][    C2]  ? do_raw_write_lock+0x11a/0x280
+[36701.255630][    C2]  ? do_epoll_create+0x460/0x460
+[36701.255636][    C2]  ? do_raw_read_unlock+0x70/0x70
+[36701.255642][    C2]  ? do_epoll_create+0x460/0x460
+[36701.255648][    C2]  ep_scan_ready_list+0x298/0x860
+[36701.255654][    C2]  ? debug_object_active_state+0x2a5/0x380
+[36701.255659][    C2]  ? ep_destroy_wakeup_source+0x170/0x170
+[36701.255665][    C2]  ? debug_object_destroy+0x1f0/0x1f0
+[36701.255670][    C2]  ep_poll+0x9b3/0xe60
+[36701.255676][    C2]  ? _raw_spin_unlock_irqrestore+0x2f/0x50
+[36701.255681][    C2]  ? ep_read_events_proc+0x460/0x460
+[36701.255687][    C2]  ? seccomp_notify_ioctl+0xd90/0xd90
+[36701.255692][    C2]  ? lock_acquire+0x6d1/0xa20
+[36701.255698][    C2]  ? unlock_page_memcg+0x60/0x60
+[36701.255703][    C2]  do_epoll_wait+0x1dd/0x230
+[36701.255708][    C2]  __x64_sys_epoll_wait+0x93/0xf0
+[36701.255713][    C2]  do_syscall_64+0x2d/0x70
+[36701.255720][    C2]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[36701.255725][    C2] RIP: 0033:0x7fb87042e303
+[36701.255741][    C2] Code: 49 89 ca b8 e8 00 00 00 0f 05 48 3d 01 f0 ff ff 73 34 c3 48 83 ec 08 e8 0b c2 00 00 48 89 04 24 49 89 ca b8 e8 00 00 00 0f 05 <48> 8b 3c 24 48 89 c2 e8 51 c2 00 00 48 89 d0 48 83 c4 08 48 3d 01
+[36701.255747][    C2] RSP: 002b:00007ffcbfdfc4f0 EFLAGS: 00000293 ORIG_RAX: 00000000000000e8
+[36701.255761][    C2] RAX: ffffffffffffffda RBX: 000056223cb281e0 RCX: 00007fb87042e303
+[36701.255769][    C2] RDX: 0000000000000013 RSI: 00007ffcbfdfc500 RDI: 0000000000000008
+[36701.255792][    C2] RBP: 00007ffcbfdfc6f0 R08: 00000000006380a8 R09: 000000005fefa101
+[36701.255800][    C2] R10: 00000000ffffffff R11: 0000000000000293 R12: 00007ffcbfdfc500
+[36701.255808][    C2] R13: 0000000000000001 R14: ffffffffffffffff R15: 0005b7de3287c7f0
+[36701.260463][ T1637] Kernel panic - not syncing: hung_task: blocked tasks
+[36701.443084][ T1637] CPU: 3 PID: 1637 Comm: khungtaskd Not tainted 5.10.0 #94
+[36701.444684][ T1637] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[36701.447518][ T1637] Call Trace:
+[36701.457028][ T1637]  dump_stack+0x107/0x163
+[36701.458130][ T1637]  panic+0x393/0x7d3
+[36701.458996][ T1637]  ? print_oops_end_marker.cold+0x15/0x15
+[36701.460352][ T1637]  ? cpumask_next+0x3c/0x40
+[36701.461405][ T1637]  ? printk_safe_flush+0x127/0x1f0
+[36701.462537][ T1637]  ? watchdog.cold+0x6d/0xfc
+[36701.463613][ T1637]  ? watchdog+0xbe1/0x12b0
+[36701.464623][ T1637]  watchdog.cold+0x7e/0xfc
+[36701.465583][ T1637]  ? reset_hung_task_detector+0x30/0x30
+[36701.475582][ T1637]  kthread+0x3b1/0x4a0
+[36701.476450][ T1637]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[36701.477853][ T1637]  ret_from_fork+0x1f/0x30
+[36701.496068][ T1637] Dumping ftrace buffer:
+[36701.497087][ T1637]    (ftrace buffer empty)
+[36701.498035][ T1637] Kernel Offset: disabled
+[36701.499004][ T1637] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

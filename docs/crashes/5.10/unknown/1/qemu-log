@@ -1,0 +1,118 @@
+============== QEMU STDOUT ================
+ ? get_timespec64+0x191/0x220
+[12517.560459][    C1]  ? put_old_itimerspec32+0x1d0/0x1d0
+[12517.560466][    C1]  common_nsleep+0xa2/0xc0
+[12517.560474][    C1]  __x64_sys_clock_nanosleep+0x31c/0x470
+[12517.560485][    C1]  ? __ia32_sys_clock_getres_time32+0x2a0/0x2a0
+[12517.560491][    C1]  ? fpregs_assert_state_consistent+0xbc/0xe0
+[12517.560499][    C1]  ? syscall_enter_from_user_mode+0x1d/0x50
+[12517.560505][    C1]  do_syscall_64+0x2d/0x70
+[12517.560514][    C1]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[12517.560518][    C1] RIP: 0033:0x495cc4
+[12517.560531][    C1] Code: 89 d4 49 89 cd 83 ff 02 74 5c 85 ff 0f 94 c3 64 8b 04 25 18 00 00 00 85 c0 75 7b 4d 89 ea 4c 89 e2 89 ee b8 e6 00 00 00 0f 05 <89> c2 83 f8 ea 75 04 84 db 75 41 89 d0 f7 d8 81 fa 00 f0 ff ff ba
+[12517.560537][    C1] RSP: 002b:00007fffa6f77ce0 EFLAGS: 00000246 ORIG_RAX: 00000000000000e6
+[12517.560548][    C1] RAX: ffffffffffffffda RBX: 0000000000000301 RCX: 0000000000495cc4
+[12517.560557][    C1] RDX: 00007fffa6f77d60 RSI: 0000000000000000 RDI: 0000000000000000
+[12517.560567][    C1] RBP: 0000000000000000 R08: 000000000025dcd8 R09: 00000000000030e6
+[12517.560577][    C1] R10: 0000000000000000 R11: 0000000000000246 R12: 00007fffa6f77d60
+[12517.560589][    C1] R13: 0000000000000000 R14: 0000000000000032 R15: 00007fffa6f77ddc
+[12517.560598][    C3] NMI backtrace for cpu 3
+[12517.560605][    C3] CPU: 3 PID: 8233 Comm: in:imklog Not tainted 5.10.0 #94
+[12517.560615][    C3] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[12517.560620][    C3] RIP: 0010:write_comp_data+0x2e/0x80
+[12517.560635][    C3] Code: 25 00 f0 01 00 65 8b 05 d0 01 8d 7e a9 00 01 ff 00 74 10 f6 c4 01 74 5c 41 8b 80 5c 14 00 00 85 c0 74 51 41 8b 80 38 14 00 00 <83> f8 03 75 45 49 8b 80 40 14 00 00 45 8b 80 3c 14 00 00 4c 8b 08
+[12517.560641][    C3] RSP: 0018:ffffc9000c99f730 EFLAGS: 00000046
+[12517.560651][    C3] RAX: 0000000000000000 RBX: 0000000000000001 RCX: ffffffff83f3fe72
+[12517.560658][    C3] RDX: 0000000000000009 RSI: 0000000000000008 RDI: 0000000000000001
+[12517.560665][    C3] RBP: ffffffff89e32840 R08: ffff88801f110000 R09: fffff52001933f44
+[12517.560672][    C3] R10: ffffc9000c99fa1b R11: fffff52001933f43 R12: 000000000000000a
+[12517.560679][    C3] R13: ffffffff898c6185 R14: 0000000000000009 R15: ffffc9000c99f858
+[12517.560687][    C3] FS:  00007f9fda352700(0000) GS:ffff888135d00000(0000) knlGS:0000000000000000
+[12517.560693][    C3] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[12517.560699][    C3] CR2: 000055631e3a9e2f CR3: 00000001047ef000 CR4: 0000000000750ee0
+[12517.560707][    C3] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[12517.560713][    C3] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[12517.560717][    C3] PKRU: 55555554
+[12517.560721][    C3] Call Trace:
+[12517.560726][    C3]  __sanitizer_cov_trace_switch+0x45/0x70
+[12517.560731][    C3]  vsnprintf+0x982/0x14f0
+[12517.560735][    C3]  ? pointer+0x7b0/0x7b0
+[12517.560739][    C3]  ? memcpy+0x39/0x60
+[12517.560744][    C3]  sprintf+0xc0/0x100
+[12517.560748][    C3]  ? snprintf+0xf0/0xf0
+[12517.560753][    C3]  ? entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[12517.560758][    C3]  ? get_data+0x3cb/0x5d0
+[12517.560763][    C3]  info_print_prefix+0x24b/0x340
+[12517.560768][    C3]  ? msg_print_ext_body+0x90/0x90
+[12517.560772][    C3]  ? space_used+0x2a0/0x2a0
+[12517.560777][    C3]  record_print_text+0x12a/0x320
+[12517.560783][    C3]  ? get_record_print_text_size+0x110/0x110
+[12517.560787][    C3]  ? prb_read_valid+0x75/0xa0
+[12517.560791][    C3]  ? prb_final_commit+0x20/0x20
+[12517.560795][    C3]  syslog_print+0x2f3/0x460
+[12517.560800][    C3]  ? printk_timed_ratelimit+0xe0/0xe0
+[12517.560804][    C3]  ? lock_release+0x4d4/0x660
+[12517.560809][    C3]  ? rwlock_bug.part.0+0x90/0x90
+[12517.560814][    C3]  ? _raw_spin_lock_irqsave+0x41/0x50
+[12517.560818][    C3]  ? finish_wait+0xb2/0x260
+[12517.560828][    C3]  ? _raw_spin_unlock_irqrestore+0x42/0x50
+[12517.560833][    C3]  do_syslog.part.0+0x2f4/0x820
+[12517.560838][    C3]  ? cpumask_test_cpu.constprop.0+0x50/0x50
+[12517.560843][    C3]  ? do_futex+0x166/0x1970
+[12517.560847][    C3]  ? finish_wait+0x260/0x260
+[12517.560852][    C3]  ? __fsnotify_parent+0x503/0xac0
+[12517.560857][    C3]  ? fsnotify+0x11d0/0x11d0
+[12517.560862][    C3]  ? common_file_perm+0x2fc/0x9b0
+[12517.560866][    C3]  ? __fdget_pos+0xe9/0x100
+[12517.560871][    C3]  ? __fget_files+0x2ce/0x450
+[12517.560876][    C3]  ? apparmor_task_setrlimit+0x9c0/0x9c0
+[12517.560882][    C3]  ? mutex_lock_io_nested+0x1410/0x1410
+[12517.560886][    C3]  ? bpf_lsm_syslog+0x5/0x10
+[12517.560891][    C3]  ? security_syslog+0x73/0x90
+[12517.560895][    C3]  do_syslog+0x49/0x60
+[12517.560900][    C3]  kmsg_read+0x90/0xb0
+[12517.560904][    C3]  ? kmsg_poll+0xb0/0xb0
+[12517.560909][    C3]  proc_reg_read+0x117/0x290
+[12517.560913][    C3]  ? rw_verify_area+0x11d/0x340
+[12517.560918][    C3]  ? proc_reg_llseek+0x280/0x280
+[12517.560922][    C3]  vfs_read+0x1b5/0x560
+[12517.560927][    C3]  ksys_read+0x12d/0x250
+[12517.560931][    C3]  ? vfs_write+0xa80/0xa80
+[12517.560937][    C3]  ? fpregs_assert_state_consistent+0xbc/0xe0
+[12517.560943][    C3]  ? syscall_enter_from_user_mode+0x1d/0x50
+[12517.560947][    C3]  do_syscall_64+0x2d/0x70
+[12517.560952][    C3]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[12517.560957][    C3] RIP: 0033:0x7f9fdc99522d
+[12517.560972][    C3] Code: c1 20 00 00 75 10 b8 00 00 00 00 0f 05 48 3d 01 f0 ff ff 73 31 c3 48 83 ec 08 e8 4e fc ff ff 48 89 04 24 b8 00 00 00 00 0f 05 <48> 8b 3c 24 48 89 c2 e8 97 fc ff ff 48 89 d0 48 83 c4 08 48 3d 01
+[12517.560977][    C3] RSP: 002b:00007f9fda331580 EFLAGS: 00000293 ORIG_RAX: 0000000000000000
+[12517.560989][    C3] RAX: ffffffffffffffda RBX: 0000000000000000 RCX: 00007f9fdc99522d
+[12517.560996][    C3] RDX: 0000000000001fa0 RSI: 00007f9fda331da0 RDI: 0000000000000004
+[12517.561002][    C3] RBP: 0000564fa2d9b9d0 R08: 0000000000000000 R09: 0000000000000000
+[12517.561010][    C3] R10: 2ce33e6c02ce33e7 R11: 0000000000000293 R12: 00007f9fda331da0
+[12517.562980][    C3] R13: 0000000000001fa0 R14: 0000000000001f9f R15: 00007f9fda331ef3
+[12517.563026][ T1676] Kernel panic - not syncing: hung_task: blocked tasks
+[12517.940620][ T1676] CPU: 2 PID: 1676 Comm: khungtaskd Not tainted 5.10.0 #94
+[12517.943010][ T1676] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[12517.944707][ T1676] Call Trace:
+[12517.946697][ T1676]  dump_stack+0x107/0x163
+[12517.948531][ T1676]  panic+0x393/0x7d3
+[12517.952656][ T1676]  ? print_oops_end_marker.cold+0x15/0x15
+[12517.954974][ T1676]  ? nmi_cpu_backtrace_handler+0x10/0x10
+[12517.959393][ T1676]  ? preempt_schedule_thunk+0x16/0x18
+[12517.963561][ T1676]  ? watchdog.cold+0x6d/0xfc
+[12517.967756][ T1676]  ? watchdog+0xbe1/0x12b0
+[12517.969736][ T1676]  watchdog.cold+0x7e/0xfc
+[12517.972083][ T1676]  ? reset_hung_task_detector+0x30/0x30
+[12517.976373][ T1676]  kthread+0x3b1/0x4a0
+[12517.980606][ T1676]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[12517.982551][ T1676]  ret_from_fork+0x1f/0x30
+[12517.986953][ T1676] Dumping ftrace buffer:
+[12517.987580][ T1676]    (ftrace buffer empty)
+[12517.988182][ T1676] Kernel Offset: disabled
+[12517.988767][ T1676] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

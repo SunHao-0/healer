@@ -1,0 +1,107 @@
+============== QEMU STDOUT ================
+99927][ T1101] kworker/1:2     D26560  4501      2 0x80004000
+[ 5875.000355][ T1101] Workqueue: usb_hub_wq hub_event
+[ 5875.000632][ T1101] Call Trace:
+[ 5875.000841][ T1101]  ? __schedule+0x94a/0x2030
+[ 5875.001154][ T1101]  ? lock_downgrade+0x860/0x860
+[ 5875.001413][ T1101]  ? firmware_map_remove+0x19f/0x19f
+[ 5875.001688][ T1101]  ? lockdep_hardirqs_on+0x463/0x620
+[ 5875.001945][ T1101]  schedule+0xd0/0x2a0
+[ 5875.002146][ T1101]  usb_kill_urb+0x21b/0x2b0
+[ 5875.002369][ T1101]  ? usb_poison_urb+0x290/0x290
+[ 5875.002645][ T1101]  ? finish_wait+0x260/0x260
+[ 5875.002870][ T1101]  ? usb_submit_urb+0x6ed/0x13b0
+[ 5875.003112][ T1101]  ? lockdep_init_map_waits+0x210/0x890
+[ 5875.003382][ T1101]  usb_start_wait_urb+0x24a/0x2b0
+[ 5875.003646][ T1101]  ? sg_clean+0x230/0x230
+[ 5875.003887][ T1101]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 5875.004174][ T1101]  ? memset+0x20/0x40
+[ 5875.004375][ T1101]  usb_control_msg+0x31c/0x4a0
+[ 5875.004610][ T1101]  ? usb_start_wait_urb+0x2b0/0x2b0
+[ 5875.067336][ T1101]  ? usb_get_device_descriptor+0x5f/0xf0
+[ 5875.067634][ T1101]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 5875.067959][ T1101]  usb_get_descriptor+0xc1/0x1b0
+[ 5875.068220][ T1101]  usb_get_device_descriptor+0x81/0xf0
+[ 5875.068486][ T1101]  hub_port_init+0xb86/0x2d50
+[ 5875.068721][ T1101]  hub_event+0x1ced/0x38f0
+[ 5875.079400][ T1101]  ? hub_port_debounce+0x270/0x270
+[ 5875.079706][ T1101]  ? call_usermodehelper_setup_file+0xb1/0x320
+[ 5875.080020][ T1101]  ? rcu_read_lock_sched_held+0x9c/0xd0
+[ 5875.080295][ T1101]  ? rcu_read_lock_any_held.part.0+0x50/0x50
+[ 5875.080626][ T1101]  ? _raw_spin_unlock_irq+0x1f/0x80
+[ 5875.080901][ T1101]  process_one_work+0x965/0x16a0
+[ 5875.081151][ T1101]  ? lock_release+0x820/0x820
+[ 5875.081386][ T1101]  ? pwq_dec_nr_in_flight+0x310/0x310
+[ 5875.081657][ T1101]  ? rwlock_bug.part.0+0x90/0x90
+[ 5875.081931][ T1101]  ? kthread_data+0x4f/0xc0
+[ 5875.082160][ T1101]  worker_thread+0x96/0xe20
+[ 5875.082390][ T1101]  ? process_one_work+0x16a0/0x16a0
+[ 5875.082648][ T1101]  kthread+0x388/0x470
+[ 5875.082880][ T1101]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 5875.083169][ T1101]  ret_from_fork+0x24/0x30
+[ 5875.083435][ T1101] 
+[ 5875.083435][ T1101] Showing all locks held in the system:
+[ 5875.083817][ T1101] 1 lock held by khungtaskd/1101:
+[ 5875.084094][ T1101]  #0: ffffffff899be8c0 (rcu_read_lock){....}-{1:2}, at: debug_show_all_locks+0x53/0x260
+[ 5875.084604][ T1101] 1 lock held by in:imklog/6091:
+[ 5875.084855][ T1101]  #0: ffff88802ffa20f0 (&f->f_pos_lock){+.+.}-{3:3}, at: __fdget_pos+0xe9/0x100
+[ 5875.085361][ T1101] 5 locks held by kworker/1:2/4501:
+[ 5875.085620][ T1101]  #0: ffff88803065f138 ((wq_completion)usb_hub_wq){+.+.}-{0:0}, at: process_one_work+0x844/0x16a0
+[ 5875.086141][ T1101]  #1: ffffc90001927dc0 ((work_completion)(&hub->events)){+.+.}-{0:0}, at: process_one_work+0x878/0x16a0
+[ 5875.086712][ T1101]  #2: ffff88802fa1f218 (&dev->mutex){....}-{3:3}, at: hub_event+0x1b6/0x38f0
+[ 5875.087149][ T1101]  #3: ffff88802e3ef590 (&port_dev->status_lock){+.+.}-{3:3}, at: hub_event+0x1cd8/0x38f0
+[ 5875.087928][ T1101]  #4: ffff88802fdd3f68 (hcd->address0_mutex){+.+.}-{3:3}, at: hub_port_init+0x1b6/0x2d50
+[ 5875.088422][ T1101] 3 locks held by kworker/1:0/12754:
+[ 5875.088683][ T1101] 2 locks held by kworker/u4:0/31287:
+[ 5875.088978][ T1101]  #0: ffff888030c34138 ((wq_completion)events_unbound){+.+.}-{0:0}, at: process_one_work+0x844/0x16a0
+[ 5875.089514][ T1101]  #1: ffffc9000b69fdc0 (connector_reaper_work){+.+.}-{0:0}, at: process_one_work+0x878/0x16a0
+[ 5875.090022][ T1101] 2 locks held by kworker/u4:2/30881:
+[ 5875.090314][ T1101]  #0: ffff888030c34138 ((wq_completion)events_unbound){+.+.}-{0:0}, at: process_one_work+0x844/0x16a0
+[ 5875.090850][ T1101]  #1: ffffc9000991fdc0 ((reaper_work).work){+.+.}-{0:0}, at: process_one_work+0x878/0x16a0
+[ 5875.091377][ T1101] 2 locks held by syz-executor/11893:
+[ 5875.091645][ T1101]  #0: ffff888015146c90 (&sb->s_type->i_mutex_key#12){+.+.}-{3:3}, at: __sock_release+0x86/0x280
+[ 5875.092198][ T1101]  #1: ffff88801c2a5120 (sk_lock-AF_PPPOX){+.+.}-{0:0}, at: pptp_release+0x4f/0x2b0
+[ 5875.092710][ T1101] 
+[ 5875.092835][ T1101] =============================================
+[ 5875.092835][ T1101] 
+[ 5875.117269][ T1101] NMI backtrace for cpu 0
+[ 5875.117526][ T1101] CPU: 0 PID: 1101 Comm: khungtaskd Not tainted 5.7.0-rc2+ #7
+[ 5875.117890][ T1101] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 5875.118364][ T1101] Call Trace:
+[ 5875.118572][ T1101]  dump_stack+0x188/0x20d
+[ 5875.118801][ T1101]  nmi_cpu_backtrace.cold+0x70/0xb1
+[ 5875.119076][ T1101]  ? lapic_can_unplug_cpu.cold+0x3b/0x3b
+[ 5875.119358][ T1101]  nmi_trigger_cpumask_backtrace+0x231/0x27e
+[ 5875.119665][ T1101]  watchdog+0xa45/0xfe0
+[ 5875.119880][ T1101]  ? reset_hung_task_detector+0x30/0x30
+[ 5875.120156][ T1101]  kthread+0x388/0x470
+[ 5875.120361][ T1101]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 5875.120646][ T1101]  ret_from_fork+0x24/0x30
+[ 5875.120891][ T1101] Sending NMI from CPU 0 to CPUs 1:
+[ 5875.121270][    C1] NMI backtrace for cpu 1 skipped: idling at native_safe_halt+0xe/0x10
+[ 5875.128345][ T1101] Kernel panic - not syncing: hung_task: blocked tasks
+[ 5875.128713][ T1101] CPU: 0 PID: 1101 Comm: khungtaskd Not tainted 5.7.0-rc2+ #7
+[ 5875.129081][ T1101] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.13.0-1ubuntu1 04/01/2014
+[ 5875.129554][ T1101] Call Trace:
+[ 5875.129726][ T1101]  dump_stack+0x188/0x20d
+[ 5875.129955][ T1101]  panic+0x2e3/0x75c
+[ 5875.130156][ T1101]  ? add_taint.cold+0x16/0x16
+[ 5875.130394][ T1101]  ? lapic_can_unplug_cpu.cold+0x3b/0x3b
+[ 5875.130697][ T1101]  ? preempt_schedule_thunk+0x16/0x18
+[ 5875.130970][ T1101]  ? watchdog+0xa45/0xfe0
+[ 5875.131198][ T1101]  ? nmi_trigger_cpumask_backtrace+0x214/0x27e
+[ 5875.131507][ T1101]  watchdog+0xa56/0xfe0
+[ 5875.131721][ T1101]  ? reset_hung_task_detector+0x30/0x30
+[ 5875.132002][ T1101]  kthread+0x388/0x470
+[ 5875.132209][ T1101]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 5875.132498][ T1101]  ret_from_fork+0x24/0x30
+[ 5875.140996][ T1101] Dumping ftrace buffer:
+[ 5875.141390][ T1101]    (ftrace buffer empty)
+[ 5875.141616][ T1101] Kernel Offset: disabled
+[ 5875.148104][ T1101] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

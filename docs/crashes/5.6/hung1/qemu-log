@@ -1,0 +1,84 @@
+============== QEMU STDOUT ================
+N
+[  524.657779][T30699] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  524.970602][T30727] could not allocate digest TFM handle E.
+[  524.992216][T30731] could not allocate digest TFM handle E.
+[  532.200415][T31027] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  532.708820][T31027] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  533.897352][T31085] SELinux: unrecognized netlink message: protocol=9 nlmsg_type=0 sclass=netlink_audit_socket pid=31085 comm=syz-executor
+[  533.902242][T31088] SELinux: unrecognized netlink message: protocol=9 nlmsg_type=0 sclass=netlink_audit_socket pid=31088 comm=syz-executor
+[  547.774330][T31808] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  548.277503][T31808] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  551.717110][T31947] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  552.221900][T31947] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  556.080111][T32122] llc_conn_state_process: llc_conn_service failed
+[  556.083030][T32122] llc_conn_state_process: llc_conn_service failed
+[  560.194571][   T37] audit: type=1400 audit(1609560106.044:25): avc:  denied  { ioctl } for  pid=32386 comm="syz-executor" path="socket:[61917]" dev="sockfs" ino=61917 ioctlcmd=0x48c8 scontext=system_u:system_r:kernel_t:s0 tcontext=system_u:system_r:kernel_t:s0 tclass=sock_file permissive=1
+[  572.191999][  T689] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  572.399620][ T1083] INFO: task kworker/0:1:12 blocked for more than 143 seconds.
+[  572.400586][ T1083]       Not tainted 5.6.0-rc1+ #1
+[  572.409038][ T1083] "echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+[  572.410093][ T1083] kworker/0:1     D12272    12      2 0x80004000
+[  572.411360][ T1083] Workqueue: usb_hub_wq hub_event
+[  572.413688][ T1083] Call Trace:
+[  572.414156][ T1083]  __schedule+0x306/0x680
+[  572.414688][ T1083]  ? wq_worker_sleeping+0xde/0x1b0
+[  572.415336][ T1083]  schedule+0x4a/0x100
+[  572.415815][ T1083]  usb_kill_urb.part.0+0xb9/0x120
+[  572.416450][ T1083]  ? finish_wait+0x80/0x80
+[  572.416972][ T1083]  usb_kill_urb+0x57/0x80
+[  572.417521][ T1083]  usb_start_wait_urb+0x18e/0x1d0
+[  572.418112][ T1083]  usb_control_msg+0x186/0x240
+[  572.418724][ T1083]  hub_port_init+0x492/0x18c0
+[  572.419280][ T1083]  hub_event+0x16a7/0x2630
+[  572.419849][ T1083]  ? __read_once_size+0x41/0xe0
+[  572.420460][ T1083]  ? __sanitizer_cov_trace_switch+0x49/0x80
+[  572.428272][ T1083]  process_one_work+0x413/0x8f0
+[  572.428867][ T1083]  worker_thread+0xa0/0x800
+[  572.429452][ T1083]  kthread+0x1d4/0x200
+[  572.429934][ T1083]  ? process_scheduled_works+0xa0/0xa0
+[  572.430612][ T1083]  ? kthread_unpark+0xe0/0xe0
+[  572.433744][ T1083]  ret_from_fork+0x1f/0x30
+[  572.435360][ T1083] NMI backtrace for cpu 1
+[  572.435873][ T1083] CPU: 1 PID: 1083 Comm: khungtaskd Not tainted 5.6.0-rc1+ #1
+[  572.436775][ T1083] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[  572.438236][ T1083] Call Trace:
+[  572.438689][ T1083]  dump_stack+0x11d/0x181
+[  572.439209][ T1083]  ? lapic_can_unplug_cpu.cold+0x3b/0x3b
+[  572.439912][ T1083]  nmi_cpu_backtrace.cold+0x18/0x75
+[  572.440518][ T1083]  ? __sanitizer_cov_trace_const_cmp4+0x16/0x20
+[  572.441581][ T1083]  ? lapic_can_unplug_cpu.cold+0x3b/0x3b
+[  572.442293][ T1083]  nmi_trigger_cpumask_backtrace+0x197/0x1c2
+[  572.442991][ T1083]  arch_trigger_cpumask_backtrace+0x27/0x40
+[  572.443718][ T1083]  watchdog+0x7ba/0x930
+[  572.444250][ T1083]  kthread+0x1d4/0x200
+[  572.444727][ T1083]  ? __read_once_size.constprop.0+0x20/0x20
+[  572.445487][ T1083]  ? kthread_unpark+0xe0/0xe0
+[  572.446070][ T1083]  ret_from_fork+0x1f/0x30
+[  572.450012][ T1083] Sending NMI from CPU 1 to CPUs 0,2-3:
+[  572.450858][    C0] NMI backtrace for cpu 0 skipped: idling at native_safe_halt+0xe/0x10
+[  572.452388][    C2] NMI backtrace for cpu 2 skipped: idling at native_safe_halt+0xe/0x10
+[  572.453686][    C3] NMI backtrace for cpu 3 skipped: idling at native_safe_halt+0xe/0x10
+[  572.454994][ T1083] Kernel panic - not syncing: hung_task: blocked tasks
+[  572.455812][ T1083] CPU: 1 PID: 1083 Comm: khungtaskd Not tainted 5.6.0-rc1+ #1
+[  572.456719][ T1083] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[  572.458331][ T1083] Call Trace:
+[  572.458786][ T1083]  dump_stack+0x11d/0x181
+[  572.459381][ T1083]  panic+0x210/0x640
+[  572.459883][ T1083]  ? nmi_trigger_cpumask_backtrace+0x17b/0x1c2
+[  572.460947][ T1083]  ? nmi_trigger_cpumask_backtrace+0x172/0x1c2
+[  572.461711][ T1083]  watchdog+0x7c6/0x930
+[  572.462211][ T1083]  kthread+0x1d4/0x200
+[  572.462731][ T1083]  ? __read_once_size.constprop.0+0x20/0x20
+[  572.463458][ T1083]  ? kthread_unpark+0xe0/0xe0
+[  572.464006][ T1083]  ret_from_fork+0x1f/0x30
+[  572.464893][ T1083] Dumping ftrace buffer:
+[  572.465440][ T1083]    (ftrace buffer empty)
+[  572.465989][ T1083] Kernel Offset: disabled
+[  572.466496][ T1083] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

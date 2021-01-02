@@ -1,0 +1,78 @@
+============== QEMU STDOUT ================
+065907][    C0]  ? __unwind_start+0x544/0x810
+[10235.065912][    C0]  ? stack_trace_save+0xc0/0xc0
+[10235.065917][    C0]  arch_stack_walk+0x7d/0xe0
+[10235.065922][    C0]  ? do_faccessat+0x3d7/0x870
+[10235.065927][    C0]  stack_trace_save+0x8c/0xc0
+[10235.065932][    C0]  ? create_prof_cpu_mask+0x20/0x20
+[10235.065938][    C0]  ? stack_trace_save+0x8c/0xc0
+[10235.065943][    C0]  ? create_prof_cpu_mask+0x20/0x20
+[10235.065948][    C0]  kasan_save_stack+0x1b/0x40
+[10235.065953][    C0]  ? kasan_save_stack+0x1b/0x40
+[10235.065959][    C0]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[10235.065964][    C0]  ? slab_post_alloc_hook+0x3e/0x570
+[10235.065969][    C0]  ? __kmalloc+0x174/0x3b0
+[10235.065990][    C0]  ? security_prepare_creds+0x10e/0x190
+[10235.065995][    C0]  ? prepare_creds+0x4bd/0x6b0
+[10235.066000][    C0]  ? do_faccessat+0x3d7/0x870
+[10235.066006][    C0]  ? kasan_save_stack+0x32/0x40
+[10235.066010][    C0]  ? kasan_save_stack+0x1b/0x40
+[10235.066015][    C0]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[10235.066020][    C0]  ? slab_post_alloc_hook+0x3e/0x570
+[10235.066024][    C0]  ? kmem_cache_alloc+0x147/0x340
+[10235.066030][    C0]  ? prepare_creds+0x39/0x6b0
+[10235.066037][    C0]  ? do_faccessat+0x3d7/0x870
+[10235.066043][    C0]  ? do_syscall_64+0x2d/0x70
+[10235.066051][    C0]  ? entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[10235.066057][    C0]  ? do_raw_spin_unlock+0x171/0x270
+[10235.066062][    C0]  ? _raw_spin_unlock+0x24/0x40
+[10235.066066][    C0]  ? get_partial_node.part.0+0x1df/0x5a0
+[10235.066069][    C0]  ? lock_downgrade+0x680/0x680
+[10235.066072][    C0]  ? lock_acquire+0x6d1/0xa20
+[10235.066075][    C0]  ? kasan_unpoison_shadow+0x33/0x40
+[10235.066079][    C0]  __kasan_kmalloc.constprop.0+0xc2/0xd0
+[10235.066081][    C0]  slab_post_alloc_hook+0x3e/0x570
+[10235.066084][    C0]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[10235.066087][    C0]  __kmalloc+0x174/0x3b0
+[10235.066090][    C0]  ? security_prepare_creds+0x10e/0x190
+[10235.066093][    C0]  security_prepare_creds+0x10e/0x190
+[10235.066096][    C0]  prepare_creds+0x4bd/0x6b0
+[10235.066098][    C0]  do_faccessat+0x3d7/0x870
+[10235.066101][    C0]  ? filp_close+0x170/0x170
+[10235.066104][    C0]  ? __secure_computing+0x104/0x370
+[10235.066111][    C0]  do_syscall_64+0x2d/0x70
+[10235.066117][    C0]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[10235.066122][    C0] RIP: 0033:0x7ff1ecca79c7
+[10235.066143][    C0] Code: 83 c4 08 48 3d 01 f0 ff ff 73 01 c3 48 8b 0d c8 d4 2b 00 f7 d8 64 89 01 48 83 c8 ff c3 66 0f 1f 44 00 00 b8 15 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d a1 d4 2b 00 f7 d8 64 89 01 48
+[10235.066158][    C0] RSP: 002b:00007fff7c5b9028 EFLAGS: 00000246 ORIG_RAX: 0000000000000015
+[10235.066170][    C0] RAX: ffffffffffffffda RBX: 00007fff7c5bbf40 RCX: 00007ff1ecca79c7
+[10235.066177][    C0] RDX: 00007ff1ed718a00 RSI: 0000000000000000 RDI: 000055d674cdd9a3
+[10235.066266][    C0] RBP: 00007fff7c5b9060 R08: 0000000000000000 R09: 0000000000000000
+[10235.066274][    C0] R10: 0000000000000069 R11: 0000000000000246 R12: 0000000000000000
+[10235.066281][    C0] R13: 0000000000000000 R14: 00007fff7c5bbf40 R15: 00007fff7c5b9550
+[10235.070786][ T1674] Kernel panic - not syncing: hung_task: blocked tasks
+[10235.268229][ T1674] CPU: 2 PID: 1674 Comm: khungtaskd Not tainted 5.10.0 #94
+[10235.269587][ T1674] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[10235.271805][ T1674] Call Trace:
+[10235.272380][ T1674]  dump_stack+0x107/0x163
+[10235.280187][ T1674]  panic+0x393/0x7d3
+[10235.280997][ T1674]  ? print_oops_end_marker.cold+0x15/0x15
+[10235.282058][ T1674]  ? nmi_cpu_backtrace_handler+0x10/0x10
+[10235.283130][ T1674]  ? preempt_schedule_thunk+0x16/0x18
+[10235.284169][ T1674]  ? watchdog.cold+0x6d/0xfc
+[10235.285019][ T1674]  ? watchdog+0xbe1/0x12b0
+[10235.285777][ T1674]  watchdog.cold+0x7e/0xfc
+[10235.293203][ T1674]  ? reset_hung_task_detector+0x30/0x30
+[10235.294342][ T1674]  kthread+0x3b1/0x4a0
+[10235.295241][ T1674]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[10235.296518][ T1674]  ret_from_fork+0x1f/0x30
+[10235.309542][ T1674] Dumping ftrace buffer:
+[10235.310389][ T1674]    (ftrace buffer empty)
+[10235.311166][ T1674] Kernel Offset: disabled
+[10235.311963][ T1674] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

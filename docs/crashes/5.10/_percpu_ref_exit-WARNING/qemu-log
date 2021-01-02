@@ -1,0 +1,94 @@
+============== QEMU STDOUT ================
+SB device
+[ 3543.981461][T31511] usb 2-1: new high-speed USB device number 124 using dummy_hcd
+[ 3544.341457][T31511] usb 2-1: config 1 has 0 interfaces, different from the descriptor's value: 1
+[ 3544.521473][T31511] usb 2-1: New USB device found, idVendor=0cf3, idProduct=9271, bcdDevice= 1.08
+[ 3544.523121][T31511] usb 2-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[ 3544.524532][T31511] usb 2-1: Product: syz
+[ 3544.525270][T31511] usb 2-1: Manufacturer: syz
+[ 3544.526072][T31511] usb 2-1: SerialNumber: syz
+[ 3546.713890][T30208] usb 2-1: USB disconnect, device number 124
+[ 3546.830498][T15533] base_sock_release(000000001747ab4b) sk=00000000a126f16e
+[ 3546.831595][T15533] base_sock_release(00000000d060522e) sk=000000003ced7d3e
+[ 3547.902895][T17970] ------------[ cut here ]------------
+[ 3547.904757][T17970] WARNING: CPU: 2 PID: 17970 at lib/percpu-refcount.c:112 __percpu_ref_exit+0x98/0x100
+[ 3547.906466][T17970] Modules linked in:
+[ 3547.907211][T17970] CPU: 2 PID: 17970 Comm: kworker/u9:1 Not tainted 5.10.0 #94
+[ 3547.908559][T17970] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[ 3547.910806][T17970] Workqueue: events_unbound io_ring_exit_work
+[ 3547.913997][T17970] RIP: 0010:__percpu_ref_exit+0x98/0x100
+[ 3547.918335][T17970] Code: fd 49 8d 7c 24 10 48 b8 00 00 00 00 00 fc ff df 48 89 fa 48 c1 ea 03 80 3c 02 00 75 61 49 83 7c 24 10 00 74 07 e8 28 bb 9e fd <0f> 0b e8 21 bb 9e fd 48 89 ef e8 b9 25 cd fd 48 89 da 48 b8 00 00
+[ 3547.922058][T17970] RSP: 0018:ffffc900076afca0 EFLAGS: 00010293
+[ 3547.923187][T17970] RAX: ffff88801d2cc280 RBX: ffff8880148ad000 RCX: ffffffff83d631f8
+[ 3547.925735][T17970] RDX: 0000000000000000 RSI: ffffffff83d63258 RDI: ffff8880130f9810
+[ 3547.929788][T17970] RBP: 0000607eca0389e0 R08: ffff88801d2cc280 R09: 0000000000000000
+[ 3547.931792][T17970] R10: ffff88807fffbcc3 R11: ffffed100ffff798 R12: ffff8880130f9800
+[ 3547.934351][T17970] R13: 0000000000000000 R14: ffff8880130f9800 R15: ffff8880235042a0
+[ 3547.936857][T17970] FS:  0000000000000000(0000) GS:ffff888063d00000(0000) knlGS:0000000000000000
+[ 3547.940053][T17970] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 3547.942028][T17970] CR2: 00007fc18758af40 CR3: 0000000019735000 CR4: 0000000000750ee0
+[ 3547.946859][T17970] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[ 3547.948968][T17970] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[ 3547.951300][T17970] PKRU: 55555554
+[ 3547.953684][T17970] Call Trace:
+[ 3547.957930][T17970]  percpu_ref_exit+0x3b/0x140
+[ 3547.964077][T17970]  io_ring_exit_work+0x4c4/0xa20
+[ 3547.968274][T17970]  process_one_work+0x926/0x1680
+[ 3547.972407][T17970]  ? lock_release+0x660/0x660
+[ 3547.987857][T17970]  ? pwq_dec_nr_in_flight+0x360/0x360
+[ 3547.993851][T17970]  ? rwlock_bug.part.0+0x90/0x90
+[ 3547.997843][T17970]  ? kthread_data+0x46/0xc0
+[ 3548.001883][T17970]  worker_thread+0x96/0xe20
+[ 3548.005964][T17970]  ? process_one_work+0x1680/0x1680
+[ 3548.010314][T17970]  kthread+0x3b1/0x4a0
+[ 3548.014636][T17970]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 3548.019100][T17970]  ret_from_fork+0x1f/0x30
+[ 3548.025772][T17970] Kernel panic - not syncing: panic_on_warn set ...
+[ 3548.027478][T17970] CPU: 2 PID: 17970 Comm: kworker/u9:1 Not tainted 5.10.0 #94
+[ 3548.029443][T17970] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[ 3548.033882][T17970] Workqueue: events_unbound io_ring_exit_work
+[ 3548.038365][T17970] Call Trace:
+[ 3548.040495][T17970]  dump_stack+0x107/0x163
+[ 3548.042850][T17970]  panic+0x393/0x7d3
+[ 3548.045079][T17970]  ? print_oops_end_marker.cold+0x15/0x15
+[ 3548.047487][T17970]  ? __warn.cold+0x5/0x2f
+[ 3548.051781][T17970]  ? __warn+0xed/0x1d0
+[ 3548.053125][T17970]  ? __percpu_ref_exit+0x98/0x100
+[ 3548.055576][T17970]  __warn.cold+0x20/0x2f
+[ 3548.059803][T17970]  ? __percpu_ref_exit+0x98/0x100
+[ 3548.063833][T17970]  report_bug+0x273/0x300
+[ 3548.068098][T17970]  handle_bug+0x3c/0x60
+[ 3548.072033][T17970]  exc_invalid_op+0x14/0x40
+[ 3548.073863][T17970]  asm_exc_invalid_op+0x12/0x20
+[ 3548.076111][T17970] RIP: 0010:__percpu_ref_exit+0x98/0x100
+[ 3548.080297][T17970] Code: fd 49 8d 7c 24 10 48 b8 00 00 00 00 00 fc ff df 48 89 fa 48 c1 ea 03 80 3c 02 00 75 61 49 83 7c 24 10 00 74 07 e8 28 bb 9e fd <0f> 0b e8 21 bb 9e fd 48 89 ef e8 b9 25 cd fd 48 89 da 48 b8 00 00
+[ 3548.086286][T17970] RSP: 0018:ffffc900076afca0 EFLAGS: 00010293
+[ 3548.088425][T17970] RAX: ffff88801d2cc280 RBX: ffff8880148ad000 RCX: ffffffff83d631f8
+[ 3548.092607][T17970] RDX: 0000000000000000 RSI: ffffffff83d63258 RDI: ffff8880130f9810
+[ 3548.094484][T17970] RBP: 0000607eca0389e0 R08: ffff88801d2cc280 R09: 0000000000000000
+[ 3548.096728][T17970] R10: ffff88807fffbcc3 R11: ffffed100ffff798 R12: ffff8880130f9800
+[ 3548.098548][T17970] R13: 0000000000000000 R14: ffff8880130f9800 R15: ffff8880235042a0
+[ 3548.100632][T17970]  ? __percpu_ref_exit+0x38/0x100
+[ 3548.104977][T17970]  ? __percpu_ref_exit+0x98/0x100
+[ 3548.108963][T17970]  percpu_ref_exit+0x3b/0x140
+[ 3548.112649][T17970]  io_ring_exit_work+0x4c4/0xa20
+[ 3548.114340][T17970]  process_one_work+0x926/0x1680
+[ 3548.116236][T17970]  ? lock_release+0x660/0x660
+[ 3548.119794][T17970]  ? pwq_dec_nr_in_flight+0x360/0x360
+[ 3548.122837][T17970]  ? rwlock_bug.part.0+0x90/0x90
+[ 3548.125878][T17970]  ? kthread_data+0x46/0xc0
+[ 3548.129290][T17970]  worker_thread+0x96/0xe20
+[ 3548.133003][T17970]  ? process_one_work+0x1680/0x1680
+[ 3548.134796][T17970]  kthread+0x3b1/0x4a0
+[ 3548.137074][T17970]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[ 3548.141342][T17970]  ret_from_fork+0x1f/0x30
+[ 3548.143624][T17970] Dumping ftrace buffer:
+[ 3548.144232][T17970]    (ftrace buffer empty)
+[ 3548.144813][T17970] Kernel Offset: disabled
+[ 3548.145423][T17970] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: 

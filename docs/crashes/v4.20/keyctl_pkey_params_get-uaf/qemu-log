@@ -1,0 +1,371 @@
+============== QEMU STDOUT ================
+ng bond_slave_1 as an active interface with an up link
+[  270.835785] IPv6: ADDRCONF(NETDEV_UP): team_slave_0: link is not ready
+[  270.839364] team0: Port device team_slave_0 added
+[  270.857439] IPv6: ADDRCONF(NETDEV_UP): team_slave_1: link is not ready
+[  270.864354] team0: Port device team_slave_1 added
+[  270.935347] batman_adv: batadv0: Adding interface: batadv_slave_0
+[  270.936638] batman_adv: batadv0: The MTU of interface batadv_slave_0 is too small (1500) to handle the transport of batman-adv packets. Packets going over this interface will be fragmented on layer2 which could impact the performance. Setting the MTU to 1560 would solve the problem.
+[  270.946446] batman_adv: batadv0: Not using interface batadv_slave_0 (retrying later): interface not active
+[  270.973055] batman_adv: batadv0: Adding interface: batadv_slave_1
+[  270.974386] batman_adv: batadv0: The MTU of interface batadv_slave_1 is too small (1500) to handle the transport of batman-adv packets. Packets going over this interface will be fragmented on layer2 which could impact the performance. Setting the MTU to 1560 would solve the problem.
+[  270.979458] batman_adv: batadv0: Not using interface batadv_slave_1 (retrying later): interface not active
+[  270.996650] IPv6: ADDRCONF(NETDEV_UP): bridge_slave_0: link is not ready
+[  270.999021] IPv6: ADDRCONF(NETDEV_UP): bridge_slave_1: link is not ready
+[  271.077480] device hsr_slave_0 entered promiscuous mode
+[  271.123357] device hsr_slave_1 entered promiscuous mode
+[  271.171796] IPv6: ADDRCONF(NETDEV_UP): hsr_slave_0: link is not ready
+[  271.173823] IPv6: ADDRCONF(NETDEV_UP): hsr_slave_1: link is not ready
+[  271.528779] IPv6: ADDRCONF(NETDEV_UP): bridge0: link is not ready
+[  271.684887] 8021q: adding VLAN 0 to HW filter on device bond0
+[  271.708678] IPv6: ADDRCONF(NETDEV_UP): veth0: link is not ready
+[  271.723438] IPv6: ADDRCONF(NETDEV_UP): veth1: link is not ready
+[  271.724639] IPv6: ADDRCONF(NETDEV_CHANGE): veth1: link becomes ready
+[  271.726735] IPv6: ADDRCONF(NETDEV_CHANGE): veth0: link becomes ready
+[  271.737541] IPv6: ADDRCONF(NETDEV_UP): team0: link is not ready
+[  271.738748] 8021q: adding VLAN 0 to HW filter on device team0
+[  271.748061] IPv6: ADDRCONF(NETDEV_UP): veth0_to_bridge: link is not ready
+[  271.749539] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_bridge: link becomes ready
+[  271.755953] IPv6: ADDRCONF(NETDEV_CHANGE): bridge_slave_0: link becomes ready
+[  271.757945] bridge0: port 1(bridge_slave_0) entered blocking state
+[  271.771425] bridge0: port 1(bridge_slave_0) entered forwarding state
+[  271.782905] IPv6: ADDRCONF(NETDEV_UP): veth1_to_bridge: link is not ready
+[  271.786327] IPv6: ADDRCONF(NETDEV_UP): veth0_to_bond: link is not ready
+[  271.789352] IPv6: ADDRCONF(NETDEV_UP): veth1_to_bond: link is not ready
+[  271.797644] IPv6: ADDRCONF(NETDEV_UP): veth0_to_team: link is not ready
+[  271.822987] IPv6: ADDRCONF(NETDEV_UP): veth1_to_team: link is not ready
+[  271.827362] IPv6: ADDRCONF(NETDEV_UP): veth0_to_hsr: link is not ready
+[  271.834352] IPv6: ADDRCONF(NETDEV_CHANGE): bridge0: link becomes ready
+[  271.836348] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_bridge: link becomes ready
+[  271.838483] IPv6: ADDRCONF(NETDEV_CHANGE): bridge_slave_1: link becomes ready
+[  271.840330] bridge0: port 2(bridge_slave_1) entered blocking state
+[  271.851314] bridge0: port 2(bridge_slave_1) entered forwarding state
+[  271.853780] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_bond: link becomes ready
+[  271.856422] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_bond: link becomes ready
+[  271.858916] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_team: link becomes ready
+[  271.885587] IPv6: ADDRCONF(NETDEV_CHANGE): team_slave_0: link becomes ready
+[  271.887696] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_team: link becomes ready
+[  271.889810] IPv6: ADDRCONF(NETDEV_CHANGE): team_slave_1: link becomes ready
+[  271.914919] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_hsr: link becomes ready
+[  271.918264] IPv6: ADDRCONF(NETDEV_CHANGE): hsr_slave_0: link becomes ready
+[  271.932089] IPv6: ADDRCONF(NETDEV_UP): veth1_to_hsr: link is not ready
+[  271.935070] hsr0: Slave B (hsr_slave_1) is not up; please bring it up to get a fully working HSR network
+[  271.938064] IPv6: ADDRCONF(NETDEV_UP): hsr0: link is not ready
+[  271.954531] IPv6: ADDRCONF(NETDEV_CHANGE): hsr0: link becomes ready
+[  271.963615] IPv6: ADDRCONF(NETDEV_CHANGE): team0: link becomes ready
+[  271.965749] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_hsr: link becomes ready
+[  271.967756] IPv6: ADDRCONF(NETDEV_CHANGE): hsr_slave_1: link becomes ready
+[  272.012500] IPv6: ADDRCONF(NETDEV_UP): vxcan0: link is not ready
+[  272.015374] IPv6: ADDRCONF(NETDEV_UP): vxcan1: link is not ready
+[  272.016750] IPv6: ADDRCONF(NETDEV_CHANGE): vxcan1: link becomes ready
+[  272.018187] IPv6: ADDRCONF(NETDEV_CHANGE): vxcan0: link becomes ready
+[  272.056101] 8021q: adding VLAN 0 to HW filter on device batadv0
+[  272.243779] IPv6: ADDRCONF(NETDEV_UP): veth0_virt_wifi: link is not ready
+[  272.249432] IPv6: ADDRCONF(NETDEV_UP): veth1_virt_wifi: link is not ready
+[  272.252194] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_virt_wifi: link becomes ready
+[  272.254490] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_virt_wifi: link becomes ready
+[  272.373920] IPv6: ADDRCONF(NETDEV_UP): veth0_vlan: link is not ready
+[  272.395311] IPv6: ADDRCONF(NETDEV_UP): vlan0: link is not ready
+[  272.413146] IPv6: ADDRCONF(NETDEV_UP): vlan1: link is not ready
+[  272.427147] IPv6: ADDRCONF(NETDEV_UP): veth1_vlan: link is not ready
+[  272.428522] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_vlan: link becomes ready
+[  272.434337] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_vlan: link becomes ready
+[  272.436353] IPv6: ADDRCONF(NETDEV_CHANGE): vlan0: link becomes ready
+[  272.438224] IPv6: ADDRCONF(NETDEV_CHANGE): vlan1: link becomes ready
+[  272.467356] device veth0_vlan entered promiscuous mode
+[  272.507386] device veth1_vlan entered promiscuous mode
+[  272.509780] IPv6: ADDRCONF(NETDEV_UP): macvlan0: link is not ready
+[  272.536584] IPv6: ADDRCONF(NETDEV_UP): macvlan1: link is not ready
+[  272.572204] IPv6: ADDRCONF(NETDEV_UP): veth0_macvtap: link is not ready
+[  272.604402] IPv6: ADDRCONF(NETDEV_UP): veth1_macvtap: link is not ready
+[  272.612135] IPv6: ADDRCONF(NETDEV_CHANGE): macvlan0: link becomes ready
+[  272.614381] IPv6: ADDRCONF(NETDEV_CHANGE): macvlan1: link becomes ready
+[  272.616353] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_macvtap: link becomes ready
+[  272.618357] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_macvtap: link becomes ready
+[  272.650613] device veth0_macvtap entered promiscuous mode
+[  272.663579] IPv6: ADDRCONF(NETDEV_UP): macvtap0: link is not ready
+[  272.693899] device veth1_macvtap entered promiscuous mode
+[  272.697208] IPv6: ADDRCONF(NETDEV_UP): macsec0: link is not ready
+[  272.753304] IPv6: ADDRCONF(NETDEV_UP): veth0_to_batadv: link is not ready
+[  272.764756] IPv6: ADDRCONF(NETDEV_UP): veth1_to_batadv: link is not ready
+[  272.780476] IPv6: ADDRCONF(NETDEV_UP): batadv_slave_0: link is not ready
+[  272.782836] batman_adv: batadv0: Interface activated: batadv_slave_0
+[  272.796451] IPv6: ADDRCONF(NETDEV_CHANGE): macvtap0: link becomes ready
+[  272.825200] IPv6: ADDRCONF(NETDEV_CHANGE): macsec0: link becomes ready
+[  272.828269] IPv6: ADDRCONF(NETDEV_CHANGE): batadv_slave_0: link becomes ready
+[  272.836208] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_batadv: link becomes ready
+[  272.853503] IPv6: ADDRCONF(NETDEV_UP): batadv_slave_1: link is not ready
+[  272.854854] batman_adv: batadv0: Interface activated: batadv_slave_1
+[  272.893560] IPv6: ADDRCONF(NETDEV_CHANGE): batadv_slave_1: link becomes ready
+[  272.896940] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_batadv: link becomes ready
+[  283.362680] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  283.869559] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  309.312463] syz-executor (6090) used greatest stack depth: 23792 bytes left
+[  309.978170] IPVS: ftp: loaded support on port[0] = 21
+[  310.298345] chnl_net:caif_netlink_parms(): no params data found
+[  310.468739] bridge0: port 1(bridge_slave_0) entered blocking state
+[  310.470395] bridge0: port 1(bridge_slave_0) entered disabled state
+[  310.472984] device bridge_slave_0 entered promiscuous mode
+[  310.476457] bridge0: port 2(bridge_slave_1) entered blocking state
+[  310.477920] bridge0: port 2(bridge_slave_1) entered disabled state
+[  310.483589] device bridge_slave_1 entered promiscuous mode
+[  310.568182] bond0: Enslaving bond_slave_0 as an active interface with an up link
+[  310.586440] bond0: Enslaving bond_slave_1 as an active interface with an up link
+[  310.687845] IPv6: ADDRCONF(NETDEV_UP): team_slave_0: link is not ready
+[  310.691282] team0: Port device team_slave_0 added
+[  310.697725] IPv6: ADDRCONF(NETDEV_UP): team_slave_1: link is not ready
+[  310.699997] team0: Port device team_slave_1 added
+[  310.749326] batman_adv: batadv0: Adding interface: batadv_slave_0
+[  310.752373] batman_adv: batadv0: The MTU of interface batadv_slave_0 is too small (1500) to handle the transport of batman-adv packets. Packets going over this interface will be fragmented on layer2 which could impact the performance. Setting the MTU to 1560 would solve the problem.
+[  310.757355] batman_adv: batadv0: Not using interface batadv_slave_0 (retrying later): interface not active
+[  310.817788] batman_adv: batadv0: Adding interface: batadv_slave_1
+[  310.819154] batman_adv: batadv0: The MTU of interface batadv_slave_1 is too small (1500) to handle the transport of batman-adv packets. Packets going over this interface will be fragmented on layer2 which could impact the performance. Setting the MTU to 1560 would solve the problem.
+[  310.824466] batman_adv: batadv0: Not using interface batadv_slave_1 (retrying later): interface not active
+[  310.835101] IPv6: ADDRCONF(NETDEV_UP): bridge_slave_0: link is not ready
+[  310.842280] IPv6: ADDRCONF(NETDEV_UP): bridge_slave_1: link is not ready
+[  310.921618] device hsr_slave_0 entered promiscuous mode
+[  310.974678] device hsr_slave_1 entered promiscuous mode
+[  311.020966] batman_adv: batadv0: Interface deactivated: batadv_slave_0
+[  311.022457] batman_adv: batadv0: Removing interface: batadv_slave_0
+[  311.026330] batman_adv: batadv0: Interface deactivated: batadv_slave_1
+[  311.027794] batman_adv: batadv0: Removing interface: batadv_slave_1
+[  311.039911] device bridge_slave_1 left promiscuous mode
+[  311.041708] bridge0: port 2(bridge_slave_1) entered disabled state
+[  311.096986] device bridge_slave_0 left promiscuous mode
+[  311.098202] bridge0: port 1(bridge_slave_0) entered disabled state
+[  311.143657] device veth1_macvtap left promiscuous mode
+[  311.145404] device veth0_macvtap left promiscuous mode
+[  311.146626] device veth1_vlan left promiscuous mode
+[  311.147997] device veth0_vlan left promiscuous mode
+[  313.365305] device hsr_slave_1 left promiscuous mode
+[  313.430729] device hsr_slave_0 left promiscuous mode
+[  313.508365] team0 (unregistering): Port device team_slave_1 removed
+[  313.522938] team0 (unregistering): Port device team_slave_0 removed
+[  313.540004] bond0 (unregistering): Releasing backup interface bond_slave_1
+[  313.586944] bond0 (unregistering): Releasing backup interface bond_slave_0
+[  313.676648] bond0 (unregistering): Released all slaves
+[  313.746780] IPv6: ADDRCONF(NETDEV_UP): hsr_slave_0: link is not ready
+[  313.750010] IPv6: ADDRCONF(NETDEV_UP): hsr_slave_1: link is not ready
+[  314.058572] IPv6: ADDRCONF(NETDEV_UP): bridge0: link is not ready
+[  314.153947] 8021q: adding VLAN 0 to HW filter on device bond0
+[  314.158449] IPv6: ADDRCONF(NETDEV_UP): veth0: link is not ready
+[  314.184766] IPv6: ADDRCONF(NETDEV_UP): veth1: link is not ready
+[  314.186144] IPv6: ADDRCONF(NETDEV_CHANGE): veth1: link becomes ready
+[  314.206050] IPv6: ADDRCONF(NETDEV_CHANGE): veth0: link becomes ready
+[  314.213355] IPv6: ADDRCONF(NETDEV_UP): team0: link is not ready
+[  314.214561] 8021q: adding VLAN 0 to HW filter on device team0
+[  314.229776] IPv6: ADDRCONF(NETDEV_UP): veth0_to_bridge: link is not ready
+[  314.234369] IPv6: ADDRCONF(NETDEV_UP): veth1_to_bridge: link is not ready
+[  314.248305] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_bridge: link becomes ready
+[  314.263979] IPv6: ADDRCONF(NETDEV_CHANGE): bridge_slave_0: link becomes ready
+[  314.266939] bridge0: port 1(bridge_slave_0) entered blocking state
+[  314.268279] bridge0: port 1(bridge_slave_0) entered forwarding state
+[  314.270052] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_bridge: link becomes ready
+[  314.287382] IPv6: ADDRCONF(NETDEV_CHANGE): bridge_slave_1: link becomes ready
+[  314.296016] bridge0: port 2(bridge_slave_1) entered blocking state
+[  314.297308] bridge0: port 2(bridge_slave_1) entered forwarding state
+[  314.320827] IPv6: ADDRCONF(NETDEV_UP): veth0_to_bond: link is not ready
+[  314.336977] IPv6: ADDRCONF(NETDEV_UP): veth1_to_bond: link is not ready
+[  314.338887] IPv6: ADDRCONF(NETDEV_CHANGE): bridge0: link becomes ready
+[  314.354608] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_bond: link becomes ready
+[  314.358095] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_bond: link becomes ready
+[  314.371360] IPv6: ADDRCONF(NETDEV_UP): veth0_to_team: link is not ready
+[  314.376146] IPv6: ADDRCONF(NETDEV_UP): veth1_to_team: link is not ready
+[  314.380170] IPv6: ADDRCONF(NETDEV_UP): veth0_to_hsr: link is not ready
+[  314.396301] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_team: link becomes ready
+[  314.398804] IPv6: ADDRCONF(NETDEV_CHANGE): team_slave_0: link becomes ready
+[  314.414292] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_team: link becomes ready
+[  314.417969] IPv6: ADDRCONF(NETDEV_CHANGE): team_slave_1: link becomes ready
+[  314.426189] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_hsr: link becomes ready
+[  314.443379] IPv6: ADDRCONF(NETDEV_CHANGE): hsr_slave_0: link becomes ready
+[  314.450445] IPv6: ADDRCONF(NETDEV_UP): veth1_to_hsr: link is not ready
+[  314.453843] hsr0: Slave B (hsr_slave_1) is not up; please bring it up to get a fully working HSR network
+[  314.477827] IPv6: ADDRCONF(NETDEV_UP): hsr0: link is not ready
+[  314.479071] IPv6: ADDRCONF(NETDEV_CHANGE): hsr0: link becomes ready
+[  314.485870] IPv6: ADDRCONF(NETDEV_CHANGE): team0: link becomes ready
+[  314.487978] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_hsr: link becomes ready
+[  314.489943] IPv6: ADDRCONF(NETDEV_CHANGE): hsr_slave_1: link becomes ready
+[  314.518614] IPv6: ADDRCONF(NETDEV_UP): vxcan0: link is not ready
+[  314.522656] IPv6: ADDRCONF(NETDEV_UP): vxcan1: link is not ready
+[  314.526701] IPv6: ADDRCONF(NETDEV_CHANGE): vxcan1: link becomes ready
+[  314.528066] IPv6: ADDRCONF(NETDEV_CHANGE): vxcan0: link becomes ready
+[  314.545739] 8021q: adding VLAN 0 to HW filter on device batadv0
+[  314.746543] IPv6: ADDRCONF(NETDEV_UP): veth0_virt_wifi: link is not ready
+[  314.751405] IPv6: ADDRCONF(NETDEV_UP): veth1_virt_wifi: link is not ready
+[  314.758392] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_virt_wifi: link becomes ready
+[  314.783671] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_virt_wifi: link becomes ready
+[  314.856311] IPv6: ADDRCONF(NETDEV_UP): veth0_vlan: link is not ready
+[  314.857912] IPv6: ADDRCONF(NETDEV_UP): vlan0: link is not ready
+[  314.883090] IPv6: ADDRCONF(NETDEV_UP): vlan1: link is not ready
+[  314.894368] IPv6: ADDRCONF(NETDEV_UP): veth1_vlan: link is not ready
+[  314.895843] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_vlan: link becomes ready
+[  314.899114] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_vlan: link becomes ready
+[  314.925085] device veth0_vlan entered promiscuous mode
+[  314.933157] IPv6: ADDRCONF(NETDEV_CHANGE): vlan0: link becomes ready
+[  314.936259] IPv6: ADDRCONF(NETDEV_CHANGE): vlan1: link becomes ready
+[  314.976352] device veth1_vlan entered promiscuous mode
+[  314.979563] IPv6: ADDRCONF(NETDEV_UP): macvlan0: link is not ready
+[  315.001756] IPv6: ADDRCONF(NETDEV_UP): macvlan1: link is not ready
+[  315.039067] IPv6: ADDRCONF(NETDEV_UP): veth0_macvtap: link is not ready
+[  315.048441] IPv6: ADDRCONF(NETDEV_UP): veth1_macvtap: link is not ready
+[  315.049886] IPv6: ADDRCONF(NETDEV_CHANGE): macvlan0: link becomes ready
+[  315.081083] IPv6: ADDRCONF(NETDEV_CHANGE): macvlan1: link becomes ready
+[  315.084321] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_macvtap: link becomes ready
+[  315.092332] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_macvtap: link becomes ready
+[  315.101502] device veth0_macvtap entered promiscuous mode
+[  315.103648] IPv6: ADDRCONF(NETDEV_UP): macvtap0: link is not ready
+[  315.107279] device veth1_macvtap entered promiscuous mode
+[  315.124364] IPv6: ADDRCONF(NETDEV_UP): macsec0: link is not ready
+[  315.152400] IPv6: ADDRCONF(NETDEV_UP): veth0_to_batadv: link is not ready
+[  315.168427] IPv6: ADDRCONF(NETDEV_UP): veth1_to_batadv: link is not ready
+[  315.192391] IPv6: ADDRCONF(NETDEV_UP): batadv_slave_0: link is not ready
+[  315.193897] batman_adv: batadv0: Interface activated: batadv_slave_0
+[  315.198214] IPv6: ADDRCONF(NETDEV_CHANGE): macvtap0: link becomes ready
+[  315.215553] IPv6: ADDRCONF(NETDEV_CHANGE): macsec0: link becomes ready
+[  315.219218] IPv6: ADDRCONF(NETDEV_CHANGE): batadv_slave_0: link becomes ready
+[  315.227603] IPv6: ADDRCONF(NETDEV_CHANGE): veth0_to_batadv: link becomes ready
+[  315.249780] IPv6: ADDRCONF(NETDEV_UP): batadv_slave_1: link is not ready
+[  315.251385] batman_adv: batadv0: Interface activated: batadv_slave_1
+[  315.292897] IPv6: ADDRCONF(NETDEV_CHANGE): batadv_slave_1: link becomes ready
+[  315.295059] IPv6: ADDRCONF(NETDEV_CHANGE): veth1_to_batadv: link becomes ready
+[  331.822433] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  332.332436] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  332.481347] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  332.988010] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  340.754842] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  341.263679] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  341.553982] llc_conn_state_process: llc_conn_service failed
+[  349.939754] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  350.451553] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  361.541130] NOHZ: local_softirq_pending 08
+[  384.331949] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  384.848812] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  391.840173] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  392.346446] vhci_hcd: Failed attach request for unsupported USB speed: UNKNOWN
+[  402.539658] NOHZ: local_softirq_pending 08
+[  403.408380] ==================================================================
+[  403.410170] BUG: KASAN: use-after-free in keyctl_pkey_params_get+0x3db/0x440
+[  403.414416] Read of size 1 at addr ffff88810d7ea280 by task syz-executor/10705
+[  403.415986] 
+[  403.416360] CPU: 2 PID: 10705 Comm: syz-executor Not tainted 4.20.0 #75
+[  403.418207] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[  403.420654] Call Trace:
+[  403.422919]  dump_stack+0x163/0x1dd
+[  403.423792]  ? keyctl_pkey_params_get+0x3db/0x440
+[  403.424951]  print_address_description.cold+0x7c/0x212
+[  403.426121]  ? keyctl_pkey_params_get+0x3db/0x440
+[  403.427244]  kasan_report.cold+0x88/0x2b9
+[  403.428230]  keyctl_pkey_params_get+0x3db/0x440
+[  403.429288]  ? __keyctl_dh_compute.cold+0x41/0x41
+[  403.430357]  ? trace_hardirqs_off+0x50/0x200
+[  403.432454]  ? check_preemption_disabled+0x41/0x280
+[  403.433585]  ? quarantine_put+0x119/0x1c0
+[  403.434577]  ? kfree+0xe4/0x220
+[  403.435391]  ? keyctl_pkey_query+0x18c/0x200
+[  403.436369]  keyctl_pkey_query+0x9d/0x200
+[  403.437286]  ? keyctl_pkey_params_get_2+0x350/0x350
+[  403.438485]  ? __x64_sys_futex+0x37e/0x4e0
+[  403.439323]  ? __x64_sys_futex+0x388/0x4e0
+[  403.440154]  ? trace_hardirqs_on_thunk+0x1a/0x1c
+[  403.441513]  ? trace_hardirqs_off_caller+0x55/0x210
+[  403.442963]  __x64_sys_keyctl+0x137/0x410
+[  403.443938]  do_syscall_64+0xf0/0x180
+[  403.444806]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[  403.445938] RIP: 0033:0x4695bd
+[  403.446765] Code: 02 b8 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 bc ff ff ff f7 d8 64 89 01 48
+[  403.451938] RSP: 002b:00007f326c490c58 EFLAGS: 00000246 ORIG_RAX: 00000000000000fa
+[  403.453533] RAX: ffffffffffffffda RBX: 000000000057bf60 RCX: 00000000004695bd
+[  403.455192] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000018
+[  403.456742] RBP: 00000000004c572c R08: 0000000020000340 R09: 0000000000000000
+[  403.459032] R10: 0000000020000300 R11: 0000000000000246 R12: 000000000057bf60
+[  403.461062] R13: 00007ffc0fbd2cff R14: 00007ffc0fbd2ea0 R15: 00007f326c490dc0
+[  403.462888] 
+[  403.463304] Allocated by task 10705:
+[  403.464393]  kasan_kmalloc+0xc2/0xe0
+[  403.465395]  __kmalloc_track_caller+0x154/0x3b0
+[  403.466526]  memdup_user+0x22/0xb0
+[  403.467363]  strndup_user+0x70/0xe0
+[  403.468047]  keyctl_pkey_params_get+0xce/0x440
+[  403.469104]  keyctl_pkey_query+0x9d/0x200
+[  403.470166]  __x64_sys_keyctl+0x137/0x410
+[  403.472253]  do_syscall_64+0xf0/0x180
+[  403.473180]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[  403.474373] 
+[  403.474726] Freed by task 10705:
+[  403.475562]  __kasan_slab_free+0xf5/0x140
+[  403.476520]  kfree+0xce/0x220
+[  403.477290]  keyctl_pkey_query+0x18c/0x200
+[  403.478341]  __x64_sys_keyctl+0x137/0x410
+[  403.479128]  do_syscall_64+0xf0/0x180
+[  403.479873]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[  403.481260] 
+[  403.481722] The buggy address belongs to the object at ffff88810d7ea280
+[  403.481722]  which belongs to the cache kmalloc-32 of size 32
+[  403.484568] The buggy address is located 0 bytes inside of
+[  403.484568]  32-byte region [ffff88810d7ea280, ffff88810d7ea2a0)
+[  403.487343] The buggy address belongs to the page:
+[  403.488508] page:ffffea000435fa80 count:1 mapcount:0 mapping:ffff88811a0001c0 index:0xffff88810d7eafc1
+[  403.491852] flags: 0x17ffe0000000200(slab)
+[  403.492816] raw: 017ffe0000000200 ffff88811a001238 ffffea000463dcc8 ffff88811a0001c0
+[  403.494721] raw: ffff88810d7eafc1 ffff88810d7ea000 0000000100000026 0000000000000000
+[  403.496435] page dumped because: kasan: bad access detected
+[  403.497613] 
+[  403.498128] Memory state around the buggy address:
+[  403.499202]  ffff88810d7ea180: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[  403.501133]  ffff88810d7ea200: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[  403.502950] >ffff88810d7ea280: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[  403.504623]                    ^
+[  403.505306]  ffff88810d7ea300: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[  403.507018]  ffff88810d7ea380: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[  403.508657] ==================================================================
+[  403.511341] Disabling lock debugging due to kernel taint
+[  403.542011] Kernel panic - not syncing: panic_on_warn set ...
+[  403.543368] CPU: 2 PID: 10705 Comm: syz-executor Tainted: G    B             4.20.0 #75
+[  403.545140] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[  403.547234] Call Trace:
+[  403.547797]  dump_stack+0x163/0x1dd
+[  403.548615]  panic+0x2cb/0x570
+[  403.549297]  ? __warn_printk+0xf3/0xf3
+[  403.560262]  ? preempt_schedule_common+0x4a/0xc0
+[  403.561259]  ? keyctl_pkey_params_get+0x3db/0x440
+[  403.562255]  ? ___preempt_schedule+0x16/0x18
+[  403.563141]  ? trace_hardirqs_on+0x55/0x210
+[  403.563989]  ? keyctl_pkey_params_get+0x3db/0x440
+[  403.565081]  kasan_end_report+0x43/0x49
+[  403.565916]  kasan_report.cold+0xa4/0x2b9
+[  403.566808]  keyctl_pkey_params_get+0x3db/0x440
+[  403.567792]  ? __keyctl_dh_compute.cold+0x41/0x41
+[  403.568771]  ? trace_hardirqs_off+0x50/0x200
+[  403.579829]  ? check_preemption_disabled+0x41/0x280
+[  403.580763]  ? quarantine_put+0x119/0x1c0
+[  403.581543]  ? kfree+0xe4/0x220
+[  403.582170]  ? keyctl_pkey_query+0x18c/0x200
+[  403.582959]  keyctl_pkey_query+0x9d/0x200
+[  403.583760]  ? keyctl_pkey_params_get_2+0x350/0x350
+[  403.584795]  ? __x64_sys_futex+0x37e/0x4e0
+[  403.585623]  ? __x64_sys_futex+0x388/0x4e0
+[  403.586439]  ? trace_hardirqs_on_thunk+0x1a/0x1c
+[  403.587365]  ? trace_hardirqs_off_caller+0x55/0x210
+[  403.594359]  __x64_sys_keyctl+0x137/0x410
+[  403.595186]  do_syscall_64+0xf0/0x180
+[  403.595978]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[  403.596922] RIP: 0033:0x4695bd
+[  403.597478] Code: 02 b8 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 bc ff ff ff f7 d8 64 89 01 48
+[  403.601258] RSP: 002b:00007f326c490c58 EFLAGS: 00000246 ORIG_RAX: 00000000000000fa
+[  403.602846] RAX: ffffffffffffffda RBX: 000000000057bf60 RCX: 00000000004695bd
+[  403.604190] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000018
+[  403.605572] RBP: 00000000004c572c R08: 0000000020000340 R09: 0000000000000000
+[  403.606976] R10: 0000000020000300 R11: 0000000000000246 R12: 000000000057bf60
+[  403.608429] R13: 00007ffc0fbd2cff R14: 00007ffc0fbd2ea0 R15: 00007f326c490dc0
+[  403.611221] Dumping ftrace buffer:
+[  403.611958]    (ftrace buffer empty)
+[  403.612681] Kernel Offset: disabled
+[  403.613392] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: Warning: Permanently added '[127.0.0.1]:1050' (ECDSA) to the list of known hosts.
+Connection to 127.0.0.1 closed by remote host.
+

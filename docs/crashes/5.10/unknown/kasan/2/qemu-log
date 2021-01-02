@@ -1,0 +1,122 @@
+============== QEMU STDOUT ================
+ ffff8880111bbe00
+[12978.267046][    C3] FS:  00007f4ffe6b28c0(0000) GS:ffff888135d00000(0000) knlGS:0000000000000000
+[12978.267051][    C3] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[12978.267059][    C3] CR2: 00007f4ff9a30000 CR3: 00000001078cc000 CR4: 0000000000750ee0
+[12978.267066][    C3] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[12978.267073][    C3] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[12978.267077][    C3] PKRU: 55555554
+[12978.267081][    C3] Call Trace:
+[12978.267086][    C3]  get_partial_node.part.0+0x22b/0x5a0
+[12978.267091][    C3]  ? kasan_save_stack+0x32/0x40
+[12978.267095][    C3]  ? kasan_save_stack+0x1b/0x40
+[12978.267100][    C3]  ? kasan_record_aux_stack+0xc0/0xf0
+[12978.267103][    C3]  ? call_rcu+0xbb/0x740
+[12978.267109][    C3]  ? exit_to_user_mode_prepare+0x195/0x1b0
+[12978.267114][    C3]  ? syscall_exit_to_user_mode+0x38/0x260
+[12978.267118][    C3]  ___slab_alloc+0x394/0x800
+[12978.267122][    C3]  ? lock_downgrade+0x680/0x680
+[12978.267126][    C3]  ? getname_flags+0xd2/0x5b0
+[12978.267130][    C3]  ? lock_release+0x4d4/0x660
+[12978.267133][    C3]  ? fs_reclaim_release+0xa/0x20
+[12978.267137][    C3]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[12978.267142][    C3]  ? __slab_alloc.isra.0+0xde/0x1a0
+[12978.267147][    C3]  __slab_alloc.isra.0+0xde/0x1a0
+[12978.267151][    C3]  ? getname_flags+0xd2/0x5b0
+[12978.267157][    C3]  ? getname_flags+0xd2/0x5b0
+[12978.267161][    C3]  kmem_cache_alloc+0x2c3/0x340
+[12978.267165][    C3]  getname_flags+0xd2/0x5b0
+[12978.267170][    C3]  ? bpf_lsm_cred_prepare+0x5/0x10
+[12978.267176][    C3]  ? security_prepare_creds+0xe6/0x190
+[12978.267180][    C3]  user_path_at_empty+0x2a/0x50
+[12978.267185][    C3]  do_faccessat+0x129/0x870
+[12978.267190][    C3]  ? filp_close+0x170/0x170
+[12978.267194][    C3]  ? __secure_computing+0x104/0x370
+[12978.267199][    C3]  do_syscall_64+0x2d/0x70
+[12978.267205][    C3]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[12978.267209][    C3] RIP: 0033:0x7f4ffd96e9c7
+[12978.267223][    C3] Code: 83 c4 08 48 3d 01 f0 ff ff 73 01 c3 48 8b 0d c8 d4 2b 00 f7 d8 64 89 01 48 83 c8 ff c3 66 0f 1f 44 00 00 b8 15 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d a1 d4 2b 00 f7 d8 64 89 01 48
+[12978.267229][    C3] RSP: 002b:00007ffd175d08c8 EFLAGS: 00000246 ORIG_RAX: 0000000000000015
+[12978.267241][    C3] RAX: ffffffffffffffda RBX: 00007ffd175d38f0 RCX: 00007f4ffd96e9c7
+[12978.267248][    C3] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 000055fdb4b969a3
+[12978.267255][    C3] RBP: 00007ffd175d0a10 R08: 000055fdb4b8c3e5 R09: 0000000000000018
+[12978.267261][    C3] R10: 0000000000000069 R11: 0000000000000246 R12: 0000000000000000
+[12978.267268][    C3] R13: 0000000000000000 R14: 000055fdb5a3d8a0 R15: 00007ffd175d0f00
+[12978.270761][    C1] NMI backtrace for cpu 1
+[12978.270769][    C1] CPU: 1 PID: 4959 Comm: systemd-udevd Not tainted 5.10.0 #94
+[12978.270777][    C1] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[12978.270780][    C1] RIP: 0010:__sanitizer_cov_trace_pc+0x31/0x60
+[12978.270789][    C1] Code: 01 00 65 8b 15 30 02 8d 7e f7 c2 00 01 ff 00 48 8b 34 24 74 0f 80 e6 01 74 35 8b 90 5c 14 00 00 85 d2 74 2b 8b 90 38 14 00 00 <83> fa 02 75 20 48 8b 88 40 14 00 00 8b 80 3c 14 00 00 48 8b 11 48
+[12978.270792][    C1] RSP: 0018:ffffc90000a4f9d8 EFLAGS: 00000246
+[12978.270799][    C1] RAX: ffff88801c992140 RBX: 0000000000000029 RCX: ffffffff83977a5b
+[12978.270809][    C1] RDX: 0000000000000000 RSI: ffffffff83977a65 RDI: 0000000000000001
+[12978.270816][    C1] RBP: dffffc0000000000 R08: ffff88801c992140 R09: ffffed1020276f87
+[12978.270826][    C1] R10: ffff8881013b7c37 R11: ffffed1020276f86 R12: ffffc90000a4fb20
+[12978.270833][    C1] R13: ffff8881013b7c00 R14: ffff8881013b7c30 R15: 000000000000002a
+[12978.270840][    C1] FS:  00007fa180b588c0(0000) GS:ffff888135c00000(0000) knlGS:0000000000000000
+[12978.270846][    C1] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[12978.270852][    C1] CR2: 0000000000980004 CR3: 0000000019b5c000 CR4: 0000000000750ee0
+[12978.270858][    C1] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[12978.270865][    C1] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[12978.270868][    C1] PKRU: 55555554
+[12978.270872][    C1] Call Trace:
+[12978.270876][    C1]  tomoyo_check_acl+0x305/0x450
+[12978.270881][    C1]  ? tomoyo_compare_name_union+0xe0/0xe0
+[12978.270886][    C1]  ? tomoyo_init_log+0x3d9/0x21f0
+[12978.270891][    C1]  tomoyo_path_permission+0x233/0x440
+[12978.270896][    C1]  ? tomoyo_fill_path_info+0x22e/0x420
+[12978.270904][    C1]  tomoyo_path_perm+0x312/0x430
+[12978.270922][    C1]  ? tomoyo_check_open_permission+0x370/0x370
+[12978.270928][    C1]  ? kmem_cache_free+0x2d3/0x410
+[12978.270932][    C1]  ? filename_lookup+0x287/0x3e0
+[12978.270935][    C1]  ? lock_release+0x4d4/0x660
+[12978.270942][    C1]  ? strncpy_from_user+0x2b9/0x420
+[12978.270948][    C1]  security_inode_getattr+0xcf/0x140
+[12978.270952][    C1]  vfs_getattr+0x22/0x60
+[12978.270957][    C1]  vfs_statx+0x168/0x370
+[12978.270961][    C1]  ? __sanitizer_cov_trace_switch+0x45/0x70
+[12978.270963][    C1]  ? vfs_getattr+0x60/0x60
+[12978.270966][    C1]  ? __seccomp_filter+0x264/0x1490
+[12978.270972][    C1]  __do_sys_newlstat+0x91/0x110
+[12978.270979][    C1]  ? __do_sys_newstat+0x110/0x110
+[12978.270986][    C1]  ? mntput+0x67/0x90
+[12978.270993][    C1]  ? __secure_computing+0x104/0x370
+[12978.270998][    C1]  ? syscall_trace_enter.isra.0+0x80/0x250
+[12978.271002][    C1]  do_syscall_64+0x2d/0x70
+[12978.271007][    C1]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[12978.271011][    C1] RIP: 0033:0x7fa17f9cb335
+[12978.271022][    C1] Code: 69 db 2b 00 64 c7 00 16 00 00 00 b8 ff ff ff ff c3 0f 1f 40 00 83 ff 01 48 89 f0 77 30 48 89 c7 48 89 d6 b8 06 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 03 f3 c3 90 48 8b 15 31 db 2b 00 f7 d8 64 89
+[12978.271026][    C1] RSP: 002b:00007ffd29cedd58 EFLAGS: 00000246 ORIG_RAX: 0000000000000006
+[12978.271037][    C1] RAX: ffffffffffffffda RBX: 000055dde4fc23d0 RCX: 00007fa17f9cb335
+[12978.271043][    C1] RDX: 00007ffd29cedd90 RSI: 00007ffd29cedd90 RDI: 000055dde4fc13d0
+[12978.271049][    C1] RBP: 00007ffd29cede50 R08: 00007fa17fc8a258 R09: 0000000000001010
+[12978.271056][    C1] R10: 00007fa17fc89b58 R11: 0000000000000246 R12: 000055dde4fc13d0
+[12978.271062][    C1] R13: 000055dde4fc13f5 R14: 000055dde4fb4b44 R15: 000055dde4fb4b45
+[12978.292031][ T1672] Kernel panic - not syncing: hung_task: blocked tasks
+[12978.635982][ T1672] CPU: 2 PID: 1672 Comm: khungtaskd Not tainted 5.10.0 #94
+[12978.637443][ T1672] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[12978.639674][ T1672] Call Trace:
+[12978.663119][ T1672]  dump_stack+0x107/0x163
+[12978.664081][ T1672]  panic+0x393/0x7d3
+[12978.664945][ T1672]  ? print_oops_end_marker.cold+0x15/0x15
+[12978.666068][ T1672]  ? nmi_cpu_backtrace_handler+0x10/0x10
+[12978.667300][ T1672]  ? preempt_schedule_thunk+0x16/0x18
+[12978.668511][ T1672]  ? watchdog.cold+0x6d/0xfc
+[12978.669442][ T1672]  ? watchdog+0xbe1/0x12b0
+[12978.670527][ T1672]  watchdog.cold+0x7e/0xfc
+[12978.671284][ T1672]  ? reset_hung_task_detector+0x30/0x30
+[12978.672441][ T1672]  kthread+0x3b1/0x4a0
+[12978.673249][ T1672]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[12978.674461][ T1672]  ret_from_fork+0x1f/0x30
+[12978.706329][ T1672] Dumping ftrace buffer:
+[12978.707225][ T1672]    (ftrace buffer empty)
+[12978.708066][ T1672] Kernel Offset: disabled
+[12978.708900][ T1672] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: Warning: Permanently added '[127.0.0.1]:1027' (ECDSA) to the list of known hosts.
+Connection to 127.0.0.1 closed by remote host.
+

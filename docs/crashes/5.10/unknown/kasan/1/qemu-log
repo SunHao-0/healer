@@ -1,0 +1,86 @@
+============== QEMU STDOUT ================
+scr_alloc+0xc0/0xc0
+[11685.633227][T15123]  ? create_prof_cpu_mask+0x20/0x20
+[11685.633236][T15123]  ? fbcon_invert_region+0x8d/0x1c0
+[11685.633246][T15123]  invert_screen+0x2a7/0x610
+[11685.633254][T15123]  ? vc_uniscr_copy_line+0x610/0x610
+[11685.633266][T15123]  ? kmalloc_order_trace+0xc5/0x130
+[11685.633281][T15123]  ? __kmalloc+0x30e/0x3b0
+[11685.633294][T15123]  clear_selection+0x55/0x70
+[11685.633304][T15123]  vc_do_resize+0xdb5/0x10c0
+[11685.633327][T15123]  ? kernel_text_address+0x6e/0xe0
+[11685.633342][T15123]  ? lock_acquire+0x6d1/0xa20
+[11685.633350][T15123]  ? con_flush_chars+0x90/0x90
+[11685.633359][T15123]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[11685.633368][T15123]  ? kasan_unpoison_shadow+0x33/0x40
+[11685.633376][T15123]  fbcon_do_set_font+0x579/0x9f0
+[11685.633385][T15123]  fbcon_set_font+0x966/0xc70
+[11685.633394][T15123]  ? set_con2fb_map+0x1310/0x1310
+[11685.633400][T15123]  con_font_op+0xb93/0xf40
+[11685.633407][T15123]  ? con_write+0xb0/0xb0
+[11685.633425][T15123]  ? debug_check_no_obj_freed+0x273/0x430
+[11685.633456][T15123]  ? cap_capable+0x1f1/0x280
+[11685.633472][T15123]  ? bpf_lsm_capable+0x5/0x10
+[11685.633480][T15123]  ? security_capable+0x8f/0xc0
+[11685.633488][T15123]  vt_ioctl+0x19cb/0x2b50
+[11685.633495][T15123]  ? lock_release+0x1/0x660
+[11685.633503][T15123]  ? complete_change_console+0x3f0/0x3f0
+[11685.633510][T15123]  ? kfree+0xfa/0x490
+[11685.633522][T15123]  ? tomoyo_path_number_perm+0x272/0x6d0
+[11685.633530][T15123]  ? tomoyo_execute_permission+0x4e0/0x4e0
+[11685.633538][T15123]  ? lockdep_init_map_waits+0x26a/0x720
+[11685.633547][T15123]  ? __sanitizer_cov_trace_switch+0x45/0x70
+[11685.633561][T15123]  ? tty_jobctrl_ioctl+0x49/0xdb0
+[11685.633570][T15123]  ? complete_change_console+0x3f0/0x3f0
+[11685.633577][T15123]  tty_ioctl+0xee3/0x1450
+[11685.633585][T15123]  ? tty_vhangup+0x30/0x30
+[11685.633593][T15123]  ? __sanitizer_cov_trace_switch+0x45/0x70
+[11685.633614][T15123]  ? do_vfs_ioctl+0x27d/0x1110
+[11685.633623][T15123]  ? ioctl_file_clone+0x180/0x180
+[11685.633659][T15123]  ? _raw_spin_unlock+0x24/0x40
+[11685.633672][T15123]  ? __fget_files+0x2f0/0x450
+[11685.633682][T15123]  ? bpf_lsm_file_ioctl+0x5/0x10
+[11685.633688][T15123]  ? tty_vhangup+0x30/0x30
+[11685.633697][T15123]  __x64_sys_ioctl+0x193/0x200
+[11685.633707][T15123]  do_syscall_64+0x2d/0x70
+[11685.633719][T15123]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[11685.633729][T15123] RIP: 0033:0x4695bd
+[11685.633739][T15123] Code: 02 b8 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 bc ff ff ff f7 d8 64 89 01 48
+[11685.633744][T15123] RSP: 002b:00007f819578ac58 EFLAGS: 00000246 ORIG_RAX: 0000000000000010
+[11685.633754][T15123] RAX: ffffffffffffffda RBX: 000000000057bf60 RCX: 00000000004695bd
+[11685.633759][T15123] RDX: 0000000020000140 RSI: 0000000000004b61 RDI: 0000000000000004
+[11685.633764][T15123] RBP: 00000000004c572c R08: 0000000000000000 R09: 0000000000000000
+[11685.633769][T15123] R10: 0000000000000000 R11: 0000000000000246 R12: 000000000057bf60
+[11685.633775][T15123] R13: 00007ffcc2a0207f R14: 00007ffcc2a02220 R15: 00007f819578adc0
+[11685.633785][T15123] Modules linked in:
+[11685.633826][T15123] Dumping ftrace buffer:
+[11685.633851][T15123]    (ftrace buffer empty)
+[11685.633855][T15123] CR2: fffff5200173c1fc
+[11685.633883][T15123] ---[ end trace 644b50ca6c8913ff ]---
+[11685.633895][T15123] RIP: 0010:sys_imageblit+0x111c/0x16f0
+[11685.633903][T15123] Code: 83 c2 03 38 ca 7c 08 84 c9 0f 85 97 03 00 00 48 be 00 00 00 00 00 fc ff df 8b 5c 24 18 23 18 4c 89 f0 48 c1 e8 03 33 5c 24 60 <0f> b6 14 30 4c 89 f0 83 e0 07 83 c0 03 38 d0 7c 08 84 d2 0f 85 56
+[11685.633908][T15123] RSP: 0018:ffffc900040df328 EFLAGS: 00010246
+[11685.633916][T15123] RAX: 1ffff9200173c1fc RBX: 0000000000000000 RCX: 0000000000000000
+[11685.633921][T15123] RDX: 0000000000000003 RSI: dffffc0000000000 RDI: dffffc0000000000
+[11685.633926][T15123] RBP: ffff888100c04260 R08: ffff88810815c280 R09: 000000000000007f
+[11685.633931][T15123] R10: ffffffff8e08ec07 R11: fffffbfff1c11d80 R12: 0000000000000007
+[11685.633937][T15123] R13: 0000000000000007 R14: ffffc9000b9e0fe0 R15: ffffc9000b9e0fe4
+[11685.633944][T15123] FS:  00007f819578b700(0000) GS:ffff888063d00000(0000) knlGS:0000000000000000
+[11685.633951][T15123] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[11685.633956][T15123] CR2: fffff5200173c1fc CR3: 00000000126bc000 CR4: 0000000000750ee0
+[11685.633962][T15123] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[11685.633967][T15123] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400
+[11685.633969][T15123] PKRU: 55555554
+[11685.633973][T15123] Kernel panic - not syncing: Fatal exception
+[11685.653078][T15123] Dumping ftrace buffer:
+[11685.653086][T15123]    (ftrace buffer empty)
+[11685.653107][T15123] Kernel Offset: disabled
+[11685.729050][T15123] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: Warning: Permanently added '[127.0.0.1]:1029' (ECDSA) to the list of known hosts.
+Connection to 127.0.0.1 closed by remote host.
+

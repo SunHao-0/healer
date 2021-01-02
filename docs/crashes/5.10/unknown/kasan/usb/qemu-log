@@ -1,0 +1,109 @@
+============== QEMU STDOUT ================
+b/0x40
+[33722.136377][    C3]  ? kasan_save_stack+0x1b/0x40
+[33722.136381][    C3]  ? __kasan_kmalloc.constprop.0+0xc2/0xd0
+[33722.136385][    C3]  ? slab_post_alloc_hook+0x3e/0x570
+[33722.136390][    C3]  ? kmem_cache_alloc+0x147/0x340
+[33722.136416][    C3]  ? jbd2__journal_start+0x1f4/0x9c0
+[33722.136421][    C3]  ? __ext4_journal_start_sb+0x3e4/0x4c0
+[33722.136426][    C3]  ? kasan_save_stack+0x32/0x40
+[33722.136430][    C3]  ? kasan_save_stack+0x1b/0x40
+[33722.136435][    C3]  ? kasan_set_track+0x1c/0x30
+[33722.136439][    C3]  ? kasan_set_free_info+0x1b/0x30
+[33722.136444][    C3]  ? __kasan_slab_free+0x103/0x140
+[33722.136447][    C3]  ? kmem_cache_free+0x9b/0x410
+[33722.136452][    C3]  ? jbd2_journal_stop+0x671/0x1010
+[33722.136456][    C3]  ? __ext4_journal_stop+0xde/0x1f0
+[33722.136461][    C3]  ? ext4_da_write_end+0x246/0xbb0
+[33722.136466][    C3]  ? generic_perform_write+0x2c0/0x4f0
+[33722.136471][    C3]  ? ext4_buffered_write_iter+0x206/0x480
+[33722.136476][    C3]  ? ext4_file_write_iter+0x48a/0x1690
+[33722.136481][    C3]  ? new_sync_write+0x426/0x660
+[33722.136485][    C3]  ? vfs_write+0x6fd/0xa80
+[33722.136490][    C3]  ? ksys_write+0x12d/0x250
+[33722.136494][    C3]  ? do_syscall_64+0x2d/0x70
+[33722.136498][    C3]  ? entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[33722.136502][    C3]  ? __wake_up_common_lock+0xde/0x130
+[33722.136505][    C3]  ? lock_downgrade+0x680/0x680
+[33722.136508][    C3]  ? lock_acquire+0x6d1/0xa20
+[33722.136513][    C3]  ? lock_release+0x4d4/0x660
+[33722.136518][    C3]  ? lock_release+0x4d4/0x660
+[33722.136522][    C3]  ? find_get_entry+0x3c5/0x9d0
+[33722.136526][    C3]  ? lock_downgrade+0x680/0x680
+[33722.136530][    C3]  ? lock_downgrade+0x680/0x680
+[33722.136535][    C3]  ? xas_descend+0x171/0x3e0
+[33722.136539][    C3]  ? xas_load+0x66/0x140
+[33722.136544][    C3]  ? kasan_unpoison_shadow+0x33/0x40
+[33722.136549][    C3]  __kasan_kmalloc.constprop.0+0xc2/0xd0
+[33722.138396][    C3]  slab_post_alloc_hook+0x3e/0x570
+[33722.139691][    C3]  ? jbd2__journal_start+0x1f4/0x9c0
+[33722.139697][    C3]  kmem_cache_alloc+0x147/0x340
+[33722.139702][    C3]  jbd2__journal_start+0x1f4/0x9c0
+[33722.139707][    C3]  ? ext4_da_write_begin+0x4c3/0x1190
+[33722.139712][    C3]  __ext4_journal_start_sb+0x3e4/0x4c0
+[33722.139717][    C3]  ext4_da_write_begin+0x4c3/0x1190
+[33722.139721][    C3]  ? ext4_write_begin+0x13f0/0x13f0
+[33722.139725][    C3]  ? current_time+0xa8/0x110
+[33722.139748][    C3]  generic_perform_write+0x20a/0x4f0
+[33722.139752][    C3]  ? update_time+0xc0/0xc0
+[33722.139757][    C3]  ? filemap_check_errors+0x150/0x150
+[33722.139761][    C3]  ? down_write+0xdb/0x150
+[33722.139766][    C3]  ext4_buffered_write_iter+0x206/0x480
+[33722.139771][    C3]  ext4_file_write_iter+0x48a/0x1690
+[33722.139775][    C3]  ? aa_path_link+0x2f0/0x2f0
+[33722.139779][    C3]  ? lock_release+0x660/0x660
+[33722.139783][    C3]  ? do_futex+0x166/0x1970
+[33722.139788][    C3]  ? ext4_buffered_write_iter+0x480/0x480
+[33722.139792][    C3]  ? lock_release+0x4d4/0x660
+[33722.139797][    C3]  ? handle_mm_fault+0x2b14/0x5960
+[33722.139801][    C3]  new_sync_write+0x426/0x660
+[33722.139805][    C3]  ? new_sync_read+0x6f0/0x6f0
+[33722.139808][    C3]  ? __fget_files+0x2ce/0x450
+[33722.139813][    C3]  ? lock_release+0x660/0x660
+[33722.139817][    C3]  ? ksys_write+0x12d/0x250
+[33722.139821][    C3]  vfs_write+0x6fd/0xa80
+[33722.139825][    C3]  ksys_write+0x12d/0x250
+[33722.139829][    C3]  ? __ia32_sys_read+0xb0/0xb0
+[33722.139834][    C3]  ? fpregs_assert_state_consistent+0xbc/0xe0
+[33722.139839][    C3]  ? syscall_enter_from_user_mode+0x1d/0x50
+[33722.139843][    C3]  do_syscall_64+0x2d/0x70
+[33722.139848][    C3]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+[33722.139852][    C3] RIP: 0033:0x7f4366bdc1cd
+[33722.139865][    C3] Code: c2 20 00 00 75 10 b8 01 00 00 00 0f 05 48 3d 01 f0 ff ff 73 31 c3 48 83 ec 08 e8 ae fc ff ff 48 89 04 24 b8 01 00 00 00 0f 05 <48> 8b 3c 24 48 89 c2 e8 f7 fc ff ff 48 89 d0 48 83 c4 08 48 3d 01
+[33722.139870][    C3] RSP: 002b:00007f435fffe590 EFLAGS: 00000293 ORIG_RAX: 0000000000000001
+[33722.139881][    C3] RAX: ffffffffffffffda RBX: 00007f435002b1d0 RCX: 00007f4366bdc1cd
+[33722.139887][    C3] RDX: 0000000000000061 RSI: 00007f435002b1d0 RDI: 0000000000000009
+[33722.139893][    C3] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[33722.139900][    C3] R10: 0000000000000000 R11: 0000000000000293 R12: 00007f435002af50
+[33722.139906][    C3] R13: 00007f435fffe5b0 R14: 0000562433edf440 R15: 0000000000000061
+[33722.139913][    C3] INFO: NMI handler (nmi_cpu_backtrace_handler) took too long to run: 1.222 msecs
+[33722.141467][ T1654] Kernel panic - not syncing: hung_task: blocked tasks
+[33722.159633][T15699] usb 2-1: Invalid ep0 maxpacket: 0
+[33722.161523][ T1654] CPU: 1 PID: 1654 Comm: khungtaskd Not tainted 5.10.0 #94
+[33722.161538][ T1654] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.12.0-59-gc9ba5276e321-prebuilt.qemu.org 04/01/2014
+[33722.163468][T15699] usb usb2-port1: unable to enumerate USB device
+[33722.165278][ T1654] Call Trace:
+[33722.165312][ T1654]  dump_stack+0x107/0x163
+[33722.404285][ T1654]  panic+0x393/0x7d3
+[33722.407667][ T1654]  ? print_oops_end_marker.cold+0x15/0x15
+[33722.409755][ T1654]  ? nmi_cpu_backtrace_handler+0x10/0x10
+[33722.411747][ T1654]  ? preempt_schedule_thunk+0x16/0x18
+[33722.415212][ T1654]  ? watchdog.cold+0x6d/0xfc
+[33722.416837][ T1654]  ? watchdog+0xbe1/0x12b0
+[33722.419819][ T1654]  watchdog.cold+0x7e/0xfc
+[33722.421544][ T1654]  ? reset_hung_task_detector+0x30/0x30
+[33722.423060][ T1654]  kthread+0x3b1/0x4a0
+[33722.426844][ T1654]  ? kthread_mod_delayed_work+0x1a0/0x1a0
+[33722.432782][ T1654]  ret_from_fork+0x1f/0x30
+[33722.436932][ T1654] Dumping ftrace buffer:
+[33722.437791][ T1654]    (ftrace buffer empty)
+[33722.438863][ T1654] Kernel Offset: disabled
+[33722.439672][ T1654] Rebooting in 1 seconds..
+
+============== QEMU STDERR ================
+
+============== SYZ LOG ================
+exec error: io: failed to fill whole buffer
+syz stderr: Warning: Permanently added '[127.0.0.1]:1037' (ECDSA) to the list of known hosts.
+Connection to 127.0.0.1 closed by remote host.
+
