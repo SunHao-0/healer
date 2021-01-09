@@ -1,0 +1,19 @@
+[package]
+name = "hlc"
+version = "0.0.0"
+authors = ["Hao Sun <sunhaoyl@outlook.com>"]
+edition = "2018"
+description = "Compiler of syz-lang"
+license = "Apache-2.0"
+
+[lib]
+name = "hlc"
+path = "lib.rs"
+
+[[bin]]
+name = "hlc"
+path = "main.rs"
+
+[dependencies]
+pest = "2.1"
+pest_derive = "2.1"
