@@ -2,7 +2,8 @@
 members = [
     "hlang",
     "fuzzer",
-    "syscalls"
+    "syscalls",
+    "tools/hlc"
 ]
 
 [profile.release]
