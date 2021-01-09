@@ -230,7 +230,7 @@ fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Valu
     None
 }
 
-fn build_parent_map<'a>(val: &'a Value) -> FxHashMap<*const Value, &'a Value> {
+fn build_parent_map(val: &Value) -> FxHashMap<*const Value, & Value> {
     let mut parent_map = FxHashMap::default();
     iter_struct_val(val, |v| {
         let vals = v.kind.get_group_val().unwrap();

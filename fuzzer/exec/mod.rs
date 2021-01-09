@@ -281,7 +281,7 @@ pub struct QemuConf {
     /// Mem size in megabyte.
     pub mem: Option<u32>,
     /// Optional shared memory device file path, creadted automatically if use qemu ivshm.
-    mem_backend_files: Vec<(Box<Path>, usize)>,
+    pub mem_backend_files: Vec<(Box<Path>, usize)>,
 }
 
 impl Default for QemuConf {
@@ -307,9 +307,9 @@ pub struct SshConf {
 
     // not used yet.
     /// Ip addr of remote mechine.
-    ip: Option<String>,
+    pub ip: Option<String>,
     /// Port addr of remote machine
-    port: Option<u16>,
+    pub port: Option<u16>,
 }
 
 impl Default for SshConf {

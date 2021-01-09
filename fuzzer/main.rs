@@ -25,15 +25,21 @@ pub fn main() {
     init_runtime();
     println!("[+] Target loaded.");
 
-    let mut qemu_conf = QemuConf::default();
-    qemu_conf.img_path = PathBuf::from(&args[0]).into_boxed_path();
-    qemu_conf.kernel_path = Some(PathBuf::from(&args[1]).into_boxed_path());
+    let qemu_conf = QemuConf {
+        img_path: PathBuf::from(&args[0]).into_boxed_path(),
+        kernel_path: Some(PathBuf::from(&args[1]).into_boxed_path()),
+        ..Default::default()
+    };
 
-    let mut ssh_conf = SshConf::default();
-    ssh_conf.ssh_key = PathBuf::from(&args[2]).into_boxed_path();
+    let ssh_conf = SshConf {
+        ssh_key: PathBuf::from(&args[2]).into_boxed_path(),
+        ..Default::default()
+    };
 
-    let mut exec_conf = ExecConf::default();
-    exec_conf.executor = PathBuf::from(&args[3]).into_boxed_path();
+    let exec_conf = ExecConf {
+        executor: PathBuf::from(&args[3]).into_boxed_path(),
+        ..Default::default()
+    };
 
     let cpu_id: usize = args[4].parse().unwrap();
 
