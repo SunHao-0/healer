@@ -1,4 +1,4 @@
-//! Data model of type, func, group and rule.
+//! Internal representation of type, func, group and rule.
 
 use std::fmt::{Display, Error, Formatter};
 use std::hash::{Hash, Hasher};
@@ -87,7 +87,7 @@ impl Display for RuleInfo {
 /// Id of type
 pub type TypeId = u64;
 
-/// Infomation of a type.
+/// Infomartion of a type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Type {
     pub tid: TypeId,

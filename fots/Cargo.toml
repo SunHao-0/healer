@@ -3,7 +3,7 @@ name = "fots"
 version = "1.0.0"
 authors = ["sunhao <sunhao.th@gmail.com>"]
 edition = "2018"
-description = "Interface desciption language"
+description = "System call desciption language"
 license = "Apache-2.0"
 
 [dependencies]

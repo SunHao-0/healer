@@ -16,7 +16,7 @@
 #[grammar = "fots.pest"]
 pub struct GrammarParser;
 
-// These test case need a older version of rustc, ignore for now.
+// These test cases need a older version of rustc, ignore for now.
 // #[cfg(test)]    // nightly required.
 // mod tests {
 //     use pest::Parser;
