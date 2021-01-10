@@ -17,6 +17,7 @@ structopt = {version="0.3.7", default-features=true}
 thiserror = "1.0"
 colored = "2.0"
 
-[dev-dependencies]
-runtime-fmt = "0.4"
+# broken
+# [dev-dependencies]
+# runtime-fmt = "0.4"
 

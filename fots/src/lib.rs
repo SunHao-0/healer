@@ -18,16 +18,11 @@
 //!
 //! ```
 
-// #[macro_use]
-// extern crate maplit;
 extern crate num_traits;
 #[macro_use]
 extern crate pest_derive;
 #[macro_use]
 extern crate prettytable;
-#[cfg(test)]
-#[macro_use]
-extern crate runtime_fmt;
 extern crate structopt;
 #[macro_use]
 extern crate thiserror;

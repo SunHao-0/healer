@@ -6,7 +6,7 @@
 ///
 /// Grammar Parser can be used to parse text by single rule.
 ///```
-/// use fots::grammar::{GrammarParser, Rule};
+/// use fots::parse::{GrammarParser, Rule};
 /// use pest::Parser;
 /// let text = "*[*i8;(0xFF,0xFFFF)]";
 /// let re = GrammarParser::parse(Rule::TypeExp, text);
