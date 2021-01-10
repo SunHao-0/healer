@@ -1,8 +1,7 @@
 //! Error of item/grammar parser.
 
-use crate::grammar::Rule;
+use crate::parse::Rule;
 
-/// Error from item parse phase
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Parse:`{0}`")]
@@ -12,7 +11,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn from_idents(idents: Vec<String>) -> Self {
+    pub fn with_idents(idents: Vec<String>) -> Self {
         assert!(!idents.is_empty());
         Error::Ident(idents)
     }

@@ -7,14 +7,14 @@ use std::ops::Range;
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
 
-use crate::grammar::Rule;
+use crate::parse::Rule;
 
-/// Type , group , rule def of fots files
+/// Type, group, rule def.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Items {
     pub types: Vec<Type>,
     pub groups: Vec<Group>,
-    pub rules: Vec<RuleInfo>, // not implemented yet
+    pub rules: Vec<RuleInfo>, // not used yet
 }
 
 impl Display for Items {
@@ -738,21 +738,6 @@ impl NumInfo {
     pub fn limit_mut<T>(&mut self) -> &mut NumLimit<T> {
         todo!()
     }
-
-    //    pub fn size(&self) -> usize{
-    //        match self{
-    //            I8=> 8,
-    //            I16(NumLimit<i16>),
-    //            I32(NumLimit<i32>),
-    //            I64(NumLimit<i64>),
-    //            U8(NumLimit<u8>),
-    //            U16(NumLimit<u16>),
-    //            U32(NumLimit<u32>),
-    //            U64(NumLimit<u64>),
-    //            Usize(NumLimit<usize>),
-    //            Isize(NumLimit<isize>),
-    //        }
-    //    }
 }
 
 /// Direction of pointer

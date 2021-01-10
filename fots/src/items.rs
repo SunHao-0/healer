@@ -1,23 +1,22 @@
 //! Parser for items
 
 use std::collections::HashMap;
-use std::error::Error;
 use std::ops::Range;
 use std::process::exit;
 
 use num_traits::Num;
 use pest::iterators::{Pair, Pairs};
 
-use crate::errors;
-use crate::grammar::Rule;
+use crate::error;
+use crate::parse::Rule;
 use crate::types::{
     Attr, Field, Flag, FnId, FnInfo, Group, GroupId, Items, NumInfo, NumLimit, Param, PtrDir,
     StrType, Type, TypeId, TypeInfo, DEFAULT_GID,
 };
 use crate::{num, parse_grammar};
 
-/// Parse plain text based on grammar, return all declarations in text
-pub fn parse(text: &str) -> Result<Items, errors::Error> {
+/// Parse plain text based on grammar, return all items.
+pub fn parse(text: &str) -> Result<Items, error::Error> {
     // parse grammar
     let parse_tree = parse_grammar(text)?;
     Parser::parse(parse_tree)
@@ -38,7 +37,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(decls: Pairs<Rule>) -> Result<Items, errors::Error> {
+    pub fn parse(decls: Pairs<Rule>) -> Result<Items, error::Error> {
         let mut parser = Parser::new();
         for p in decls {
             match p.as_rule() {
@@ -55,7 +54,7 @@ impl Parser {
         parser.finish()
     }
 
-    fn finish(mut self) -> Result<Items, errors::Error> {
+    fn finish(mut self) -> Result<Items, error::Error> {
         if let Some(e) = self.type_table.check() {
             return Err(e);
         }
@@ -159,7 +158,7 @@ impl Parser {
     }
 
     fn parse_rule(&mut self, _p: Pair<Rule>) {
-        todo!("Parsing of rule")
+        todo!("Parsing rule")
     }
 
     fn parse_type(&mut self, p: Pair<Rule>) -> TypeId {
@@ -296,6 +295,7 @@ impl Parser {
         let mut num_info = NumInfo::from_rule(t_p.as_rule());
         if let Some(l_p) = p.next() {
             match l_p.as_rule() {
+                // TODO fix this.
                 Rule::Range => match &mut num_info {
                     NumInfo::I8(l) => {
                         *l = NumLimit::Range(self.parse_range(l_p));
@@ -366,11 +366,6 @@ impl Parser {
 
         self.type_table.add(TypeInfo::Num(num_info))
     }
-
-    //    fn parse_range<E: Debug, T: FromStr<Err=E>>(&mut self, p: Pair<Rule>) -> Range<T> {
-    //        let mut p = p.into_inner();
-    //        self.parse_num(p.next().unwrap())..self.parse_num(p.next().unwrap())
-    //    }
 
     fn parse_nums<T: Num>(&mut self, p: Pair<Rule>) -> Vec<T>
     where
@@ -480,10 +475,6 @@ impl Parser {
             exit(1);
         })
     }
-    #[allow(dead_code)]
-    fn report<E: Error>(_e: pest::error::Error<Rule>) -> E {
-        todo!()
-    }
 
     fn next_fid(&mut self) -> FnId {
         let id = self.fid_count;
@@ -499,10 +490,11 @@ struct GroupTable {
 
 impl Default for GroupTable {
     fn default() -> Self {
-        GroupTable {
-            groups: hashmap! {0 => Default::default()},
-            idents: hashmap! {"Default".into() => 0},
-        }
+        let mut groups = HashMap::new();
+        groups.insert(0, Default::default());
+        let mut idents = HashMap::new();
+        idents.insert("Default".to_string(), 0);
+        GroupTable { groups, idents }
     }
 }
 
@@ -559,12 +551,12 @@ impl TypeTable {
         }
     }
 
-    pub fn check(&self) -> Option<errors::Error> {
+    pub fn check(&self) -> Option<error::Error> {
         if self.unresolved.is_empty() {
             None
         } else {
             // TODO Remove clone
-            Some(errors::Error::from_idents(
+            Some(error::Error::with_idents(
                 self.unresolved.keys().cloned().collect::<Vec<_>>(),
             ))
         }

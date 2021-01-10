@@ -1,6 +1,6 @@
 use num_traits::Num;
 
-/// Parse number value from string literal.
+/// Parse number value from num-literal.
 pub fn parse<T: Num>(input: &str) -> Result<T, T::FromStrRadixErr> {
     let mut input = input.trim();
     assert!(!input.is_empty());

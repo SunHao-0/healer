@@ -1,14 +1,10 @@
-// fots
-// Author: sam
+Root = _{ SOI ~ (TypeDef | FuncDef | GroupDef | RuleDef)* ~ EOI }
 
-Root = _{ SOI ~ (TypeDef | FuncDef | GroupDef | RuleDef)+ ~EOI  }
-
-// Grammar of Typedef
 TypeDef = { StructDef | UnionDef | FlagDef | AliasDef }
-StructDef = { Struct ~ Ident ~ OBrace ~Fields~ CBrace}
+StructDef = { Struct ~ Ident ~ OBrace ~ Fields ~ CBrace}
 UnionDef = { Union ~ Ident ~ OBrace ~ Fields ~ CBrace}
+Fields = {Field ~ (Comma? ~Field)* ~ (Comma)?}
 Field = {Ident~Colon?~TypeExp}
-Fields = {Field~(Comma? ~Field)*~(Comma)?}
 
 FlagDef = { Flag ~ Ident ~UnderType?~ OBrace ~ FlagFields ~ CBrace}
 UnderType = {"<" ~ NumType ~ ">"}
@@ -77,8 +73,7 @@ AttrArg = {Ident}
 
 // Identifier
 Alpha = _{'a'..'z' | 'A'..'Z' }
-Ident = ${ NotKeyword ~ (Alpha|UnderLine) ~ (Alpha | Digit | UnderLine | "/" | ".")*}
-NotKeyword = _{ !(Keyword~WHITESPACE)}
+Ident = @{ !(Keyword~WHITESPACE) ~ (Alpha|UnderLine) ~ (Alpha | Digit | UnderLine | "/" | ".")*}
 
 // Key word
 RuleOp = {Choice}

@@ -1,9 +1,7 @@
 //! Fots
 //!
-//! Fots is a fuzzing oriented type system used as system call description.
-//! It has part of rust's type and type constructor with golang likely syntex.
-//! A fots file consists four kind of items: type def, func def, group def and rule def.
-//! Every func belongs to a group. A sample example as follow:
+//! Fots is a fuzzing oriented system call description language.
+//! A fots file contains four kind of item: type def, func def, group def and rule def.
 //! ``` fots
 //! type fd = res<i32>
 //! struct stat{...}
@@ -17,11 +15,11 @@
 //!     fn newfstatat(dfd i32{0}, file *In cstr, statbuf *Out stat, f statx_flags)
 //!     fn statx(fd Fd, file *In cstr, flags statx_flags, mask statx_mask, statxbuf *Out statx)
 //! }
-//}
-//! ```
 //!
-#[macro_use]
-extern crate maplit;
+//! ```
+
+// #[macro_use]
+// extern crate maplit;
 extern crate num_traits;
 #[macro_use]
 extern crate pest_derive;
@@ -37,12 +35,12 @@ extern crate thiserror;
 use pest::iterators::Pairs;
 use pest::Parser;
 
-use grammar::{GrammarParser, Rule};
+use parse::{GrammarParser, Rule};
 
-pub mod errors;
-pub mod grammar;
+pub mod error;
 pub mod items;
 pub mod num;
+pub mod parse;
 pub mod types;
 
 /// Parse plain text, return grammar structure of text.
@@ -72,6 +70,6 @@ pub fn parse_grammar(text: &str) -> Result<Pairs<Rule>, pest::error::Error<Rule>
 /// let mut re = parse_items(text);
 /// assert!(re.is_ok());
 /// ```
-pub fn parse_items(text: &str) -> Result<types::Items, errors::Error> {
+pub fn parse_items(text: &str) -> Result<types::Items, error::Error> {
     items::parse(text)
 }
