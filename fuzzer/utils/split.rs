@@ -34,7 +34,6 @@ impl Iterator for Split {
 #[cfg(test)]
 mod tests {
     use crate::utils::split::Split;
-    use supper::*;
 
     #[test]
     fn split() {
@@ -42,8 +41,8 @@ mod tests {
         let s2 = Split::new(10, 9);
         let s3 = Split::new(19, 3);
 
-        assert_eq!(s1.sum(), 9);
-        assert_eq!(s2.sum(), 10);
-        assert_eq!(s3.sum(), 19);
+        assert_eq!(s1.sum::<usize>(), 9);
+        assert_eq!(s2.sum::<usize>(), 10usize);
+        assert_eq!(s3.sum::<usize>(), 19usize);
     }
 }

@@ -60,7 +60,8 @@ fn find_calls(p: &Prog, i: usize) -> Vec<usize> {
             result.extend(calls);
         }
     }
-    result.sort();
+
+    result.sort_unstable();
     result.dedup();
     result
 }
