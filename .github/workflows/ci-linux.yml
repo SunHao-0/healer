@@ -1,9 +1,10 @@
-name: Build
+name: CI(Linux)
 on:
-  push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - master
 
 jobs:
   build:
@@ -17,27 +18,41 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+
+      - name: Generate Cargo.lock
+        uses: actions-rs/cargo@v1
+        with:
+          command: generate-lockfile
       
-      - name: deps
-        run: sudo apt update && sudo apt install gcc-multilib g++-multilib 
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@v1.0.1
       
-      - name: tcc-0.9.27
-        run: git clone https://github.com/TinyCC/tinycc.git tcc  && cd tcc && ./configure && make && sudo make install && cd ../
-      
-      - name: Clippy
+      - name: clippy
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all
 
-      - name: Fmt
+      - name: format check
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      
-      - name: Release build
+
+      - name: check build
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --release
+          command: check
+          args: --all --bins --examples --tests
+
+      - name: tests
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 40
+        with:
+          command: test
+          args: --all --all-features --no-fail-fast -- --nocapture
+      
+      - name: Clear the cargo caches
+        run: |
+          cargo install cargo-cache --no-default-features --features ci-autoclean
+          cargo-cache
