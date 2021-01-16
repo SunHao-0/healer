@@ -1,0 +1,108 @@
+diff --git a/sys/syz-sysgen/sysgen.go b/sys/syz-sysgen/sysgen.go
+index a1718673..480476f4 100644
+--- a/sys/syz-sysgen/sysgen.go
++++ b/sys/syz-sysgen/sysgen.go
+@@ -5,6 +5,7 @@ package main
+ 
+ import (
+ 	"bytes"
++	"encoding/json"
+ 	"flag"
+ 	"fmt"
+ 	"io"
+@@ -58,6 +59,8 @@ type ExecutorData struct {
+ 
+ var srcDir = flag.String("src", "", "path to root of syzkaller source dir")
+ var outDir = flag.String("out", "", "path to out dir")
++var genJson = flag.Bool("gen_json", true, "generate json representation")
++var jsonOutDir = flag.String("json_out", "json", "path to json representation")
+ 
+ func main() {
+ 	defer tool.Init()()
+@@ -68,6 +71,10 @@ func main() {
+ 	}
+ 	sort.Strings(OSList)
+ 
++	if *genJson {
++		osutil.MkdirAll(filepath.Join(*outDir, "sys", *jsonOutDir))
++	}
++
+ 	data := &ExecutorData{}
+ 	for _, OS := range OSList {
+ 		descriptions := ast.ParseGlob(filepath.Join(*srcDir, "sys", OS, "*.txt"), nil)
+@@ -79,6 +86,9 @@ func main() {
+ 			os.Exit(1)
+ 		}
+ 		osutil.MkdirAll(filepath.Join(*outDir, "sys", OS, "gen"))
++		if *genJson {
++			osutil.MkdirAll(filepath.Join(*outDir, "sys", *jsonOutDir, OS))
++		}
+ 
+ 		var archs []string
+ 		for arch := range targets.List[OS] {
+@@ -140,6 +150,10 @@ func main() {
+ 				rev := hash.String(out.Bytes())
+ 				fmt.Fprintf(out, "const revision_%v = %q\n", job.Target.Arch, rev)
+ 				writeSource(sysFile, out.Bytes())
++				// generate json representation.
++				if *genJson {
++					generate_json(job.Target, prog, consts, rev)
++				}
+ 
+ 				job.ArchData = generateExecutorSyscalls(job.Target, prog.Syscalls, rev)
+ 
+@@ -186,6 +200,41 @@ func main() {
+ 	writeExecutorSyscalls(data)
+ }
+ 
++func generate_json(target *targets.Target, prg *compiler.Prog, consts map[string]uint64, rev string) {
++	type Type struct {
++		Name  string
++		Value prog.Type
++	}
++	types := make([]Type, 0, len(prg.Types))
++	for _, ty := range prg.Types {
++		types = append(types, Type{Name: reflect.TypeOf(ty).Elem().Name(), Value: ty})
++	}
++	type Sys struct {
++		Target    *targets.Target
++		Syscalls  []*prog.Syscall
++		Types     []Type
++		Resources []*prog.ResourceDesc
++		Consts    map[string]uint64
++		Revision  string
++	}
++	sys := Sys{
++		Target:    target,
++		Syscalls:  prg.Syscalls,
++		Types:     types,
++		Resources: prg.Resources,
++		Consts:    consts,
++		Revision:  rev,
++	}
++	jsonFile := filepath.Join(*outDir, "sys", *jsonOutDir, target.OS, target.Arch+".json")
++	sys_json, err := json.Marshal(sys)
++	if err != nil {
++		fmt.Printf("failed to marshal target %v/%v: %v\n", target.OS, target.Arch, err)
++		os.Exit(1)
++	}
++	writeSource(jsonFile, sys_json)
++
++}
++
+ func generate(target *targets.Target, prg *compiler.Prog, consts map[string]uint64, out io.Writer) {
+ 	tag := fmt.Sprintf("syz_target,syz_os_%v,syz_arch_%v", target.OS, target.Arch)
+ 	if target.VMArch != "" {
+diff --git a/sys/targets/targets.go b/sys/targets/targets.go
+index 7102d6f9..c44cdfdf 100644
+--- a/sys/targets/targets.go
++++ b/sys/targets/targets.go
+@@ -35,7 +35,7 @@ type Target struct {
+ 	KernelHeaderArch string
+ 	BrokenCompiler   string
+ 	// NeedSyscallDefine is used by csource package to decide when to emit __NR_* defines.
+-	NeedSyscallDefine  func(nr uint64) bool
++	NeedSyscallDefine  func(nr uint64) bool `json:"-"`
+ 	HostEndian         binary.ByteOrder
+ 	SyscallTrampolines map[string]string
+ 
