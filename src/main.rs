@@ -1,3 +1,8 @@
+// Temporary
+#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unreachable_code)]
+
 use std::{
     fs::{create_dir, write},
     path::{Path, PathBuf},
