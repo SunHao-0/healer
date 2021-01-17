@@ -9,7 +9,7 @@ pub struct GlobalState {
     corpus: (),
 }
 
-pub type ValuePool = FxHashMap<Rc<Type>, FxHashSet<Value>>;
+pub type ValuePool = FxHashMap<TypeRef, FxHashSet<Value>>;
 
 pub struct LocalState {
     pub branches: (),

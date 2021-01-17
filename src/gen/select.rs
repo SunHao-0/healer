@@ -1,9 +1,8 @@
 use super::*;
 use crate::targets::Target;
-use std::rc::Rc;
 
 /// Select a syscall to fuzz based on resource usage.
-pub(super) fn select_syscall(ctx: &GenContext) -> Rc<Syscall> {
+pub(super) fn select_syscall(ctx: &GenContext) -> SyscallRef {
     loop {
         let call = if should_try_gen_res(ctx) {
             let res_ty = select_res(&ctx.target.res_tys);
@@ -38,7 +37,7 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
     }
 }
 
-fn select_syscall_rand(ctx: &GenContext) -> Rc<Syscall> {
+fn select_syscall_rand(ctx: &GenContext) -> SyscallRef {
     // Try to select a consumer first.
     if random::<f32>() < 0.96 {
         if let Some(syscall) = ctx
@@ -46,7 +45,6 @@ fn select_syscall_rand(ctx: &GenContext) -> Rc<Syscall> {
             .iter()
             .flat_map(|(res_ty, _)| res_ty.res_desc().unwrap().consumers.iter())
             .choose(&mut thread_rng())
-            .map(Rc::clone)
         {
             return syscall;
         }
@@ -55,21 +53,16 @@ fn select_syscall_rand(ctx: &GenContext) -> Rc<Syscall> {
         .syscalls
         .iter()
         .choose(&mut thread_rng())
-        .map(Rc::clone)
         .unwrap()
 }
 
-fn select_res(res_tys: &[Rc<Type>]) -> &Type {
-    res_tys
-        .iter()
-        .map(|t| &*t)
-        .choose(&mut thread_rng())
-        .unwrap()
+fn select_res(res_tys: &[TypeRef]) -> TypeRef {
+    *res_tys.iter().choose(&mut thread_rng()).unwrap()
 }
 
-fn select_res_producer(t: &Target, res: &Type) -> Rc<Syscall> {
+fn select_res_producer(t: &Target, res: TypeRef) -> SyscallRef {
     let res_desc = res.res_desc().unwrap();
-    let eq_class = &t.res_eq_class[res];
+    let eq_class = &t.res_eq_class[&res];
     let accurate_ctors = &res_desc.ctors;
     let all_ctors = eq_class
         .iter()
@@ -84,16 +77,12 @@ fn select_res_producer(t: &Target, res: &Type) -> Rc<Syscall> {
             .choose(&mut rng)
         {
             if rng.gen::<f32>() < 0.8 {
-                return Rc::clone(e);
+                return e;
             }
         }
-        accurate_ctors
-            .iter()
-            .choose(&mut rng)
-            .map(Rc::clone)
-            .unwrap()
+        accurate_ctors.iter().choose(&mut rng).unwrap()
     } else {
         // unreachable resources were removed during constructing target.
-        all_ctors.choose(&mut rng).map(Rc::clone).unwrap()
+        all_ctors.choose(&mut rng).unwrap()
     }
 }

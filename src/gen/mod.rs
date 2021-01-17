@@ -5,7 +5,7 @@ use crate::model::*;
 use crate::targets::Target;
 use rand::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::rc::Rc;
+use std::sync::Arc;
 
 // Syscall selection.
 mod select;
@@ -23,21 +23,21 @@ pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
 }
 
 /// Generated resource during one generation.
-type ResPool = FxHashMap<Rc<Type>, FxHashSet<Rc<ResValue>>>;
+type ResPool = FxHashMap<TypeRef, FxHashSet<Arc<ResValue>>>;
 
 /// Generation context.
 /// A context contains test target, generated resource and buffer value, global value pool.
 struct GenContext<'a, 'b> {
     target: &'a Target,
     generated_res: ResPool,
-    generated_str: FxHashMap<Rc<Type>, FxHashSet<Box<[u8]>>>, // use u8 instread of str type for convenience.
+    generated_str: FxHashMap<TypeRef, FxHashSet<Box<[u8]>>>, // use u8 instread of str type for convenience.
     pool: &'b ValuePool,
     // id for resource value count.
     id_count: usize,
     mem_alloc: MemAlloc,
     vma_alloc: VmaAlloc,
     // handle recusive type or circle reference.
-    rec_depth: FxHashMap<Rc<Type>, usize>,
+    rec_depth: FxHashMap<TypeRef, usize>,
 
     call_ctx: call::GenCallContext,
     param_ctx: param::GenParamContext,
@@ -65,34 +65,34 @@ impl<'a, 'b> GenContext<'a, 'b> {
         id
     }
 
-    pub fn add_res(&mut self, ty: Rc<Type>, res: Rc<ResValue>) -> bool {
+    pub fn add_res(&mut self, ty: TypeRef, res: Arc<ResValue>) -> bool {
         let entry = self.generated_res.entry(ty).or_default();
         entry.insert(res)
     }
 
-    pub fn add_str(&mut self, ty: Rc<Type>, new_str: Box<[u8]>) -> bool {
+    pub fn add_str(&mut self, ty: TypeRef, new_str: Box<[u8]>) -> bool {
         let entry = self.generated_str.entry(ty).or_default();
         entry.insert(new_str)
     }
 
-    pub fn inc_rec_depth(&mut self, ty: &Rc<Type>) -> usize {
-        let entry = self.rec_depth.entry(Rc::clone(ty)).or_insert(0);
+    pub fn inc_rec_depth(&mut self, ty: TypeRef) -> usize {
+        let entry = self.rec_depth.entry(ty).or_insert(0);
         *entry += 1;
         *entry
     }
 
-    pub fn dec_rec_depth(&mut self, ty: &Rc<Type>) {
-        if let Some(v) = self.rec_depth.get_mut(ty) {
+    pub fn dec_rec_depth(&mut self, ty: TypeRef) {
+        if let Some(v) = self.rec_depth.get_mut(&ty) {
             *v -= 1;
         } else {
             return;
         }
-        if self.rec_depth[ty] == 0 {
-            self.rec_depth.remove(ty);
+        if self.rec_depth[&ty] == 0 {
+            self.rec_depth.remove(&ty);
         }
     }
 
-    pub fn record_len_to_call_ctx(&mut self, len: (*mut u64, Rc<LenInfo>)) {
+    pub fn record_len_to_call_ctx(&mut self, len: (*mut u64, LenInfo)) {
         self.call_ctx.left_len_vals.push(len);
     }
 

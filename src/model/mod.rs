@@ -8,10 +8,11 @@ pub use value::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
 
 /// System call id.
 pub type SId = usize;
+
+pub type SyscallRef = &'static Syscall;
 
 /// Information related to particular system call.
 #[derive(Debug, Clone)]
@@ -29,42 +30,15 @@ pub struct Syscall {
     /// Parameters of calls.
     pub params: Box<[Param]>,
     /// Return type of system call: a ref to res type or None.
-    pub ret: Option<Rc<Type>>,
+    pub ret: Option<TypeRef>,
     /// Attributes of system call.
     pub attr: SyscallAttr,
     /// Resources consumed by current system call.
     /// Key is resourse type, value is count of that kind of resource .
-    pub input_res: FxHashMap<Rc<Type>, usize>,
+    pub input_res: FxHashMap<TypeRef, usize>,
     /// Resource produced by current system call.
-    /// Key is resourse type, value if count.
-    pub output_res: FxHashMap<Rc<Type>, usize>,
-}
-
-impl Syscall {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: SId,
-        nr: u64,
-        name: &str,
-        call_name: &str,
-        miss_args: u64,
-        params: Vec<Param>,
-        ret: Option<Rc<Type>>,
-        attr: SyscallAttr,
-    ) -> Self {
-        Syscall {
-            id,
-            nr,
-            miss_args,
-            attr,
-            ret,
-            name: to_boxed_str(name),
-            call_name: to_boxed_str(call_name),
-            params: Vec::into_boxed_slice(params),
-            input_res: FxHashMap::default(),
-            output_res: FxHashMap::default(),
-        }
-    }
+    /// Key is resourse type, value is count.
+    pub output_res: FxHashMap<TypeRef, usize>,
 }
 
 pub(crate) fn to_boxed_str<T: AsRef<str>>(s: T) -> Box<str> {
@@ -86,7 +60,7 @@ impl fmt::Display for Syscall {
             }
         }
         write!(f, ")")?;
-        if let Some(ref ret) = self.ret {
+        if let Some(ret) = self.ret {
             write!(f, " -> {}", ret)?;
         }
         Ok(())
@@ -112,12 +86,12 @@ pub struct Param {
     /// Name of Field.
     pub name: Box<str>,
     /// Typeid of Field.
-    pub ty: Rc<Type>,
+    pub ty: TypeRef,
     pub dir: Option<Dir>,
 }
 
 impl Param {
-    pub fn new(name: &str, ty: Rc<Type>, dir: Option<Dir>) -> Self {
+    pub fn new(name: &str, ty: TypeRef, dir: Option<Dir>) -> Self {
         Self {
             name: to_boxed_str(name),
             ty,
@@ -138,9 +112,20 @@ impl fmt::Display for Param {
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
 pub enum Dir {
-    In,
+    In = 0,
     Out,
     InOut,
+}
+
+impl From<u64> for Dir {
+    fn from(val: u64) -> Self {
+        match val {
+            0 => Dir::In,
+            1 => Dir::Out,
+            2 => Dir::InOut,
+            _ => panic!("bad dir value: {}", val),
+        }
+    }
 }
 
 impl fmt::Display for Dir {
@@ -205,7 +190,7 @@ impl fmt::Display for SyscallAttr {
 }
 
 pub struct Prog {
-    pub calls: Vec<Call>, // may be add other analysis data
+    pub calls: Vec<Call>,
 }
 
 impl fmt::Display for Prog {
@@ -228,13 +213,13 @@ impl Prog {
 }
 
 pub struct Call {
-    pub meta: Rc<Syscall>,
+    pub meta: SyscallRef,
     pub args: Vec<Value>,
     pub ret: Option<Value>,
 }
 
 impl Call {
-    pub fn new(meta: Rc<Syscall>, args: Vec<Value>, ret: Option<Value>) -> Self {
+    pub fn new(meta: SyscallRef, args: Vec<Value>, ret: Option<Value>) -> Self {
         Self { meta, args, ret }
     }
 }
@@ -242,7 +227,7 @@ impl Call {
 impl fmt::Display for Call {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ret) = &self.ret {
-            let id = ret.kind.get_res_id().unwrap();
+            let id = ret.res_id().unwrap();
             write!(f, "r{} = ", id)?;
         }
         write!(f, "{}(", self.meta.name)?;

@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 pub(super) fn finish_cal(ctx: &mut GenContext) {
     let left_len_ty = ctx.call_ctx.left_len_vals.split_off(0);
     for (scalar_val_ref, len_info) in left_len_ty {
-        cal_syscall_param_len(ctx, unsafe { scalar_val_ref.as_mut().unwrap() }, len_info)
+        cal_syscall_param_len(ctx, unsafe { scalar_val_ref.as_mut().unwrap() }, &len_info)
     }
 }
 
@@ -19,7 +19,7 @@ pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
 
     match &mut val.kind {
         ValueKind::Scalar(scalar_val_ref) => {
-            if let Some(len_info) = val.ty.get_len_info() {
+            if let Some(len_info) = val.ty.len_info() {
                 try_cal_syscall_param_len(ctx, scalar_val_ref, len_info)
             }
         }
@@ -34,7 +34,7 @@ pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
 }
 
 fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*const Value, &Value>) {
-    let vals = val.kind.get_group_val().unwrap();
+    let vals = val.group_val().unwrap();
     for v in vals {
         let v = if let Some(v) = v.inner_val() {
             v
@@ -42,7 +42,7 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*cons
             continue;
         };
         if let ValueKind::Scalar(scalar_val_ref) = &v.kind {
-            if let Some(len_info) = v.ty.get_len_info() {
+            if let Some(len_info) = v.ty.len_info() {
                 #[allow(mutable_transmutes, clippy::transmute_ptr_to_ptr)]
                 let scalar_val_ref: &mut u64 = unsafe { std::mem::transmute(scalar_val_ref) };
                 if &*len_info.path[0] == "syscall" {
@@ -56,20 +56,16 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*cons
     }
 }
 
-fn cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: Rc<LenInfo>) {
+fn cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
     *scalar_val_ref = try_cal_syscall_param_len_inner(ctx, &*len_info)
         .unwrap_or_else(|| panic!("Failed to calculate length of system param: {:?}", len_info));
 }
 
-fn try_cal_syscall_param_len(
-    ctx: &mut GenContext,
-    scalar_val_ref: &mut u64,
-    len_info: Rc<LenInfo>,
-) {
-    if let Some(val) = try_cal_syscall_param_len_inner(ctx, &*len_info) {
+fn try_cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
+    if let Some(val) = try_cal_syscall_param_len_inner(ctx, len_info) {
         *scalar_val_ref = val;
     } else {
-        ctx.record_len_to_call_ctx((scalar_val_ref as *mut u64, len_info))
+        ctx.record_len_to_call_ctx((scalar_val_ref as *mut u64, len_info.clone()))
     }
 }
 
@@ -135,14 +131,14 @@ fn do_cal<T: std::borrow::Borrow<Value>>(parent: &[T], target: usize, len_info: 
 
         match &v.ty.kind {
             TypeKind::Vma { .. } => {
-                let vma_size = v.kind.get_vma_size().unwrap();
+                let vma_size = v.vma_size().unwrap();
                 vma_size * 8 / bz
             }
             TypeKind::Array { .. } => {
                 if len_info.bit_sz != 0 {
                     v.size() * 8 / bz
                 } else {
-                    v.kind.get_group_val().unwrap().len() as u64
+                    v.group_val().unwrap().len() as u64
                 }
             }
             _ => v.size() * 8 / bz,
@@ -160,7 +156,7 @@ fn cal_struct_field_len(
     if &*path[0] == "parent" {
         path = &path[1..]; // we're already in parent struct.
         if path.is_empty() {
-            let vals = val.kind.get_group_val().unwrap();
+            let vals = val.group_val().unwrap();
             return do_cal(vals, vals.len(), len_info);
         }
     }
@@ -177,7 +173,7 @@ fn cal_struct_field_len(
         if path.len() > 1 {
             cal_struct_field_len(root_struct, &path[1..], len_info, None)
         } else {
-            let vals = root_struct.kind.get_group_val().unwrap();
+            let vals = root_struct.group_val().unwrap();
             do_cal(vals, vals.len(), len_info)
         }
     }
@@ -188,7 +184,7 @@ fn position<'a>(
     parent_map: &'a FxHashMap<*const Value, &Value>,
     path: &[Box<str>],
 ) -> &'a Value {
-    if val.ty.get_template_name() == &*path[0] {
+    if val.ty.template_name() == &*path[0] {
         val
     } else {
         let parent = parent_map.get(&(val as *const Value));
@@ -208,8 +204,8 @@ fn position<'a>(
 }
 
 fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Value]>, usize)> {
-    let vals = val.kind.get_group_val().unwrap();
-    let fields = val.ty.get_fields().unwrap();
+    let vals = val.group_val().unwrap();
+    let fields = val.ty.fields().unwrap();
     let elem = &*path[0];
 
     for (i, val) in vals.iter().enumerate() {
@@ -233,7 +229,7 @@ fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Valu
 fn build_parent_map(val: &Value) -> FxHashMap<*const Value, &Value> {
     let mut parent_map = FxHashMap::default();
     iter_struct_val(val, |v| {
-        let vals = v.kind.get_group_val().unwrap();
+        let vals = v.group_val().unwrap();
         for val in vals {
             let val = if let Some(val) = val.inner_val() {
                 val
@@ -268,9 +264,9 @@ where
             }
         }
         ValueKind::Group(_) => {
-            if val.ty.get_fields().is_some() {
+            if val.ty.fields().is_some() {
                 f(val);
-                let vals = val.kind.get_group_val().unwrap();
+                let vals = val.group_val().unwrap();
                 for v in vals {
                     iter_struct_val_inner(v, f)
                 }

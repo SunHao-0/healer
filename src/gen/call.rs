@@ -1,32 +1,33 @@
 use super::*;
-use crate::model::{Call, Dir, LenInfo, ResValue};
-use std::rc::Rc;
+use crate::model::{Call, Dir, LenInfo, ResValue, Value};
+use std::sync::Arc;
+
 #[allow(clippy::vec_box)]
 #[derive(Default)]
 pub(super) struct GenCallContext {
-    pub(super) generating_syscall: Option<Rc<Syscall>>,
+    pub(super) generating_syscall: Option<SyscallRef>,
     pub(super) generated_params: Vec<Box<Value>>, // This is neccessary.
-    pub(super) left_len_vals: Vec<(*mut u64, Rc<LenInfo>)>,
+    pub(super) left_len_vals: Vec<(*mut u64, LenInfo)>,
 }
 
 /// Generate particular syscall.
-pub(super) fn gen(ctx: &mut GenContext, syscall: Rc<Syscall>) -> Call {
-    ctx.call_ctx.generating_syscall = Some(Rc::clone(&syscall));
+pub(super) fn gen(ctx: &mut GenContext, syscall: SyscallRef) -> Call {
+    ctx.call_ctx.generating_syscall = Some(syscall);
     ctx.call_ctx.generated_params.clear();
     for p in syscall.params.iter() {
-        let value = param::gen(ctx, Rc::clone(&p.ty), p.dir.unwrap_or(Dir::In));
+        let value = param::gen(ctx, p.ty, p.dir.unwrap_or(Dir::In));
         ctx.call_ctx.generated_params.push(value);
     }
 
     let mut ret_value = None;
-    if let Some(ret) = syscall.ret.as_ref() {
-        let res_value = Rc::new(ResValue::new_res(0, ctx.next_id()));
-        ret_value = Some(Value::new_res(
+    if let Some(ret) = syscall.ret {
+        let res_value = Arc::new(ResValue::new_res(0, ctx.next_id()));
+        ret_value = Some(Value::new(
             Dir::Out,
-            Rc::clone(ret),
-            Rc::clone(&res_value),
+            ret,
+            ValueKind::new_res(Arc::clone(&res_value)),
         ));
-        ctx.add_res(Rc::clone(ret), res_value);
+        ctx.add_res(ret, res_value);
     }
 
     // calculate the left length parameters.

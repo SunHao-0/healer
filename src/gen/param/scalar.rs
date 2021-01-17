@@ -42,7 +42,7 @@ const MAGIC64: [u64; 24 * 24] = {
     magic
 };
 
-pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
+pub(super) fn gen(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
     use TypeKind::*;
     let val = match &ty.kind {
         Int {
@@ -63,7 +63,7 @@ pub(super) fn gen(ctx: &mut GenContext, ty: Rc<Type>, dir: Dir) -> Value {
         Const { val, .. } => *val,
         _ => unreachable!(),
     };
-    Value::new_scalar(dir, ty, val)
+    Value::new(dir, ty, ValueKind::new_scalar(val))
 }
 
 /// Generate a random integer value of 'bit' size, in range 'range', with alignment 'align'.
@@ -114,7 +114,7 @@ pub(super) fn gen_flag(pool: Option<&FxHashSet<Value>>, vals: &[u64], bitmask: b
     let extra_vals = || {
         pool.unwrap_or(&empty_set)
             .iter()
-            .map(|v| v.kind.get_scalar_val().unwrap())
+            .map(|v| v.kind.scalar_val().unwrap())
             .chain(MAGIC64.iter().copied())
     };
 

@@ -1,105 +1,22 @@
 //! Abstract representation of value structure of different types.
-use super::types::Type;
+use super::types::TypeRef;
 use super::Dir;
-use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::{fmt, sync::Arc};
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Value {
     /// Direction of value.
     pub dir: Dir,
     /// Original type of value.
-    pub ty: Rc<Type>,
+    pub ty: TypeRef,
     /// Actual value storage.
     pub kind: ValueKind,
 }
 
 impl Value {
-    pub fn new(dir: Dir, ty: Rc<Type>, kind: ValueKind) -> Self {
+    pub fn new(dir: Dir, ty: TypeRef, kind: ValueKind) -> Self {
         Self { dir, ty, kind }
-    }
-
-    pub fn new_scalar(dir: Dir, ty: Rc<Type>, val: u64) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Scalar(val),
-        }
-    }
-
-    pub fn new_ptr(dir: Dir, ty: Rc<Type>, addr: u64, pointee: Option<Value>) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Ptr {
-                addr,
-                pointee: pointee.map(Box::new),
-            },
-        }
-    }
-
-    pub fn new_ptr_null(dir: Dir, ty: Rc<Type>) -> Self {
-        Self::new_ptr(dir, ty, 0, None)
-    }
-
-    pub fn new_vma(dir: Dir, ty: Rc<Type>, addr: u64, size: u64) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Vma { addr, size },
-        }
-    }
-
-    pub fn new_bytes<T: Into<Box<[u8]>>>(dir: Dir, ty: Rc<Type>, vals: T) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Bytes(vals.into()),
-        }
-    }
-
-    pub fn new_group(dir: Dir, ty: Rc<Type>, vals: Vec<Value>) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Group(vals),
-        }
-    }
-
-    pub fn new_union(dir: Dir, ty: Rc<Type>, idx: usize, val: Value) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Union {
-                idx,
-                val: Box::new(val),
-            },
-        }
-    }
-
-    pub fn new_res_ref(dir: Dir, ty: Rc<Type>, src: Rc<ResValue>) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Res(Rc::new(ResValue::new_ref_res(src))),
-        }
-    }
-
-    pub fn new_res(dir: Dir, ty: Rc<Type>, kind: Rc<ResValue>) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Res(kind),
-        }
-    }
-
-    pub fn new_res_null(dir: Dir, ty: Rc<Type>, val: u64) -> Self {
-        Self {
-            dir,
-            ty,
-            kind: ValueKind::Res(Rc::new(ResValue::new_null(val))),
-        }
     }
 
     pub fn inner_val(&self) -> Option<&Value> {
@@ -129,7 +46,7 @@ impl Value {
         }
     }
 
-    pub fn get_scalar_val(&self) -> (u64, u64) {
+    pub fn scalar_val(&self) -> (u64, u64) {
         use super::types::TypeKind;
 
         match &self.ty.kind {
@@ -138,21 +55,74 @@ impl Value {
             | TypeKind::Csum { .. }
             | TypeKind::Res { .. }
             | TypeKind::Const { .. }
-            | TypeKind::Len { .. } => (self.kind.get_scalar_val().unwrap(), 0),
+            | TypeKind::Len { .. } => (self.kind.scalar_val().unwrap(), 0),
             TypeKind::Proc {
                 start, per_proc, ..
-            } => (*start + self.kind.get_scalar_val().unwrap(), *per_proc),
+            } => (*start + self.kind.scalar_val().unwrap(), *per_proc),
             _ => unreachable!(),
         }
     }
 
     pub fn unit_sz(&self) -> u64 {
-        if let Some(int_fmt) = self.ty.get_int_fmt() {
+        if let Some(int_fmt) = self.ty.int_fmt() {
             if int_fmt.bitfield_len != 0 {
                 return int_fmt.bitfield_unit;
             }
         }
         self.size()
+    }
+
+    pub fn vma_size(&self) -> Option<u64> {
+        if let ValueKind::Vma { size, .. } = &self.kind {
+            Some(*size)
+        } else {
+            None
+        }
+    }
+
+    pub fn bytes_val(&self) -> Option<&[u8]> {
+        if let ValueKind::Bytes(v) = &self.kind {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn group_val(&self) -> Option<&[Value]> {
+        if let ValueKind::Group(vals) = &self.kind {
+            Some(vals)
+        } else {
+            None
+        }
+    }
+
+    pub fn group_val_mut(&mut self) -> Option<&mut [Value]> {
+        if let ValueKind::Group(vals) = &mut self.kind {
+            Some(vals)
+        } else {
+            None
+        }
+    }
+
+    pub fn res_id(&self) -> Option<usize> {
+        match &self.kind {
+            ValueKind::Res(e) => e.get_res_id(),
+            _ => None,
+        }
+    }
+
+    pub fn res_rc(&self) -> Option<usize> {
+        match &self.kind {
+            ValueKind::Res(e) => e.get_res_rc(),
+            _ => None,
+        }
+    }
+
+    pub fn res_val(&self) -> Option<&ResValue> {
+        match &self.kind {
+            ValueKind::Res(e) => Some(e),
+            _ => None,
+        }
     }
 
     pub fn size(&self) -> u64 {
@@ -228,7 +198,7 @@ impl fmt::Display for Value {
             }
             ValueKind::Vma { addr, size } => write!(f, "vma=({}, {})", *addr, *size),
             ValueKind::Bytes(val) => {
-                if self.ty.kind.is_str_like() {
+                if self.ty.is_str_like() {
                     write!(f, "\"{}\"", String::from_utf8_lossy(val))
                 } else {
                     write!(f, "{:X?}", val)
@@ -255,7 +225,7 @@ impl fmt::Display for Value {
             ValueKind::Union { val, idx } => write!(
                 f,
                 "union{{{}: {}}}",
-                self.ty.get_fields().unwrap()[*idx].name,
+                self.ty.fields().unwrap()[*idx].name,
                 val
             ),
             ValueKind::Res(r) => write!(f, "{}", r),
@@ -282,70 +252,63 @@ pub enum ValueKind {
     Union { idx: usize, val: Box<Value> },
     /// For resource type, store a flag to indicate whether it is
     /// expected to output resource value or ref previous generated resource value.
-    Res(Rc<ResValue>),
+    Res(Arc<ResValue>),
 }
 
 impl ValueKind {
-    pub fn get_scalar_val(&self) -> Option<u64> {
+    pub fn new_scalar(val: u64) -> Self {
+        ValueKind::Scalar(val)
+    }
+
+    pub fn new_ptr(addr: u64, pointee: Option<Value>) -> Self {
+        ValueKind::Ptr {
+            addr,
+            pointee: pointee.map(Box::new),
+        }
+    }
+
+    pub fn new_ptr_null() -> Self {
+        ValueKind::new_ptr(0, None)
+    }
+
+    pub fn new_vma(addr: u64, size: u64) -> Self {
+        ValueKind::Vma { addr, size }
+    }
+
+    pub fn new_bytes<T: Into<Box<[u8]>>>(vals: T) -> Self {
+        ValueKind::Bytes(vals.into())
+    }
+
+    pub fn new_group(vals: Vec<Value>) -> Self {
+        ValueKind::Group(vals)
+    }
+
+    pub fn new_union(idx: usize, val: Value) -> Self {
+        ValueKind::Union {
+            idx,
+            val: Box::new(val),
+        }
+    }
+
+    pub fn new_res_ref(src: Arc<ResValue>) -> Self {
+        ValueKind::Res(Arc::new(ResValue::new_res_ref(src)))
+    }
+
+    pub fn new_res(kind: Arc<ResValue>) -> Self {
+        ValueKind::Res(kind)
+    }
+
+    pub fn new_res_null(val: u64) -> Self {
+        ValueKind::Res(Arc::new(ResValue::new_null(val)))
+    }
+
+    pub fn scalar_val(&self) -> Option<u64> {
         if let ValueKind::Scalar(val) = self {
             Some(*val)
-        } else if let ValueKind::Res(res) = self {
+        } else if let ValueKind::Res(res) = &self {
             Some(res.val)
         } else {
             None
-        }
-    }
-
-    pub fn get_vma_size(&self) -> Option<u64> {
-        if let ValueKind::Vma { size, .. } = self {
-            Some(*size)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_bytes_val(&self) -> Option<&[u8]> {
-        if let ValueKind::Bytes(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_group_val(&self) -> Option<&[Value]> {
-        if let ValueKind::Group(vals) = self {
-            Some(vals)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_group_val_mut(&mut self) -> Option<&mut [Value]> {
-        if let ValueKind::Group(vals) = self {
-            Some(vals)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_res_id(&self) -> Option<usize> {
-        match &self {
-            ValueKind::Res(e) => e.get_res_id(),
-            _ => None,
-        }
-    }
-
-    pub fn get_res_rc(&self) -> Option<usize> {
-        match &self {
-            ValueKind::Res(e) => e.get_res_rc(),
-            _ => None,
-        }
-    }
-
-    pub fn get_res_val(&self) -> Option<&ResValue> {
-        match &self {
-            ValueKind::Res(e) => Some(e),
-            _ => None,
         }
     }
 }
@@ -369,7 +332,7 @@ impl ResValue {
         }
     }
 
-    pub fn new_ref_res(src: Rc<ResValue>) -> Self {
+    pub fn new_res_ref(src: Arc<ResValue>) -> Self {
         Self {
             val: 0,
             op_add: 0,
@@ -423,7 +386,7 @@ pub enum ResValueKind {
         refs: std::cell::Cell<usize>,
     },
     /// Current syscall ref some other resources outputed by previous calls.
-    Ref { src: Rc<ResValue> },
+    Ref { src: Arc<ResValue> },
     /// Do not own or ref any resource, only contains special value.
     Null,
 }
@@ -438,7 +401,7 @@ impl ResValueKind {
         }
     }
 
-    pub fn new_ref_kind(src: Rc<ResValue>) -> Self {
+    pub fn new_ref_kind(src: Arc<ResValue>) -> Self {
         src.inc_ref_count_uncheck();
         Self::Ref { src }
     }
@@ -466,7 +429,7 @@ impl ResValueKind {
         }
     }
 
-    pub fn get_src(&self) -> Option<&Rc<ResValue>> {
+    pub fn get_src(&self) -> Option<&Arc<ResValue>> {
         if let ResValueKind::Ref { src } = self {
             Some(src)
         } else {

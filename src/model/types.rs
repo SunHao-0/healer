@@ -1,12 +1,12 @@
-//! Abstract representation or AST type information.
-use super::{to_boxed_str, Dir, Syscall};
+use super::{to_boxed_str, Dir, SyscallRef};
 use rustc_hash::FxHashSet;
-use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
+use std::{fmt, ops::Deref};
 
+/// Unique id of each type.
 pub type TypeId = usize;
 
+/// Type information.
 #[derive(Debug)]
 pub struct Type {
     pub id: TypeId,
@@ -19,26 +19,6 @@ pub struct Type {
 }
 
 impl Type {
-    pub fn new(
-        id: TypeId,
-        name: &str,
-        sz: u64,
-        align: u64,
-        optional: bool,
-        varlen: bool,
-        kind: TypeKind,
-    ) -> Self {
-        Self {
-            id,
-            sz,
-            align,
-            optional,
-            varlen,
-            kind,
-            name: to_boxed_str(name),
-        }
-    }
-
     pub fn is_res_kind(&self) -> bool {
         matches!(&self.kind, TypeKind::Res { .. })
     }
@@ -57,43 +37,42 @@ impl Type {
         }
     }
 
-    pub fn get_buffer_kind(&self) -> Option<&BufferKind> {
+    pub fn buffer_kind(&self) -> Option<&BufferKind> {
         match &self.kind {
             TypeKind::Buffer { kind, .. } => Some(kind),
             _ => None,
         }
     }
 
-    pub fn get_ptr_info(&self) -> Option<(&Rc<Type>, Dir)> {
+    pub fn ptr_info(&self) -> Option<(TypeRef, Dir)> {
         match &self.kind {
-            TypeKind::Ptr { elem, dir } => Some((elem.as_ref().unwrap(), *dir)),
+            TypeKind::Ptr { elem, dir } => Some((*elem, *dir)),
             _ => None,
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn get_array_info(&self) -> Option<(&Rc<Type>, Option<(u64, u64)>)> {
+    pub fn array_info(&self) -> Option<(TypeRef, Option<(u64, u64)>)> {
         match &self.kind {
-            TypeKind::Array { elem, range } => Some((elem.as_ref().unwrap(), *range)),
+            TypeKind::Array { elem, range } => Some((*elem, *range)),
             _ => None,
         }
     }
 
-    pub fn get_fields(&self) -> Option<&[Field]> {
+    pub fn fields(&self) -> Option<&[Field]> {
         match &self.kind {
             TypeKind::Struct { fields, .. } | TypeKind::Union { fields } => Some(fields),
             _ => None,
         }
     }
 
-    pub fn get_len_info(&self) -> Option<Rc<LenInfo>> {
+    pub fn len_info(&self) -> Option<&LenInfo> {
         match &self.kind {
-            TypeKind::Len { len_info, .. } => Some(Rc::clone(len_info)),
+            TypeKind::Len { len_info, .. } => Some(len_info),
             _ => None,
         }
     }
 
-    pub fn get_template_name(&self) -> &str {
+    pub fn template_name(&self) -> &str {
         let name = &*self.name;
         if let Some(idx) = name.find('[') {
             &name[0..idx]
@@ -102,7 +81,7 @@ impl Type {
         }
     }
 
-    pub fn get_int_fmt(&self) -> Option<&IntFmt> {
+    pub fn int_fmt(&self) -> Option<&IntFmt> {
         match &self.kind {
             TypeKind::Int { int_fmt, .. }
             | TypeKind::Flags { int_fmt, .. }
@@ -115,7 +94,7 @@ impl Type {
     }
 
     pub fn bf_offset(&self) -> u64 {
-        if let Some(int_fmt) = self.get_int_fmt() {
+        if let Some(int_fmt) = self.int_fmt() {
             int_fmt.bitfield_off
         } else {
             0
@@ -123,7 +102,7 @@ impl Type {
     }
 
     pub fn bf_len(&self) -> u64 {
-        if let Some(int_fmt) = self.get_int_fmt() {
+        if let Some(int_fmt) = self.int_fmt() {
             int_fmt.bitfield_len
         } else {
             0
@@ -144,7 +123,7 @@ impl Type {
     }
 
     pub fn unit_offset(&self) -> u64 {
-        if let Some(int_fmt) = self.get_int_fmt() {
+        if let Some(int_fmt) = self.int_fmt() {
             int_fmt.bitfield_unit_off
         } else {
             0
@@ -152,7 +131,7 @@ impl Type {
     }
 
     pub fn is_bitfield(&self) -> bool {
-        if let Some(int_fmt) = self.get_int_fmt() {
+        if let Some(int_fmt) = self.int_fmt() {
             int_fmt.bitfield_len != 0
         } else {
             false
@@ -171,6 +150,14 @@ impl Type {
     pub fn is_pad(&self) -> bool {
         if let TypeKind::Const { pad, .. } = &self.kind {
             *pad
+        } else {
+            false
+        }
+    }
+
+    pub fn is_str_like(&self) -> bool {
+        if let TypeKind::Buffer { kind, .. } = &self.kind {
+            matches!(kind, BufferKind::Filename { .. } | BufferKind::String { .. })
         } else {
             false
         }
@@ -208,32 +195,36 @@ impl Hash for Type {
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO display more information.
         write!(f, "{}", self.name)
     }
 }
 
 /// Ref of another type.
 /// Id ref is only used during constructing target.
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Copy, Hash)]
 pub enum TypeRef {
-    /// Temporary ref representation for convenience.
+    /// Temporary ref representation for convenience, used only during parsing json representation.
     Id(TypeId),
     /// Share ref.
-    Ref(Rc<Type>),
+    Ref(&'static Type),
 }
 
-impl TypeRef {
-    pub fn as_id(&self) -> Option<TypeId> {
+impl Deref for TypeRef {
+    type Target = Type;
+    fn deref(&self) -> &Type {
         match self {
-            Self::Id(tid) => Some(*tid),
-            Self::Ref(_) => None,
+            TypeRef::Ref(ty) => ty,
+            _ => panic!("typeref was derefed, while owning typeid"),
         }
     }
+}
 
-    pub fn as_ref(&self) -> Option<&Rc<Type>> {
-        match &self {
-            Self::Id(_) => None,
-            Self::Ref(ty) => Some(ty),
+impl fmt::Display for TypeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeRef::Ref(ty) => write!(f, "{}", ty),
+            _ => panic!("typeref was derefed, while owning typeid"),
         }
     }
 }
@@ -241,18 +232,15 @@ impl TypeRef {
 /// Type kind.
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum TypeKind {
-    /// Resource kind.
     Res {
         fmt: BinFmt,
         desc: ResDesc,
     },
-    /// Const kind.
     Const {
         int_fmt: IntFmt,
         val: u64,
         pad: bool,
     },
-    /// Integer kind.
     Int {
         int_fmt: IntFmt,
         range: Option<(u64, u64)>,
@@ -265,7 +253,7 @@ pub enum TypeKind {
     },
     Len {
         int_fmt: IntFmt,
-        len_info: Rc<LenInfo>,
+        len_info: LenInfo,
     },
     Proc {
         int_fmt: IntFmt,
@@ -307,13 +295,58 @@ pub enum TypeKind {
 pub struct Field {
     /// Name of Field.
     pub name: Box<str>,
-    /// Typeid of Field.
+    /// TypeRef of Field.
     pub ty: TypeRef,
     /// Direction of field.
     pub dir: Option<Dir>,
 }
 
 impl TypeKind {
+    pub fn new_res(fmt: BinFmt, desc: ResDesc) -> Self {
+        TypeKind::Res { fmt, desc }
+    }
+
+    pub fn new_const(int_fmt: IntFmt, val: u64, pad: bool) -> Self {
+        TypeKind::Const { int_fmt, val, pad }
+    }
+
+    pub fn new_int(int_fmt: IntFmt, range: Option<(u64, u64)>, align: u64) -> Self {
+        TypeKind::Int {
+            int_fmt,
+            range,
+            align,
+        }
+    }
+
+    pub fn new_len(int_fmt: IntFmt, len_info: LenInfo) -> Self {
+        TypeKind::Len { int_fmt, len_info }
+    }
+
+    pub fn new_flags(int_fmt: IntFmt, vals: Vec<u64>, bitmask: bool) -> Self {
+        TypeKind::Flags {
+            int_fmt,
+            vals: vals.into_boxed_slice(),
+            bitmask,
+        }
+    }
+
+    pub fn new_csum(int_fmt: IntFmt, kind: CsumKind, buf: Option<&str>, proto: u64) -> Self {
+        TypeKind::Csum {
+            int_fmt,
+            kind,
+            buf: buf.map(to_boxed_str),
+            protocol: proto,
+        }
+    }
+
+    pub fn new_proc(int_fmt: IntFmt, start: u64, per_proc: u64) -> Self {
+        TypeKind::Proc {
+            int_fmt,
+            start,
+            per_proc,
+        }
+    }
+
     pub fn new_buffer(kind: BufferKind, subkind: &str) -> Self {
         TypeKind::Buffer {
             kind,
@@ -324,6 +357,25 @@ impl TypeKind {
             },
         }
     }
+
+    pub fn new_vma(begin: u64, end: u64) -> Self {
+        TypeKind::Vma { begin, end }
+    }
+
+    pub fn new_ptr(elem: TypeId, dir: Dir) -> Self {
+        TypeKind::Ptr {
+            elem: TypeRef::Id(elem),
+            dir,
+        }
+    }
+
+    pub fn new_array(elem: TypeId, range: Option<(u64, u64)>) -> Self {
+        TypeKind::Array {
+            range,
+            elem: TypeRef::Id(elem),
+        }
+    }
+
     pub fn new_struct(align: u64, fields: Vec<Field>) -> Self {
         TypeKind::Struct {
             fields: fields.into_boxed_slice(),
@@ -337,50 +389,14 @@ impl TypeKind {
         }
     }
 
-    pub fn new_len(int_fmt: IntFmt, bit_sz: u64, offset: bool, path: Vec<&str>) -> Self {
-        let path = path.iter().map(to_boxed_str).collect::<Vec<_>>();
-        TypeKind::Len {
-            int_fmt,
-            len_info: Rc::new(LenInfo {
-                bit_sz,
-                offset,
-                path: path.into_boxed_slice(),
-            }),
-        }
-    }
-
-    pub fn new_csum(int_fmt: IntFmt, kind: CsumKind, buf: Option<&str>, proto: u64) -> Self {
-        TypeKind::Csum {
-            int_fmt,
-            kind,
-            buf: buf.map(to_boxed_str),
-            protocol: proto,
-        }
-    }
-
-    pub fn new_flags(int_fmt: IntFmt, vals: Vec<u64>, bitmask: bool) -> Self {
-        TypeKind::Flags {
-            int_fmt,
-            vals: vals.into_boxed_slice(),
-            bitmask,
-        }
-    }
-
-    pub fn void() -> Self {
+    pub fn new_void() -> Self {
         Self::Buffer {
             kind: BufferKind::BlobRange(0, 0),
             subkind: None,
         }
     }
-
-    pub fn is_str_like(&self) -> bool {
-        if let TypeKind::Buffer { kind, .. } = self {
-            matches!(kind, BufferKind::Filename { .. } | BufferKind::String { .. })
-        } else {
-            false
-        }
-    }
 }
+
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct LenInfo {
     pub bit_sz: u64,
@@ -388,6 +404,20 @@ pub struct LenInfo {
     pub path: Box<[Box<str>]>,
 }
 
+impl LenInfo {
+    pub fn new(bit_sz: u64, offset: bool, path: Vec<&str>) -> Self {
+        let path = path
+            .into_iter()
+            .map(|p| String::from(p).into_boxed_str())
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        LenInfo {
+            bit_sz,
+            offset,
+            path,
+        }
+    }
+}
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct ResDesc {
     /// Name of resource.
@@ -397,11 +427,11 @@ pub struct ResDesc {
     /// Special value for current resource.
     pub vals: Box<[u64]>,
     /// Underlying type, None value for default u64.
-    pub ty: Option<Rc<Type>>,
+    pub ty: Option<TypeRef>,
     /// Possible constructors.
-    pub ctors: FxHashSet<Rc<Syscall>>,
+    pub ctors: FxHashSet<SyscallRef>,
     /// Possible consumers.
-    pub consumers: FxHashSet<Rc<Syscall>>,
+    pub consumers: FxHashSet<SyscallRef>,
 }
 
 impl ResDesc {
@@ -425,6 +455,19 @@ pub enum BinFmt {
     StrDec,
     StrHex,
     StrOct,
+}
+
+impl From<u64> for BinFmt {
+    fn from(val: u64) -> Self {
+        match val {
+            0 => BinFmt::Native,
+            1 => BinFmt::BigEndian,
+            2 => BinFmt::StrDec,
+            3 => BinFmt::StrHex,
+            4 => BinFmt::StrOct,
+            _ => panic!("bad bin fmt value: {}", val),
+        }
+    }
 }
 
 impl fmt::Display for BinFmt {
@@ -452,8 +495,18 @@ pub struct IntFmt {
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
 pub enum CsumKind {
-    Inet,
+    Inet = 0,
     Pseudo,
+}
+
+impl From<u64> for CsumKind {
+    fn from(val: u64) -> Self {
+        match val {
+            0 => CsumKind::Inet,
+            1 => CsumKind::Pseudo,
+            _ => panic!("bad csumkind: {}", val),
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
@@ -466,6 +519,14 @@ pub enum BufferKind {
 }
 
 impl BufferKind {
+    pub fn new_blob(range: Option<(u64, u64)>) -> Self {
+        if let Some(range) = range {
+            BufferKind::BlobRange(range.0, range.1)
+        } else {
+            BufferKind::BlobRand
+        }
+    }
+
     pub fn new_str(vals: Vec<&[u8]>, noz: bool) -> Self {
         let vals = vals
             .iter()
@@ -476,6 +537,7 @@ impl BufferKind {
             noz,
         }
     }
+
     pub fn new_fname(vals: Vec<&str>, noz: bool) -> Self {
         let vals = vals
             .iter()
@@ -486,15 +548,34 @@ impl BufferKind {
             noz,
         }
     }
+
+    pub fn new_text(kind: TextKind) -> Self {
+        BufferKind::Text(kind)
+    }
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
 pub enum TextKind {
-    Target,
+    Target = 0,
     X86Real,
     X86bit16,
     X86bit32,
     X86bit64,
     Arm64,
     Ppc64,
+}
+
+impl From<u64> for TextKind {
+    fn from(val: u64) -> Self {
+        match val {
+            0 => TextKind::Target,
+            1 => TextKind::X86Real,
+            2 => TextKind::X86bit16,
+            3 => TextKind::X86bit32,
+            4 => TextKind::X86bit64,
+            5 => TextKind::Arm64,
+            6 => TextKind::Ppc64,
+            _ => panic!("bad text kind: {}", val),
+        }
+    }
 }

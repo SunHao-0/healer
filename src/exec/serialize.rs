@@ -96,15 +96,13 @@ impl ExecCtx<'_, '_> {
         // ignore write csum for now.
         self.write_u64(c.meta.id as u64);
         if let Some(ret) = c.ret.as_ref() {
-            if ret.kind.get_res_rc().unwrap() != 0 {
+            if ret.res_rc().unwrap() != 0 {
                 assert!(!self
                     .res_args
-                    .contains_key(&(ret.kind.get_res_val().unwrap() as *const _)));
+                    .contains_key(&(ret.res_val().unwrap() as *const _)));
                 let idx = self.next_copyout_seq();
-                self.res_args.insert(
-                    ret.kind.get_res_val().unwrap() as *const _,
-                    ArgInfo::with_ret(idx),
-                );
+                self.res_args
+                    .insert(ret.res_val().unwrap() as *const _, ArgInfo::with_ret(idx));
                 self.write_u64(idx);
             } else {
                 self.write_u64(EXEC_NO_COPYOUT);
@@ -126,7 +124,7 @@ impl ExecCtx<'_, '_> {
                 val_addr -= arg.ty.unit_offset();
                 if self.will_be_used(arg) {
                     self.res_args.insert(
-                        arg.kind.get_res_val().unwrap() as *const _,
+                        arg.res_val().unwrap() as *const _,
                         ArgInfo::with_addr(val_addr),
                     );
                 }
@@ -148,9 +146,9 @@ impl ExecCtx<'_, '_> {
 
     fn write_copyout(&mut self, c: &Call) {
         iter_call_args(c, |arg, _| {
-            if let Some(res_rc) = arg.kind.get_res_rc() {
+            if let Some(res_rc) = arg.res_rc() {
                 if res_rc != 0 {
-                    let res_val = arg.kind.get_res_val().unwrap();
+                    let res_val = arg.res_val().unwrap();
                     let mut info = self.res_args.get(&(res_val as *const _)).unwrap().clone();
                     if info.ret {
                         return;
@@ -170,7 +168,7 @@ impl ExecCtx<'_, '_> {
     fn write_arg(&mut self, val: &Value) {
         match &val.kind {
             ValueKind::Scalar(_) => {
-                let (scalar_val, pid_stride) = val.get_scalar_val();
+                let (scalar_val, pid_stride) = val.scalar_val();
                 self.write_const_arg(
                     val.unit_sz(),
                     scalar_val,
@@ -182,7 +180,7 @@ impl ExecCtx<'_, '_> {
             }
             ValueKind::Res(res_val) => match &res_val.kind {
                 ResValueKind::Own { .. } | ResValueKind::Null => {
-                    let (scalar_val, _) = val.get_scalar_val();
+                    let (scalar_val, _) = val.scalar_val();
                     self.write_const_arg(val.size(), scalar_val, 0, 0, 0, val.ty.bin_fmt());
                 }
                 ResValueKind::Ref { src } => {
@@ -264,7 +262,7 @@ impl ExecCtx<'_, '_> {
 
     fn will_be_used(&self, arg: &Value) -> bool {
         // ignore csum type for now
-        if let Some(res_rc) = arg.kind.get_res_rc() {
+        if let Some(res_rc) = arg.res_rc() {
             res_rc != 0
         } else {
             false

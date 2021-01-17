@@ -1,15 +1,14 @@
 use super::{scalar::*, *};
-use crate::model::{BufferKind, Dir, TextKind, Type, Value};
+use crate::model::{BufferKind, Dir, TextKind, Value};
 use rustc_hash::FxHashSet;
 use std::iter::Iterator;
-use std::rc::Rc;
 
 pub(super) fn gen(
     ctx: &mut GenContext,
-    ty: Rc<Type>,
+    ty: TypeRef,
     dir: Dir, /*For now, just ignore dir.*/
 ) -> Value {
-    let val = match ty.get_buffer_kind().unwrap() {
+    let val = match ty.buffer_kind().unwrap() {
         BufferKind::BlobRand => gen_blob(ctx.pool.get(&ty), None),
         BufferKind::BlobRange(min, max) => gen_blob(ctx.pool.get(&ty), Some((*min, *max))),
         BufferKind::Filename { vals, noz } => {
@@ -19,7 +18,7 @@ pub(super) fn gen(
                 &vals[..],
                 *noz,
             );
-            ctx.add_str(Rc::clone(&ty), fname.clone());
+            ctx.add_str(ty, fname.clone());
             fname
         }
         BufferKind::String { vals, noz } => {
@@ -29,12 +28,12 @@ pub(super) fn gen(
                 &vals[..],
                 *noz,
             );
-            ctx.add_str(Rc::clone(&ty), new_str.clone());
+            ctx.add_str(ty, new_str.clone());
             new_str
         }
         BufferKind::Text(kind) => gen_text(kind),
     };
-    Value::new_bytes(dir, ty, val)
+    Value::new(dir, ty, ValueKind::new_bytes(val))
 }
 
 fn gen_fname(
@@ -167,7 +166,7 @@ fn try_reuse(
             .unwrap()
             .iter()
             .choose(&mut rng)
-            .map(|x| Vec::from(x.kind.get_bytes_val().unwrap()))
+            .map(|x| Vec::from(x.bytes_val().unwrap()))
     };
     val
 }
@@ -203,7 +202,7 @@ fn mutate_exist_blob(pool: Option<&FxHashSet<Value>>, (min, max): (usize, usize)
             let mut src = pool
                 .iter()
                 .choose(&mut thread_rng())
-                .map(|v| Vec::from(v.kind.get_bytes_val().unwrap()))
+                .map(|v| Vec::from(v.bytes_val().unwrap()))
                 .unwrap();
             if src.is_empty() {
                 return rand_blob_range((min, max));
@@ -229,7 +228,7 @@ fn mutate_blob(src: &mut Vec<u8>, pool: Option<&FxHashSet<Value>>, (min, max): (
             let oth = pool
                 .iter()
                 .choose(&mut rng)
-                .map(|v| v.kind.get_bytes_val().unwrap())
+                .map(|v| v.bytes_val().unwrap())
                 .unwrap();
             splice(src, oth);
         }
