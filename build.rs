@@ -127,8 +127,8 @@ fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
 
 fn build_syz(syz_dir: PathBuf) -> PathBuf {
     if !syz_dir.join("bin").exists() {
-        let patch_file = syz_dir.join("sysgen.patch");
-        copy("./sysgen.patch", &patch_file).unwrap_or_else(|e| {
+        let patch_file = syz_dir.join("sysgen.diff");
+        copy("./sysgen.diff", &patch_file).unwrap_or_else(|e| {
             eprintln!("failed to copy sysgen.patch: {}", e);
             exit(1)
         });
