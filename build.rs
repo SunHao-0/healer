@@ -1,15 +1,43 @@
 use std::{
     env,
-    fs::{copy, create_dir, read_dir, File},
+    fs::{copy, create_dir, read_dir, remove_file, File},
     io::ErrorKind,
     path::{Path, PathBuf},
     process::{exit, Command},
 };
 
 fn main() {
+    check_env();
     let syz_dir = download();
     let sys_dir = build_syz(syz_dir);
     copy_sys(sys_dir)
+}
+
+fn check_env() {
+    if cfg!(target_os = "windows") {
+        eprintln!("Sorry, Healer does not support the Windows platform yet");
+        exit(1);
+    }
+
+    const TOOLS: [(&str, &str); 5] = [
+        ("wget", "download syzkaller"),
+        ("sha384sum", "check download"),
+        ("unzip", "unzip syzkaller.zip"),
+        ("patch", "patch sysgen.patch"),
+        ("make", "build the syzkaller description and executor"),
+    ];
+    let mut missing = false;
+    for (tool, reason) in TOOLS.iter().copied() {
+        let status = Command::new("which").arg(tool).status().unwrap();
+        if !status.success() {
+            eprintln!("missing tool {} to {}.", tool, reason);
+            missing = true;
+        }
+    }
+    if missing {
+        eprintln!("missing tools, please install them first");
+        exit(1)
+    }
 }
 
 fn download() -> PathBuf {
@@ -19,6 +47,16 @@ fn download() -> PathBuf {
         SYZ_REVISION
     );
     let syz_zip = PathBuf::from("target/syzkaller.zip");
+    if syz_zip.exists() && !check_download(&syz_zip) {
+        remove_file(&syz_zip).unwrap_or_else(|e| {
+            eprintln!(
+                "failed to removed broken file({}): {}",
+                syz_zip.display(),
+                e
+            );
+            exit(1);
+        })
+    }
     if !syz_zip.exists() {
         println!("downloading syzkaller...");
         let wget = Command::new("wget")
@@ -37,6 +75,10 @@ fn download() -> PathBuf {
                 repo_url, stderr
             );
             exit(1);
+        }
+        if !check_download(&syz_zip) {
+            eprintln!("downloaded file {} was broken", syz_zip.display());
+            exit(1)
         }
         println!("cargo:rerun-if-changed=target/syzkaller.zip");
     }
@@ -64,6 +106,23 @@ fn download() -> PathBuf {
     }
     println!("cargo:rerun-if-changed={}", syz_dir.display());
     syz_dir
+}
+
+fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
+    const CKSUM: &str = "f43be1b85f16e11efda469eaef0686ffb00be1ea75bb6ad2603456b572b6703cb8bbf5093ba8b2a1d935c53c485b188d";
+    let output = Command::new("sha384sum")
+        .arg(syz_zip.as_ref())
+        .output()
+        .unwrap();
+    if !output.status.success() {
+        let stderr = String::from_utf8(output.stderr).unwrap_or_default();
+        eprintln!("sha384sum failed: {}", stderr);
+        exit(1)
+    } else {
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let cksum = stdout.split(" ").next().unwrap();
+        cksum.trim() == CKSUM
+    }
 }
 
 fn build_syz(syz_dir: PathBuf) -> PathBuf {
