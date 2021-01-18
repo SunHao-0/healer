@@ -7,9 +7,17 @@ use std::{
 };
 
 fn main() {
-    check_env();
-    let syz_dir = download();
-    let sys_dir = build_syz(syz_dir);
+    let sys_dir = if !env::var("SKIP_SYZ_BUILD").is_ok() {
+        check_env();
+        let syz_dir = download();
+        build_syz(syz_dir)
+    } else {
+        if let Ok(syz_dir) = env::var("SYZ_SYS_DIR") {
+            PathBuf::from(syz_dir)
+        } else {
+            PathBuf::from("target/syzkaller/sys/json")
+        }
+    };
     copy_sys(sys_dir)
 }
 
@@ -19,12 +27,13 @@ fn check_env() {
         exit(1);
     }
 
-    const TOOLS: [(&str, &str); 5] = [
+    const TOOLS: [(&str, &str); 6] = [
         ("wget", "download syzkaller"),
         ("sha384sum", "check download"),
         ("unzip", "unzip syzkaller.zip"),
         ("patch", "patch sysgen.patch"),
         ("make", "build the syzkaller description and executor"),
+        ("go", "build the syzkaller")
     ];
     let mut missing = false;
     for (tool, reason) in TOOLS.iter().copied() {
