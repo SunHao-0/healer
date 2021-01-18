@@ -16,7 +16,6 @@ iota = "0.2"            # for constant calculation.
 shared_memory = "0.11"  # for qemu ivshmem.
 json = "0.12"           # for syz description parsing.
 thiserror = "1.0"       # for error hanlding.
-affinity = "0.1"        # for cpu affinity.
 
 [dev-dependencies]  
 criterion = "0.3"

@@ -46,8 +46,6 @@ pub fn main() {
         ..Default::default()
     };
 
-    let cpu_id: usize = args[4].parse().unwrap();
-
     println!("[+] Booting");
     let now = Instant::now();
     let mut handle = spawn_in_qemu(exec_conf, qemu_conf, ssh_conf, 1).unwrap_or_else(|e| {
@@ -55,11 +53,6 @@ pub fn main() {
         exit(1);
     });
     println!("[+] Boot finished, cost {}s", now.elapsed().as_secs());
-
-    if let Err(e) = affinity::set_thread_affinity(&[cpu_id]) {
-        eprintln!("[-] Failed to bind to cpu-{}: {}", cpu_id, e);
-    }
-    println!("[+] Bind to cpu-{}", cpu_id);
 
     let workdir = build_workdir();
     let exec_opt = ExecOpt::default();
