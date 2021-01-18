@@ -136,7 +136,7 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
         let patch = Command::new("patch")
             .current_dir(syz_dir.to_str().unwrap())
             .arg("-p1")
-            .stdin(File::open("sysgen.patch").unwrap())
+            .stdin(File::open("sysgen.sys").unwrap())
             .output()
             .unwrap_or_else(|e| {
                 eprintln!("failed to spawn git: {}", e);
