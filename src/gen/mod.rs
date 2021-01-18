@@ -108,7 +108,7 @@ impl<'a, 'b> GenContext<'a, 'b> {
         self.param_ctx.len_type_count != 0
     }
 
-    pub fn get_generating_syscall(&self) -> Option<&Syscall> {
+    pub fn generating_syscall(&self) -> Option<&Syscall> {
         self.call_ctx.generating_syscall.as_deref()
     }
 }

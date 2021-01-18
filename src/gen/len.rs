@@ -71,9 +71,9 @@ fn try_cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len
 
 fn try_cal_syscall_param_len_inner(ctx: &mut GenContext, len_info: &LenInfo) -> Option<u64> {
     assert!(len_info.path.len() >= 1);
-    assert!(ctx.get_generating_syscall().is_some());
+    assert!(ctx.generating_syscall().is_some());
 
-    let generating_syscall = ctx.get_generating_syscall().unwrap(); // We're generating a syscall.
+    let generating_syscall = ctx.generating_syscall().unwrap(); // We're generating a syscall.
     let generated_params_val = &ctx.call_ctx.generated_params;
     if generated_params_val.is_empty() {
         return None;

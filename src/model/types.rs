@@ -224,7 +224,7 @@ impl fmt::Display for TypeRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TypeRef::Ref(ty) => write!(f, "{}", ty),
-            _ => panic!("typeref was derefed, while owning typeid"),
+            TypeRef::Id(id) => write!(f, "id({})", id),
         }
     }
 }

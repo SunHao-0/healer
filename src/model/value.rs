@@ -106,14 +106,14 @@ impl Value {
 
     pub fn res_id(&self) -> Option<usize> {
         match &self.kind {
-            ValueKind::Res(e) => e.get_res_id(),
+            ValueKind::Res(e) => e.res_id(),
             _ => None,
         }
     }
 
     pub fn res_rc(&self) -> Option<usize> {
         match &self.kind {
-            ValueKind::Res(e) => e.get_res_rc(),
+            ValueKind::Res(e) => e.res_rc(),
             _ => None,
         }
     }
@@ -350,16 +350,12 @@ impl ResValue {
         }
     }
 
-    pub fn inc_ref_count_uncheck(&self) {
-        self.kind.inc_ref_count_uncheck();
+    pub fn res_id(&self) -> Option<usize> {
+        self.kind.id()
     }
 
-    pub fn get_res_id(&self) -> Option<usize> {
-        self.kind.get_id()
-    }
-
-    pub fn get_res_rc(&self) -> Option<usize> {
-        self.kind.get_rc()
+    pub fn res_rc(&self) -> Option<usize> {
+        self.kind.rc()
     }
 }
 
@@ -367,7 +363,7 @@ impl fmt::Display for ResValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
             ResValueKind::Own { id, .. } => write!(f, "r{}(out)", *id),
-            ResValueKind::Ref { src } => write!(f, "r{}", src.get_res_id().unwrap()),
+            ResValueKind::Ref { src } => write!(f, "r{}", src.res_id().unwrap()),
             ResValueKind::Null => write!(f, "{:#X}(null)", self.val),
         }
     }
@@ -392,7 +388,7 @@ pub enum ResValueKind {
 }
 
 impl ResValueKind {
-    pub fn inc_ref_count_uncheck(&self) {
+    fn inc_rc_uncheck(&self) {
         if let ResValueKind::Own { refs, .. } = self {
             let count = refs.get() + 1;
             refs.set(count);
@@ -402,7 +398,7 @@ impl ResValueKind {
     }
 
     pub fn new_ref_kind(src: Arc<ResValue>) -> Self {
-        src.inc_ref_count_uncheck();
+        src.kind.inc_rc_uncheck();
         Self::Ref { src }
     }
 
@@ -413,7 +409,7 @@ impl ResValueKind {
         }
     }
 
-    pub fn get_id(&self) -> Option<usize> {
+    pub fn id(&self) -> Option<usize> {
         if let ResValueKind::Own { id, .. } = self {
             Some(*id)
         } else {
@@ -421,7 +417,7 @@ impl ResValueKind {
         }
     }
 
-    pub fn get_rc(&self) -> Option<usize> {
+    pub fn rc(&self) -> Option<usize> {
         if let ResValueKind::Own { refs, .. } = self {
             Some(refs.get())
         } else {
@@ -429,7 +425,7 @@ impl ResValueKind {
         }
     }
 
-    pub fn get_src(&self) -> Option<&Arc<ResValue>> {
+    pub fn src(&self) -> Option<&Arc<ResValue>> {
         if let ResValueKind::Ref { src } = self {
             Some(src)
         } else {
@@ -460,14 +456,14 @@ impl Hash for ResValueKind {
 
 impl PartialEq for ResValueKind {
     fn eq(&self, other: &ResValueKind) -> bool {
-        if let Some(id0) = self.get_id() {
-            if let Some(id1) = other.get_id() {
+        if let Some(id0) = self.id() {
+            if let Some(id1) = other.id() {
                 id0 == id1
             } else {
                 false
             }
-        } else if let Some(src0) = self.get_src() {
-            if let Some(src1) = other.get_src() {
+        } else if let Some(src0) = self.src() {
+            if let Some(src1) = other.src() {
                 src0.eq(src1)
             } else {
                 false
