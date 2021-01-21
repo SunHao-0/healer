@@ -1,7 +1,5 @@
-// Temporary
-#![allow(unused_variables)]
-#![allow(dead_code)]
-#![allow(unreachable_code)]
+#[macro_use]
+extern crate lazy_static;
 
 pub mod exec;
 pub mod fuzz;

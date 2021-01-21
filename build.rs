@@ -33,7 +33,7 @@ fn check_env() {
         ("unzip", "unzip syzkaller.zip"),
         ("patch", "patch sysgen.patch"),
         ("make", "build the syzkaller description and executor"),
-        ("go", "build the syzkaller")
+        ("go", "build the syzkaller"),
     ];
     let mut missing = false;
     for (tool, reason) in TOOLS.iter().copied() {

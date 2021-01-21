@@ -2,45 +2,6 @@ use crate::model::{Dir, Syscall, SyscallRef, TypeId, TypeRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 
-pub const AKAROS_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/akaros", "/amd64.json"));
-
-pub const FREEBSD_386: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/freebsd", "/386.json"));
-pub const FREEBSD_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/freebsd", "/amd64.json"));
-
-pub const FUCHISA_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/fuchsia", "/amd64.json"));
-pub const FUCHISA_ARM64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/fuchsia", "/arm64.json"));
-
-pub const NETBSD_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/netbsd", "/amd64.json"));
-
-pub const OPENBSD_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/openbsd", "/amd64.json"));
-
-pub const TRUSTY_ARM: &str = include_str!(concat!(env!("OUT_DIR"), "/sys", "/trusty", "/arm.json"));
-
-pub const WINDOWS_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/windows", "/amd64.json"));
-
-pub const LINUX_AMD64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/amd64.json"));
-pub const LINUX_386: &str = include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/386.json"));
-pub const LINUX_ARM: &str = include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/arm.json"));
-pub const LINUX_ARM64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/arm64.json"));
-pub const LINUX_MIPS64LE: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/mips64le.json"));
-pub const LINUX_PPC64LE: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/ppc64le.json"));
-pub const LINUX_RISCV64: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/riscv64.json"));
-pub const LINUX_S390X: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/sys", "/linux", "/s390x.json"));
-
 /// Target maintain all information related to current test target.
 pub struct Target {
     pub os: Box<str>,
