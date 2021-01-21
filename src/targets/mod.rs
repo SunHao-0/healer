@@ -1,253 +1,116 @@
-use crate::model::{Dir, Syscall, SyscallRef, TypeId, TypeRef};
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::rc::Rc;
+use crate::{
+    model::{SyscallRef, TypeRef},
+    utils::to_boxed_str,
+};
+use rustc_hash::FxHashMap;
 
-/// Target maintain all information related to current test target.
+/// Syscall desciptions in json format of Syzkaller.
+pub mod sys_json;
+/// Parse syscalls json to ast, maintain internal static data.
+mod syscalls;
+
+/// Information of current test target.
 pub struct Target {
+    /// Name of target os.
     pub os: Box<str>,
+    /// Target arch.
     pub arch: Box<str>,
+    /// Revision of syscall description.
     pub revision: Box<str>,
+    /// Ptr size of target arch.
     pub ptr_sz: u64,
+    /// Page size of target os.
     pub page_sz: u64,
+    /// Page number of target os.
     pub page_num: u64,
+    /// Data offset of syz-executor.
     pub data_offset: u64,
+    /// Endian of target arch.
     pub le_endian: bool,
+    /// Use shared memory or not of syz-executor for current target.
+    pub syz_exec_use_shm: bool,
+    /// Use fork server or not of syz-executor for current target.
+    pub syz_exec_use_forksrv: bool,
+    /// Name of syz-executor binaray on target os.
+    /// Equals to `Some`, when the target image already contains syz-executor.  
+    pub syz_exec_bin: Option<Box<str>>,
 
-    /// All syscalls, order is important.
-    pub syscalls: Vec<SyscallRef>,
-    /// All type of syscalls, order is important.
-    pub tys: Vec<TypeRef>,
-    // resource type is special, we maintain a dependent vec.
-    pub res_tys: Vec<TypeRef>,
-    /// Compatible resource type.
-    pub res_eq_class: FxHashMap<TypeRef, Rc<[TypeRef]>>,
+    /// All syscalls of target os.
+    pub syscalls: Box<[SyscallRef]>,
+    /// All types of syscalls.
+    pub tys: Box<[TypeRef]>,
+    /// All resource types of `tys`.
+    pub res_tys: Box<[TypeRef]>,
+    /// All compatible resource types.
+    pub res_eq_class: FxHashMap<TypeRef, Box<[TypeRef]>>,
 }
 
 impl Target {
-    pub fn new(calls: Vec<Syscall>, _tys: Vec<TypeRef>) -> Self {
-        // let mut calls = calls.into_iter().map(Rc::new).collect::<Vec<_>>();
+    pub fn new<T: AsRef<str>>(target: T) -> Option<Self> {
+        let target = target.as_ref();
+        let desc_str = sys_json::load(target)?;
+        let desc_json = json::parse(desc_str).unwrap();
 
-        // Self::restore_typeref(&mut tys);
-        // let mut res_tys = tys
-        //     .iter()
-        //     .flat_map(|ty| Self::extract_res_ty(ty))
-        //     .map(|(ty, _)| ty)
-        //     .collect::<FxHashSet<TypeRef>>()
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
         // let mut res_eq_class = Self::cal_res_eq_class(&res_tys);
         // assert!(res_tys.iter().all(|ty| ty.is_res_kind()));
         // Self::analyze_syscall_inout_res(&mut calls, &mut tys);
         // Self::complete_res_ty_info(&mut res_tys, &calls);
         // Self::filter_unreachable_res(&mut res_tys, &mut res_eq_class);
 
-        // Target {
-        //     os: todo!(),
-        //     arch: todo!(),
-        //     revision: todo!(),
-        //     ptr_sz: todo!(),
-        //     page_sz: todo!(),
-        //     page_num: todo!(),
-        //     data_offset: todo!(),
-        //     le_endian: todo!(),
-        //     syscalls: calls,
-        //     tys,
-        //     res_tys,
-        //     res_eq_class,
-        // }
-        todo!()
+        let (syscalls, tys) = syscalls::parse(target, &desc_json);
+        let res_tys = tys
+            .iter()
+            .copied()
+            .filter(|ty| ty.res_desc().is_some())
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let target_json = &desc_json["Target"];
+        let os = target_json["OS"].as_str().unwrap();
+        let arch = target_json["Arch"].as_str().unwrap();
+        let revision = desc_json["Revision"].as_str().unwrap();
+        let ptr_sz = target_json["PtrSize"].as_u64().unwrap();
+        let page_sz = target_json["PageSize"].as_u64().unwrap();
+        let page_num = target_json["NumPages"].as_u64().unwrap();
+        let data_offset = target_json["DataOFfset"].as_u64().unwrap();
+        let le_endian = target_json["LittleEndian"].as_bool().unwrap();
+        let syz_exec_use_shm = target_json["ExecutorUsesShmem"].as_bool().unwrap();
+        let syz_exec_use_forksrv = target_json["ExecutorUsesForkServer"].as_bool().unwrap();
+        let syz_exec_bin = target_json["ExecutorBin"].as_str().unwrap();
+
+        let target = Self {
+            os: to_boxed_str(os),
+            arch: to_boxed_str(arch),
+            revision: to_boxed_str(revision),
+            ptr_sz,
+            page_sz,
+            page_num,
+            data_offset,
+            le_endian,
+            syz_exec_use_shm,
+            syz_exec_use_forksrv,
+            syz_exec_bin: if syz_exec_bin.is_empty() {
+                None
+            } else {
+                Some(to_boxed_str(syz_exec_bin))
+            },
+            syscalls,
+            tys,
+            res_tys,
+            res_eq_class: FxHashMap::default(), // TODO
+        };
+        Some(target)
     }
 
     pub fn physical_addr(&self, addr: u64) -> u64 {
         self.data_offset + addr
     }
 
-    #[allow(clippy::collapsible_if)]
-    fn filter_unreachable_res(
-        res_tys: &mut Vec<TypeRef>,
-        res_eq_class: &mut FxHashMap<TypeRef, Rc<[TypeRef]>>,
-    ) {
-        let mut reachable_res = FxHashSet::default();
-        for (res, eq_res) in res_eq_class.iter() {
-            if !reachable_res.contains(res) {
-                if eq_res
-                    .iter()
-                    .any(|res| !res.res_desc().unwrap().ctors.is_empty())
-                {
-                    reachable_res.extend(eq_res.iter().cloned())
-                }
-            }
-        }
-        res_eq_class.retain(|k, _| reachable_res.contains(k));
-        res_tys.retain(|r| reachable_res.contains(r));
-        assert_eq!(res_eq_class.len(), res_tys.len());
-    }
-
-    /// Analyze input/output resources of eacho system call.
-    /// Add these resources in call's input_res/output_res set.
-    fn analyze_syscall_inout_res(scs: &mut [Rc<Syscall>], tys: &mut [TypeRef]) {
-        for sc in scs.iter_mut() {
-            let sc = Self::rc_to_mut(sc);
-            // analyze each parameter first.
-            let res_tys = sc
-                .params
-                .iter()
-                .flat_map(|param| Self::extract_res_ty(param.ty))
-                .collect::<Vec<(TypeRef, Dir)>>();
-            res_tys
-                .into_iter()
-                .for_each(|(res_ty, dir)| Self::record_syscall_res(sc, res_ty, dir));
-            let ret_res_tys = sc.ret.as_ref().map(|res_ty| Self::extract_res_ty(*res_ty));
-            if let Some(res_tys) = ret_res_tys {
-                res_tys
-                    .into_iter()
-                    .for_each(|(res_ty, _)| Self::record_syscall_res(sc, res_ty, Dir::Out));
-            }
-        }
-    }
-
-    fn record_syscall_res(sc: &mut Syscall, res_ty: TypeRef, dir: Dir) {
-        let add_counter = |map: &mut FxHashMap<TypeRef, usize>, key: TypeRef| {
-            let counter = map.entry(key).or_insert(0);
-            *counter += 1;
-        };
-
-        match dir {
-            Dir::In => add_counter(&mut sc.input_res, res_ty),
-            Dir::Out => add_counter(&mut sc.output_res, res_ty),
-            Dir::InOut => {
-                add_counter(&mut sc.output_res, res_ty);
-                add_counter(&mut sc.input_res, res_ty);
-            }
-        }
-    }
-
-    fn extract_res_ty(ty: TypeRef) -> Vec<(TypeRef, Dir)> {
-        let mut ctx = FxHashSet::default();
-        let mut ret = Self::extract_res_ty_inner(ty, &mut ctx);
-        ret.sort();
-        ret.dedup();
-        ret
-    }
-
-    fn extract_res_ty_inner(ty: TypeRef, ctx: &mut FxHashSet<TypeId>) -> Vec<(TypeRef, Dir)> {
-        use crate::model::TypeKind::*;
-        if ctx.contains(&ty.id) {
-            return Vec::new();
-        } else {
-            assert!(ctx.insert(ty.id));
-        }
-        match &(*ty).kind {
-            Res { .. } => vec![(ty, Dir::In)],
-            Array { elem, .. } => Self::extract_res_ty_inner(*elem, ctx),
-            Ptr { elem, dir } => Self::extract_res_ty_inner(*elem, ctx)
-                .into_iter()
-                .map(|(ty, _)| (ty, *dir))
-                .collect::<Vec<_>>(),
-            Struct { fields, .. } | Union { fields } => {
-                let mut ret = Vec::new();
-                for field in fields.iter() {
-                    let mut res_tys = Self::extract_res_ty_inner(field.ty, ctx);
-                    res_tys
-                        .iter_mut()
-                        .for_each(|(_, dir)| *dir = field.dir.unwrap_or(Dir::Out));
-                    ret.extend(res_tys);
-                }
-                ret
-            }
-            // for scalar type, just return empty vec.
-            _ => Vec::new(), // empty vec,
-        }
-    }
-
-    /// Complete resource type info, such as constructors and consumers.
-    fn complete_res_ty_info(res_tys: &mut [TypeRef], syscalls: &[Rc<Syscall>]) {
-        // for res_ty in res_tys.iter_mut() {
-        //     for sc in syscalls {
-        //         if sc.output_res.contains_key(res_ty) {
-        //             res_ty.res_desc_mut().unwrap().ctors.insert(Rc::clone(sc));
-        //         }
-        //         if sc.input_res.contains_key(res_ty) {
-        //             res_ty
-        //                 .res_desc_mut()
-        //                 .unwrap()
-        //                 .consumers
-        //                 .insert(Rc::clone(sc));
-        //         }
-        //     }
-        // }
-        todo!()
-    }
-
-    /// Restore typeref value from id to ref.
-    fn restore_typeref(tys: &mut [TypeRef]) {
-        // use crate::model::TypeKind::*;
-
-        // for i in 0..tys.len() {
-        //     // This is necessary to pass rustc borrow checker.
-        //     let mut ty = Rc::clone(&tys[i]);
-        //     match &mut Self::rc_to_mut(&mut ty).kind {
-        //         Array { elem, .. } | Ptr { elem, .. } => {
-        //             *elem = TypeRef::Ref(Rc::clone(&tys[elem.as_id().unwrap()]));
-        //         }
-        //         Struct { fields, .. } | Union { fields, .. } => {
-        //             for field in fields.iter_mut() {
-        //                 field.ty = TypeRef::Ref(Rc::clone(&tys[field.ty.as_id().unwrap()]));
-        //             }
-        //         }
-        //         // just pass other ty kinds
-        //         _ => (),
-        //     }
-        // }
-        todo!()
-    }
-
-    #[allow(clippy::transmute_ptr_to_ref)]
-    fn rc_to_mut<T>(rc: &mut Rc<T>) -> &mut T {
-        use std::mem::transmute;
-        // Safety, only used during constructing target and all methods guarantee the safe use of ref.
-        // After construction, the target inmutable.
-        unsafe { transmute(Rc::as_ptr(rc)) }
-    }
-
-    /// Calculate equivalence class of resource type
-    fn cal_res_eq_class(res_tys: &[TypeRef]) -> FxHashMap<TypeRef, Rc<[TypeRef]>> {
-        // let mut ret = FxHashMap::default();
-        // let mut left_res_tys = Vec::from(res_tys);
-        // loop {
-        //     if left_res_tys.is_empty() {
-        //         break;
-        //     }
-
-        //     let ty1 = left_res_tys.pop().unwrap(); // so, the loop will stop.
-        //     let mut eq_class = FxHashSet::default();
-        //     for ty2 in left_res_tys.iter() {
-        //         if Self::is_equivalence_class(&ty1, ty2) {
-        //             eq_class.insert(ty2);
-        //         }
-        //     }
-
-        //     left_res_tys.retain(|x| !eq_class.contains(x));
-        //     eq_class.insert(ty1);
-
-        //     let eq_class: Rc<[TypeRef]> = Rc::from(eq_class.into_iter().collect::<Vec<TypeRef>>());
-
-        //     for ty in (*eq_class).iter() {
-        //         ret.insert(Rc::clone(ty), Rc::clone(&eq_class));
-        //     }
-        // }
-        // assert_eq!(ret.len(), res_tys.len());
-        // assert!(res_tys.iter().all(|ty| ret.contains_key(ty)));
-        // ret
-        todo!()
-    }
-
-    fn is_equivalence_class(r1: &TypeRef, r2: &TypeRef) -> bool {
-        let d1 = r1.res_desc().unwrap();
-        let d2 = r2.res_desc().unwrap();
-        let min_len = std::cmp::min(d1.kinds.len(), d2.kinds.len());
-        (&d1.kinds[0..min_len])
-            .iter()
-            .eq((&d2.kinds[0..min_len]).iter())
-    }
+    // fn is_equivalence_class(r1: TypeRef, r2: TypeRef) -> bool {
+    //     let d1 = r1.res_desc().unwrap();
+    //     let d2 = r2.res_desc().unwrap();
+    //     let min_len = std::cmp::min(d1.kinds.len(), d2.kinds.len());
+    //     (&d1.kinds[0..min_len])
+    //         .iter()
+    //         .eq((&d2.kinds[0..min_len]).iter())
+    // }
 }

@@ -171,7 +171,7 @@ fn try_reuse(
     val
 }
 
-fn gen_text(kind: &TextKind) -> Box<[u8]> {
+fn gen_text(_kind: &TextKind) -> Box<[u8]> {
     rand_blob_range(gen_range())
 }
 

@@ -1,8 +1,3 @@
-// Temporary
-#![allow(unused_variables)]
-#![allow(dead_code)]
-#![allow(unreachable_code)]
-
 use std::{
     fs::{create_dir, write},
     path::{Path, PathBuf},
@@ -23,9 +18,7 @@ use std::env::args;
 
 pub fn main() {
     let args = args().skip(1).collect::<Vec<_>>();
-
-    let (sys, ty) = todo!();
-    let target = Target::new(sys, ty);
+    let target = Target::new("linux/amd64").unwrap();
     let pool = ValuePool::default();
     init_runtime();
     println!("[+] Target loaded.");

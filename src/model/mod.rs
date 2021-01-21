@@ -5,9 +5,11 @@ pub mod value;
 pub use types::*;
 pub use value::*;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+
+use crate::utils::to_boxed_str;
 
 /// System call id.
 pub type SId = usize;
@@ -21,12 +23,12 @@ pub struct Syscall {
     pub id: SId,
     /// Call number, set to 0 for system that doesn't use nr.
     pub nr: u64,
-    /// System call name.
+    /// Name of specialized call.
     pub name: Box<str>,
-    /// Name of specialized system call.
+    /// Name of system call.
     pub call_name: Box<str>,
     /// Syzkaller: Number of trailing args that should be zero-filled.
-    pub miss_args: u64,
+    pub missing_args: u64,
     /// Parameters of calls.
     pub params: Box<[Param]>,
     /// Return type of system call: a ref to res type or None.
@@ -35,15 +37,10 @@ pub struct Syscall {
     pub attr: SyscallAttr,
     /// Resources consumed by current system call.
     /// Key is resourse type, value is count of that kind of resource .
-    pub input_res: FxHashMap<TypeRef, usize>,
+    pub input_res: FxHashSet<TypeRef>,
     /// Resource produced by current system call.
     /// Key is resourse type, value is count.
-    pub output_res: FxHashMap<TypeRef, usize>,
-}
-
-pub(crate) fn to_boxed_str<T: AsRef<str>>(s: T) -> Box<str> {
-    let t = s.as_ref();
-    String::into_boxed_str(t.to_string())
+    pub output_res: FxHashSet<TypeRef>,
 }
 
 impl fmt::Display for Syscall {

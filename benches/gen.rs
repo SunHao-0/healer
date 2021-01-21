@@ -4,8 +4,7 @@ use healer::gen::gen;
 use healer::targets::Target;
 
 pub fn bench_gen(c: &mut Criterion) {
-    let (sys, ty) = todo!();
-    let target = Target::new(sys, ty);
+    let target = Target::new("linux/amd64").unwrap();
     let pool = ValuePool::default();
     c.bench_function("Gen", |b| b.iter(|| gen(&target, &pool)));
 }

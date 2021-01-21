@@ -210,6 +210,16 @@ pub enum TypeRef {
     Ref(&'static Type),
 }
 
+impl TypeRef {
+    pub fn as_id(&self) -> Option<TypeId> {
+        if let TypeRef::Id(id) = self {
+            Some(*id)
+        } else {
+            None
+        }
+    }
+}
+
 impl Deref for TypeRef {
     type Target = Type;
     fn deref(&self) -> &Type {
@@ -263,7 +273,7 @@ pub enum TypeKind {
     Csum {
         int_fmt: IntFmt,
         kind: CsumKind,
-        buf: Option<Box<str>>,
+        buf: Box<str>,
         protocol: u64,
     },
     Vma {
@@ -330,11 +340,11 @@ impl TypeKind {
         }
     }
 
-    pub fn new_csum(int_fmt: IntFmt, kind: CsumKind, buf: Option<&str>, proto: u64) -> Self {
+    pub fn new_csum(int_fmt: IntFmt, kind: CsumKind, buf: &str, proto: u64) -> Self {
         TypeKind::Csum {
             int_fmt,
             kind,
-            buf: buf.map(to_boxed_str),
+            buf: to_boxed_str(buf),
             protocol: proto,
         }
     }

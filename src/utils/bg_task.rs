@@ -40,7 +40,7 @@ pub fn runtime() -> &'static Runtime {
 
 pub struct Reader {
     pub(crate) recv: Receiver<Vec<u8>>,
-    cancel: Sender<()>, // as long as reader was dropped, the cancel will be closed and the bg_task would exited eventually.
+    _cancel: Sender<()>, // as long as reader was dropped, the cancel will be closed and the bg_task would exited eventually.
 }
 
 impl Reader {
@@ -50,7 +50,7 @@ impl Reader {
         let (cancel, data_recv) = Self::read_to_end_inner(unsafe { File::from_raw_handle(f) });
         Self {
             recv: data_recv,
-            cancel,
+            _cancel: cancel,
         }
     }
 
@@ -60,7 +60,7 @@ impl Reader {
         let (cancel, data_recv) = Self::read_to_end_inner(unsafe { File::from_raw_fd(f) });
         Self {
             recv: data_recv,
-            cancel,
+            _cancel: cancel,
         }
     }
 
