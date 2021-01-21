@@ -28,7 +28,7 @@ pub enum SyzSpawnError {
     HandShake(String),
 }
 
-pub(super) struct SyzHandleBuilder {
+pub struct SyzHandleBuilder {
     ssh_key: Option<String>,
     ssh_user: Option<String>,
     ssh_ip: Option<String>,
@@ -50,7 +50,7 @@ impl Default for SyzHandleBuilder {
 }
 
 impl SyzHandleBuilder {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             ssh_key: None,
             ssh_user: None,
@@ -67,68 +67,65 @@ impl SyzHandleBuilder {
         }
     }
 
-    pub(super) fn ssh_addr<T: Into<String>>(mut self, ip: T, port: u16) -> Self {
+    pub fn ssh_addr<T: Into<String>>(mut self, ip: T, port: u16) -> Self {
         self.ssh_ip = Some(ip.into());
         self.ssh_port = Some(port);
         self
     }
 
-    pub(super) fn ssh_identity<T: Into<String>>(mut self, key: T, user: T) -> Self {
+    pub fn ssh_identity<T: Into<String>>(mut self, key: T, user: T) -> Self {
         self.ssh_user = Some(user.into());
         self.ssh_key = Some(key.into());
         self
     }
 
-    pub(super) fn env_flags(mut self, flag: u64) -> Self {
+    pub fn env_flags(mut self, flag: u64) -> Self {
         self.env_flags = flag;
         self
     }
 
-    pub(super) fn executor(mut self, p: Box<Path>) -> Self {
+    pub fn executor(mut self, p: Box<Path>) -> Self {
         self.executor = Some(p);
         self
     }
 
-    pub(super) fn use_forksrv(mut self, u: bool) -> Self {
+    pub fn use_forksrv(mut self, u: bool) -> Self {
         self.use_forksrv = u;
         self
     }
 
-    pub(super) fn user_shm(mut self, u: bool) -> Self {
-        self.use_shm = true;
+    pub fn use_shm(mut self, u: bool) -> Self {
+        self.use_shm = u;
         self
     }
 
-    pub(super) fn copy_bin(mut self, u: bool) -> Self {
+    pub fn copy_bin(mut self, u: bool) -> Self {
         self.copy_bin = u;
         self
     }
 
-    pub(super) fn pid(mut self, pid: u64) -> Self {
+    pub fn pid(mut self, pid: u64) -> Self {
         self.pid = Some(pid);
         self
     }
 
-    pub(super) fn extra_arg<T: Into<String>>(mut self, arg: T) -> Self {
+    pub fn extra_arg<T: Into<String>>(mut self, arg: T) -> Self {
         self.extra_args.push(arg.into());
         self
     }
 
-    pub(super) fn extra_args<T: IntoIterator<Item = F>, F: Into<String>>(
-        mut self,
-        args: T,
-    ) -> Self {
+    pub fn extra_args<T: IntoIterator<Item = F>, F: Into<String>>(mut self, args: T) -> Self {
         self.extra_args
             .extend(args.into_iter().map(|arg| arg.into()));
         self
     }
 
-    pub(super) fn scp_path(mut self, p: Box<Path>) -> Self {
+    pub fn scp_path(mut self, p: Box<Path>) -> Self {
         self.scp_path = Some(p);
         self
     }
 
-    pub(super) fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
+    pub fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
         let pid = self
             .pid
             .ok_or_else(|| SyzSpawnError::Config("need pid".to_string()))?;
@@ -215,7 +212,7 @@ pub struct SyzHandle {
     pub(crate) env_flags: EnvFlags,
 }
 
-pub(super) enum SyzExecResult {
+pub enum SyzExecResult {
     Ok(Vec<CallExecInfo>),
     Failed {
         info: Vec<CallExecInfo>,
@@ -225,7 +222,7 @@ pub(super) enum SyzExecResult {
 }
 
 impl SyzHandle {
-    pub(super) fn exec(
+    pub fn exec(
         &mut self,
         t: &Target,
         p: &Prog,

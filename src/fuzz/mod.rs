@@ -1,13 +1,11 @@
 use crate::model::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
-pub struct GlobalState {
-    branches: (),
-    covers: (),
-    corpus: (),
-}
+// pub struct GlobalState {
+//     branches: (),
+//     covers: (),
+//     corpus: (),
+// }
 
 pub type ValuePool = FxHashMap<TypeRef, FxHashSet<Value>>;
 
@@ -15,12 +13,12 @@ pub struct LocalState {
     pub branches: (),
     pub cover: (),
     pub res_fuzz_count: FxHashMap<Box<str>, u64>,
-    pub call_fuzz_count: FxHashMap<Rc<Syscall>, u64>,
+    pub call_fuzz_count: FxHashMap<SyscallRef, u64>,
 }
 
 pub struct FuzzInstance {
-    ls: LocalState,
-    gs: Arc<Mutex<GlobalState>>,
+    // ls: LocalState,
+// gs: Arc<Mutex<GlobalState>>,
 }
 
 impl FuzzInstance {

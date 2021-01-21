@@ -12,13 +12,13 @@ use crate::targets::Target;
 /// Communication with syz-executor.
 mod comm;
 /// Spawning qemu.
-mod qemu;
+pub mod qemu;
 /// Prog Serialization.
 mod serialize;
 /// Invoking ssh.
-mod ssh;
+pub mod ssh;
 /// Syz-executor handling.
-mod syz;
+pub mod syz;
 
 /// Possible result of one execution.
 pub enum ExecResult {
@@ -202,7 +202,7 @@ impl ExecHandle {
                 ssh_conf.ssh_user.clone().unwrap(),
             )
             .use_forksrv(conf.use_forksrv)
-            .user_shm(conf.use_shm)
+            .use_shm(conf.use_shm)
             .executor(conf.executor.clone())
             .copy_bin(self.copy_bin)
             .pid(self.pid)

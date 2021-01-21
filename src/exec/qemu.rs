@@ -9,7 +9,7 @@ use thiserror::Error;
 use super::{ssh, QemuConf, SshConf};
 use crate::utils::bg_task::Reader;
 
-pub(super) struct QemuHandle {
+pub struct QemuHandle {
     qemu: Child,
     stdout: Reader,
     stderr: Reader,
@@ -26,15 +26,15 @@ impl Drop for QemuHandle {
 }
 
 impl QemuHandle {
-    pub(super) fn ssh_ip(&self) -> &str {
+    pub fn ssh_ip(&self) -> &str {
         &self.ssh_ip
     }
 
-    pub(super) fn ssh_port(&self) -> u16 {
+    pub fn ssh_port(&self) -> u16 {
         self.ssh_port
     }
 
-    pub(super) fn output(mut self) -> (Vec<u8>, Vec<u8>) {
+    pub fn output(mut self) -> (Vec<u8>, Vec<u8>) {
         self.kill_qemu();
 
         let stdout = self.stdout.recv.recv().unwrap();
@@ -48,7 +48,7 @@ impl QemuHandle {
         }
     }
 
-    pub(super) fn is_alive(&self) -> Result<bool, std::io::Error> {
+    pub fn is_alive(&self) -> Result<bool, std::io::Error> {
         let mut ssh_cmd = ssh::ssh_basic_cmd(
             &self.ssh_ip,
             self.ssh_port,
@@ -75,7 +75,7 @@ pub enum BootError {
     NoFreePort,
 }
 
-pub(super) fn boot(conf: &QemuConf, ssh_conf: &SshConf) -> Result<QemuHandle, BootError> {
+pub fn boot(conf: &QemuConf, ssh_conf: &SshConf) -> Result<QemuHandle, BootError> {
     let (mut qemu_cmd, ssh_fwd_port) = build_qemu_command(conf)?;
     qemu_cmd
         .stdin(Stdio::null())
