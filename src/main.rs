@@ -23,10 +23,7 @@ use rustc_hash::FxHashSet;
 
 pub fn main() {
     let args = args().skip(1).collect::<Vec<_>>();
-    env_logger::Builder::new()
-        .format_timestamp_secs()
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    env_logger::init();
     let target = Arc::new(Target::new("linux/amd64").unwrap());
     log::info!("Target loaded.");
 

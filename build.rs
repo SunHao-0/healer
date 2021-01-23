@@ -7,16 +7,14 @@ use std::{
 };
 
 fn main() {
-    let sys_dir = if !env::var("SKIP_SYZ_BUILD").is_ok() {
+    let sys_dir = if env::var("SKIP_SYZ_BUILD").is_err() {
         check_env();
         let syz_dir = download();
         build_syz(syz_dir)
+    } else if let Ok(syz_dir) = env::var("SYZ_SYS_DIR") {
+        PathBuf::from(syz_dir)
     } else {
-        if let Ok(syz_dir) = env::var("SYZ_SYS_DIR") {
-            PathBuf::from(syz_dir)
-        } else {
-            PathBuf::from("target/syzkaller/sys/json")
-        }
+        PathBuf::from("target/syzkaller/sys/json")
     };
     copy_sys(sys_dir)
 }
@@ -50,7 +48,7 @@ fn check_env() {
 }
 
 fn download() -> PathBuf {
-    const SYZ_REVISION: &str = "65a7a8540d29e72622fca06522587f7e66539fd3";
+    const SYZ_REVISION: &str = "52e3731913ab2677be27c29ed8142b04e8f28521";
     let repo_url = format!(
         "https://github.com/google/syzkaller/archive/{}.zip",
         SYZ_REVISION
@@ -118,7 +116,7 @@ fn download() -> PathBuf {
 }
 
 fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
-    const CKSUM: &str = "f43be1b85f16e11efda469eaef0686ffb00be1ea75bb6ad2603456b572b6703cb8bbf5093ba8b2a1d935c53c485b188d";
+    const CKSUM: &str = "28107aaf037d73b3e6c7057f679cbc7a75e95d3542286ec9c94ef9535a27111070b03fabfafeb97d1626fe6c99b53e04";
     let output = Command::new("sha384sum")
         .arg(syz_zip.as_ref())
         .output()
@@ -129,32 +127,52 @@ fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
         exit(1)
     } else {
         let stdout = String::from_utf8(output.stdout).unwrap();
-        let cksum = stdout.split(" ").next().unwrap();
+        let cksum = stdout.split(' ').next().unwrap();
         cksum.trim() == CKSUM
     }
 }
 
 fn build_syz(syz_dir: PathBuf) -> PathBuf {
     if !syz_dir.join("bin").exists() {
-        let patch_file = syz_dir.join("sysgen.diff");
-        copy("./sysgen.diff", &patch_file).unwrap_or_else(|e| {
-            eprintln!("failed to copy sysgen.patch: {}", e);
+        let patch_dir = PathBuf::from("./patches");
+        copy(
+            patch_dir.join("ivshm_setup.h"),
+            syz_dir.join("executor/ivshm_setup.h"),
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("failed to copy ivshm_setup.h: {}", e);
             exit(1)
         });
 
-        let patch = Command::new("patch")
-            .current_dir(syz_dir.to_str().unwrap())
-            .arg("-p1")
-            .stdin(File::open("sysgen.diff").unwrap())
-            .output()
-            .unwrap_or_else(|e| {
-                eprintln!("failed to spawn git: {}", e);
-                exit(1)
-            });
-        if !patch.status.success() {
-            let stderr = String::from_utf8(patch.stderr).unwrap_or_default();
-            eprintln!("failde to patch sysgen: {}", stderr);
-            exit(1);
+        for f in read_dir(&patch_dir).unwrap().filter_map(|f| f.ok()) {
+            let f = f.path();
+            if let Some(ext) = f.extension() {
+                if ext.to_str().unwrap() == "diff" {
+                    let patch_file = syz_dir.join(f.file_name().unwrap());
+                    copy(f, &patch_file).unwrap_or_else(|e| {
+                        eprintln!(
+                            "failed to copy patch file '{}': {}",
+                            patch_file.display(),
+                            e
+                        );
+                        exit(1)
+                    });
+                    let patch = Command::new("patch")
+                        .current_dir(syz_dir.to_str().unwrap())
+                        .arg("-p1")
+                        .stdin(File::open(&patch_file).unwrap())
+                        .output()
+                        .unwrap_or_else(|e| {
+                            eprintln!("failed to spawn git: {}", e);
+                            exit(1)
+                        });
+                    if !patch.status.success() {
+                        let stderr = String::from_utf8(patch.stderr).unwrap_or_default();
+                        eprintln!("failde to patch {}: {}", patch_file.display(), stderr);
+                        exit(1);
+                    }
+                }
+            }
         }
 
         let make = Command::new("make")

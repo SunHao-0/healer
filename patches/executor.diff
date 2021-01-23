@@ -1,0 +1,18 @@
+--- ./executor/executor.cc	2021-01-23 16:16:57.184718966 +0000
++++ ./executor/executor.cc	2021-01-23 16:18:34.099578799 +0000
+@@ -360,6 +360,7 @@
+ #endif
+ 
+ #include "cov_filter.h"
++#include "ivshm_setup.h"
+ 
+ #include "test.h"
+ 
+@@ -398,6 +399,7 @@
+ 	current_thread = &threads[0];
+ 
+ #if SYZ_EXECUTOR_USES_SHMEM
++	ivshm_setup(kInFd, kOutFd);
+ 	if (mmap(&input_data[0], kMaxInput, PROT_READ, MAP_PRIVATE | MAP_FIXED, kInFd, 0) != &input_data[0])
+ 		fail("mmap of input file failed");
+ 	// The output region is the only thing in executor process for which consistency matters.

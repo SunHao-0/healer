@@ -1,8 +1,6 @@
-diff --git a/sys/syz-sysgen/sysgen.go b/sys/syz-sysgen/sysgen.go
-index a1718673..480476f4 100644
---- a/sys/syz-sysgen/sysgen.go
-+++ b/sys/syz-sysgen/sysgen.go
-@@ -5,6 +5,7 @@ package main
+--- ./sys/syz-sysgen/sysgen.go	2021-01-23 16:17:40.841742761 +0000
++++ ./sys/syz-sysgen/sysgen.go	2021-01-23 16:15:03.991819688 +0000
+@@ -5,6 +5,7 @@
  
  import (
  	"bytes"
@@ -10,7 +8,7 @@ index a1718673..480476f4 100644
  	"flag"
  	"fmt"
  	"io"
-@@ -58,6 +59,8 @@ type ExecutorData struct {
+@@ -58,6 +59,8 @@
  
  var srcDir = flag.String("src", "", "path to root of syzkaller source dir")
  var outDir = flag.String("out", "", "path to out dir")
@@ -19,7 +17,7 @@ index a1718673..480476f4 100644
  
  func main() {
  	defer tool.Init()()
-@@ -68,6 +71,10 @@ func main() {
+@@ -68,6 +71,10 @@
  	}
  	sort.Strings(OSList)
  
@@ -30,7 +28,7 @@ index a1718673..480476f4 100644
  	data := &ExecutorData{}
  	for _, OS := range OSList {
  		descriptions := ast.ParseGlob(filepath.Join(*srcDir, "sys", OS, "*.txt"), nil)
-@@ -79,6 +86,9 @@ func main() {
+@@ -79,6 +86,9 @@
  			os.Exit(1)
  		}
  		osutil.MkdirAll(filepath.Join(*outDir, "sys", OS, "gen"))
@@ -40,7 +38,7 @@ index a1718673..480476f4 100644
  
  		var archs []string
  		for arch := range targets.List[OS] {
-@@ -140,6 +150,10 @@ func main() {
+@@ -140,6 +150,10 @@
  				rev := hash.String(out.Bytes())
  				fmt.Fprintf(out, "const revision_%v = %q\n", job.Target.Arch, rev)
  				writeSource(sysFile, out.Bytes())
@@ -51,7 +49,7 @@ index a1718673..480476f4 100644
  
  				job.ArchData = generateExecutorSyscalls(job.Target, prog.Syscalls, rev)
  
-@@ -186,6 +200,41 @@ func main() {
+@@ -186,6 +200,41 @@
  	writeExecutorSyscalls(data)
  }
  
@@ -93,16 +91,3 @@ index a1718673..480476f4 100644
  func generate(target *targets.Target, prg *compiler.Prog, consts map[string]uint64, out io.Writer) {
  	tag := fmt.Sprintf("syz_target,syz_os_%v,syz_arch_%v", target.OS, target.Arch)
  	if target.VMArch != "" {
-diff --git a/sys/targets/targets.go b/sys/targets/targets.go
-index 7102d6f9..c44cdfdf 100644
---- a/sys/targets/targets.go
-+++ b/sys/targets/targets.go
-@@ -35,7 +35,7 @@ type Target struct {
- 	KernelHeaderArch string
- 	BrokenCompiler   string
- 	// NeedSyscallDefine is used by csource package to decide when to emit __NR_* defines.
--	NeedSyscallDefine  func(nr uint64) bool
-+	NeedSyscallDefine  func(nr uint64) bool `json:"-"`
- 	HostEndian         binary.ByteOrder
- 	SyscallTrampolines map[string]string
- 
