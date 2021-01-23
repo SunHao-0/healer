@@ -6,7 +6,11 @@ pub(super) fn select_syscall(ctx: &GenContext) -> SyscallRef {
     loop {
         let call = if should_try_gen_res(ctx) {
             let res_ty = select_res(&ctx.target.res_tys);
-            select_res_producer(ctx.target, res_ty)
+            if let Some(call) = select_res_producer(ctx.target, res_ty) {
+                call
+            } else {
+                continue;
+            }
         } else {
             select_syscall_rand(ctx)
         };
@@ -60,29 +64,42 @@ fn select_res(res_tys: &[TypeRef]) -> TypeRef {
     *res_tys.iter().choose(&mut thread_rng()).unwrap()
 }
 
-fn select_res_producer(t: &Target, res: TypeRef) -> SyscallRef {
+fn select_res_producer(t: &Target, res: TypeRef) -> Option<SyscallRef> {
     let res_desc = res.res_desc().unwrap();
-    let eq_class = &t.res_eq_class[&res];
+    let subtypes = &t.subtype_map[&res];
+    let supertypes = &t.supertype_map[&res];
     let accurate_ctors = &res_desc.ctors;
-    let all_ctors = eq_class
-        .iter()
-        .flat_map(|res| res.res_desc().unwrap().ctors.iter());
     let mut rng = thread_rng();
+
     if !accurate_ctors.is_empty() && rng.gen::<f32>() < 0.85 {
-        // Try to choose calls that generate current resource and do not depend on other resources
-        // first.
+        // Try to choose calls that generate current resource and do not depend on other resources first.
         if let Some(e) = accurate_ctors
             .iter()
             .filter(|s| s.input_res.is_empty())
             .choose(&mut rng)
         {
             if rng.gen::<f32>() < 0.8 {
-                return e;
+                return Some(e);
             }
         }
-        accurate_ctors.iter().choose(&mut rng).unwrap()
+        accurate_ctors.iter().copied().choose(&mut rng)
+    } else if !subtypes.is_empty() && rng.gen::<f32>() < 0.75 {
+        let subtype = subtypes.choose(&mut rng)?;
+        subtype
+            .res_desc()
+            .unwrap()
+            .ctors
+            .iter()
+            .copied()
+            .choose(&mut rng)
     } else {
-        // unreachable resources were removed during constructing target.
-        all_ctors.choose(&mut rng).unwrap()
+        let supertype = supertypes.choose(&mut rng)?;
+        supertype
+            .res_desc()
+            .unwrap()
+            .ctors
+            .iter()
+            .copied()
+            .choose(&mut rng)
     }
 }

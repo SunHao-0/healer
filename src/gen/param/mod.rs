@@ -160,20 +160,20 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
                 }
             }
             // Otherwise, try to find the eq resource. Also handle unreachable resource here.
-            if let Some(eq_res) = ctx.target.res_eq_class.get(&ty) {
-                let mut res_vals = Vec::new();
+            let subtypes = &ctx.target.subtype_map[&ty];
+            let supertypes = &ctx.target.supertype_map[&ty];
+            let mut res_vals = Vec::new();
 
-                for res in eq_res.iter() {
-                    if let Some(r) = ctx.generated_res.get(res) {
-                        if !r.is_empty() {
-                            res_vals.extend(r.iter());
-                        }
+            for res in subtypes.iter().copied().chain(supertypes.iter().copied()) {
+                if let Some(r) = ctx.generated_res.get(&res) {
+                    if !r.is_empty() {
+                        res_vals.extend(r.iter());
                     }
                 }
-                if !res_vals.is_empty() {
-                    let res = Arc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
-                    return Value::new(dir, ty, ValueKind::new_res_ref(res));
-                }
+            }
+            if !res_vals.is_empty() {
+                let res = Arc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
+                return Value::new(dir, ty, ValueKind::new_res_ref(res));
             }
             // We still haven't found any usable resource, try to choose a arbitrary generated
             // resource. May be we can use resource centric strategy here just like syzkaller.
