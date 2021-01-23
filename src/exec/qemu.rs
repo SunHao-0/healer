@@ -7,12 +7,12 @@ use std::{thread::sleep, time::Duration};
 use thiserror::Error;
 
 use super::{ssh, QemuConf, SshConf};
-use crate::utils::bg_task::Reader;
+use crate::utils::{into_async_file, LogReader};
 
 pub struct QemuHandle {
     qemu: Child,
-    stdout: Reader,
-    stderr: Reader,
+    stdout: LogReader,
+    stderr: LogReader,
     ssh_ip: String,
     ssh_port: u16,
     ssh_key_path: String,
@@ -34,11 +34,16 @@ impl QemuHandle {
         self.ssh_port
     }
 
+    pub fn clear(&self) {
+        self.stdout.clear();
+        self.stderr.clear();
+    }
+
     pub fn output(mut self) -> (Vec<u8>, Vec<u8>) {
         self.kill_qemu();
 
-        let stdout = self.stdout.recv.recv().unwrap();
-        let stderr = self.stderr.recv.recv().unwrap();
+        let (stdout, _) = self.stdout.read_all();
+        let (stderr, _) = self.stderr.read_all();
         (stdout, stderr)
     }
 
@@ -82,9 +87,9 @@ pub fn boot(conf: &QemuConf, ssh_conf: &SshConf) -> Result<QemuHandle, BootError
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = qemu_cmd.spawn()?;
-
-    let stdout_reader = Reader::new(child.stdout.take().unwrap());
-    let stderr_reader = Reader::new(child.stderr.take().unwrap());
+    log::trace!("qemu spawned: {:?}", child);
+    let stdout_reader = LogReader::new(into_async_file(child.stdout.take().unwrap()));
+    let stderr_reader = LogReader::new(into_async_file(child.stderr.take().unwrap()));
     let ssh_user = ssh_conf
         .ssh_user
         .clone()

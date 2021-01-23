@@ -1,6 +1,6 @@
 //! Start, interactive with syz-executor
 
-use crate::model::Prog;
+use crate::{model::Prog, utils::into_async_file};
 use std::{
     error::Error,
     io::ErrorKind,
@@ -14,7 +14,7 @@ use super::{
     ssh::{scp, ssh_basic_cmd, ScpError},
     CallExecInfo, EnvFlags, ExecOpt,
 };
-use crate::{targets::Target, utils::bg_task::Reader};
+use crate::{targets::Target, utils::LogReader};
 
 #[derive(Debug, Error)]
 pub enum SyzSpawnError {
@@ -132,13 +132,13 @@ impl SyzHandleBuilder {
         let mut syz = self.spawn_remote()?;
         let stdin = syz.stdin.take().unwrap();
         let stdout = syz.stdout.take().unwrap();
-        let stderr = Reader::new(syz.stderr.take().unwrap());
+        let stderr = LogReader::new(into_async_file(syz.stderr.take().unwrap()));
         let mut syz_handle = SyzHandle {
             syz,
             stdin,
             stdout,
             pid,
-            bg_stderr: stderr,
+            stderr,
             use_shm: self.use_shm,
             env_flags: self.env_flags,
         };
@@ -206,7 +206,7 @@ pub struct SyzHandle {
     pub(crate) syz: Child,
     pub(crate) stdin: ChildStdin,
     pub(crate) stdout: ChildStdout,
-    pub(crate) bg_stderr: Reader,
+    pub(crate) stderr: LogReader,
     pub(crate) pid: u64,
     pub(crate) use_shm: bool,
     pub(crate) env_flags: EnvFlags,
@@ -226,7 +226,7 @@ impl SyzHandle {
         &mut self,
         t: &Target,
         p: &Prog,
-        opt: ExecOpt,
+        opt: &ExecOpt,
         in_buf: &mut [u8],
         out_buf: &mut [u8],
     ) -> SyzExecResult {
@@ -248,14 +248,16 @@ impl SyzHandle {
                 }
                 Err(e) => panic!("unexpected error {}", e),
             };
-            let stderr = self.bg_stderr.recv.recv().unwrap();
-            let std_err_str = String::from_utf8(stderr).unwrap_or_default();
+            let (stderr, _) = self.stderr.read_to_string();
             if exit_status == SYZ_STATUS_INTERNAL_ERROR {
-                return SyzExecResult::Internal(std_err_str.into());
+                return SyzExecResult::Internal(stderr.into());
             } else {
-                err = format!("exec error: {}\nsyz stderr: {}", e, std_err_str);
+                err = format!("exec error: {}\nsyz stderr: {}", e, stderr);
             }
             failed = true;
+        }
+        if !failed {
+            self.stderr.clear();
         }
         match self.parse_output(p, out_buf) {
             Ok(info) => {
@@ -274,7 +276,8 @@ impl SyzHandle {
 
     fn output(mut self) -> Vec<u8> {
         self.kill();
-        self.bg_stderr.recv.recv().unwrap()
+        let (out, _) = self.stderr.read_all();
+        out
     }
 
     fn kill(&mut self) {

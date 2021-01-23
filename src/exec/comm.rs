@@ -88,7 +88,7 @@ impl SyzHandle {
 
     pub(super) fn exec_inner(
         &mut self,
-        opt: ExecOpt,
+        opt: &ExecOpt,
         in_buf: &[u8], /* stores the serialized prog */
         out_buf: &mut [u8],
     ) -> Result<(), ExecInnerError> {

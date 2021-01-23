@@ -111,6 +111,7 @@ impl Default for ExecOpt {
 
 /// Hign-level controller of inner executor and qemu.
 pub struct ExecHandle {
+    target: Target,
     /// Inner qemu driver, handling qemu boot, interactive stuff.
     qemu: Option<QemuHandle>,
     /// Inner executor driver, handling spawn, communication stuff.
@@ -139,27 +140,26 @@ pub struct ExecHandle {
 
 impl ExecHandle {
     /// Execute one prog with specific option.
-    pub fn exec(&mut self, t: &Target, p: &Prog, opt: ExecOpt) -> Result<ExecResult, ExecError> {
+    pub fn exec(&mut self, opt: &ExecOpt, p: &Prog) -> Result<ExecResult, ExecError> {
         if self.syz.is_none() {
             self.spawn_syz()?;
         }
 
         let syz = self.syz.as_mut().unwrap();
-        let exec_result = if self.exec_conf.use_shm {
+        let exec_result = if self.target.syz_exec_use_shm {
             let in_shm = unsafe { self.in_shm.as_mut().unwrap().as_slice_mut() };
             let out_shm = unsafe { self.out_shm.as_mut().unwrap().as_slice_mut() };
-            syz.exec(t, p, opt, in_shm, out_shm)
+            syz.exec(&self.target, p, opt, in_shm, out_shm)
         } else {
             let in_mem = self.in_mem.as_deref_mut().unwrap();
             let out_mem = self.out_mem.as_deref_mut().unwrap();
-            syz.exec(t, p, opt, in_mem, out_mem)
+            syz.exec(&self.target, p, opt, in_mem, out_mem)
         };
 
-        match exec_result {
+        let ret = match exec_result {
             syz::SyzExecResult::Ok(info) => Ok(ExecResult::Normal(info)),
             syz::SyzExecResult::Failed { info, err } => {
-                let syz = self.syz.take().unwrap();
-                drop(syz);
+                self.syz.take().unwrap();
                 if !self
                     .qemu
                     .as_mut()
@@ -181,11 +181,17 @@ impl ExecHandle {
                 }
             }
             syz::SyzExecResult::Internal(e) => {
-                let syz = self.syz.take().unwrap();
-                drop(syz);
+                if e.downcast_ref::<serialize::SerializeError>().is_none() {
+                    self.syz.take().unwrap();
+                }
                 Err(ExecError::SyzInternal(e))
             }
+        };
+
+        if let Some(ref mut qemu) = self.qemu {
+            qemu.clear();
         }
+        ret
     }
 
     fn spawn_syz(&mut self) -> Result<(), SpawnError> {
@@ -201,8 +207,8 @@ impl ExecHandle {
                 ssh_conf.ssh_key.display().to_string(),
                 ssh_conf.ssh_user.clone().unwrap(),
             )
-            .use_forksrv(conf.use_forksrv)
-            .use_shm(conf.use_shm)
+            .use_forksrv(self.target.syz_exec_use_forksrv)
+            .use_shm(self.target.syz_exec_use_shm)
             .executor(conf.executor.clone())
             .copy_bin(self.copy_bin)
             .pid(self.pid)
@@ -251,18 +257,12 @@ iota! {
 pub struct ExecConf {
     /// Path to inner executor executable file.
     pub executor: Box<Path>,
-    /// Use shared memory or not, default is true.
-    pub use_shm: bool,
-    /// Use fork server or not, default is true.
-    pub use_forksrv: bool,
 }
 
 impl Default for ExecConf {
     fn default() -> Self {
         Self {
             executor: PathBuf::from("./syz-executor").into_boxed_path(),
-            use_forksrv: true,
-            use_shm: true,
         }
     }
 }
@@ -280,7 +280,7 @@ pub struct QemuConf {
     pub smp: Option<u8>,
     /// Mem size in megabyte.
     pub mem: Option<u32>,
-    /// Optional shared memory device file path, creadted automatically if use qemu ivshm.
+    /// Shared memory device file path, creadted automatically if use qemu ivshm.
     pub mem_backend_files: Vec<(Box<Path>, usize)>,
 }
 
@@ -304,12 +304,6 @@ pub struct SshConf {
     pub ssh_key: Box<Path>,
     /// Ssh user, default is root.
     pub ssh_user: Option<String>,
-
-    // not used yet.
-    /// Ip addr of remote mechine.
-    pub ip: Option<String>,
-    /// Port addr of remote machine
-    pub port: Option<u16>,
 }
 
 impl Default for SshConf {
@@ -317,8 +311,6 @@ impl Default for SshConf {
         Self {
             ssh_key: PathBuf::from("./stretch.id_rsa").into_boxed_path(),
             ssh_user: Some("root".to_string()),
-            ip: None,
-            port: None,
         }
     }
 }
@@ -330,13 +322,15 @@ pub fn spawn_in_qemu(
     mut ssh_conf: SshConf,
     pid: u64,
 ) -> Result<ExecHandle, SpawnError> {
+    // TODO use env detection to decide this.
     const ENV: u64 = FLAG_SIGNAL | FLAG_ENABLE_TUN | FLAG_ENABLE_NETDEV | FLAG_ENABLE_CGROUPS;
     const IN_MEM_SIZE: usize = 4 << 20;
     const OUT_MEM_SIZE: usize = 16 << 20;
 
+    let target = Target::new(&qemu_conf.target).unwrap();
     let (mut in_shm, mut out_shm) = (None, None);
     let (mut in_mem, mut out_mem) = (None, None);
-    if conf.use_shm {
+    if target.syz_exec_use_shm {
         let in_shm_id = format!("healer-in_shm-{}-{}", pid, std::process::id());
         let out_shm_id = format!("healer-out_shm_{}-{}", pid, std::process::id());
         let shm_dev = PathBuf::from("/dev/shm");
@@ -361,6 +355,7 @@ pub fn spawn_in_qemu(
 
     let qemu = qemu::boot(&qemu_conf, &ssh_conf)?;
     let mut handle = ExecHandle {
+        target,
         qemu: Some(qemu),
         syz: None,
         exec_conf: conf,
