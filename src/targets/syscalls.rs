@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use crate::model::{
     BinFmt, BufferKind, CsumKind, Dir, Field, IntFmt, LenInfo, Param, ResDesc, Syscall,
     SyscallAttr, SyscallRef, TextKind, Type, TypeKind, TypeRef,
@@ -10,7 +12,6 @@ use std::mem;
 use std::sync::Mutex;
 
 lazy_static! {
-    #[allow(clippy::type_complexity)]
     static ref DESCS: Mutex<[Option<(&'static [Syscall], &'static [Type])>; 17]> =
         Mutex::new([None; 17]);
 }
@@ -422,33 +423,33 @@ fn parse_res_desc(val: &JsonValue) -> ResDesc {
 }
 
 fn restore_tyref(tys: &mut [Type], calls: &mut [Syscall]) {
-    // SAFETY: All types is guaranteed to be stores staticly.
-    let addr: Vec<&'static Type> = tys
+    // SAFETY: All types are guaranteed to be stored staticly.
+    let addrs: Vec<&'static Type> = tys
         .iter()
         .map(|addr| unsafe { mem::transmute(addr) })
         .collect();
 
     for call in calls.iter_mut() {
         for param in call.params.iter_mut() {
-            let id = param.ty.as_id().unwrap();
-            param.ty = TypeRef::Ref(addr[id]);
+            let idx = param.ty.as_id().unwrap();
+            param.ty = TypeRef::Ref(addrs[idx]);
         }
         if let Some(ref mut ret) = call.ret {
-            let id = ret.as_id().unwrap();
-            *ret = TypeRef::Ref(addr[id]);
+            let idx = ret.as_id().unwrap();
+            *ret = TypeRef::Ref(addrs[idx]);
         }
     }
 
     for ty in tys.iter_mut() {
         match &mut ty.kind {
             TypeKind::Array { elem, .. } | TypeKind::Ptr { elem, .. } => {
-                let id = elem.as_id().unwrap();
-                *elem = TypeRef::Ref(addr[id]);
+                let idx = elem.as_id().unwrap();
+                *elem = TypeRef::Ref(addrs[idx]);
             }
             TypeKind::Struct { fields, .. } | TypeKind::Union { fields, .. } => {
                 for field in fields.iter_mut() {
-                    let id = field.ty.as_id().unwrap();
-                    field.ty = TypeRef::Ref(addr[id]);
+                    let idx = field.ty.as_id().unwrap();
+                    field.ty = TypeRef::Ref(addrs[idx]);
                 }
             }
             _ => (),
@@ -457,16 +458,38 @@ fn restore_tyref(tys: &mut [Type], calls: &mut [Syscall]) {
 }
 
 fn restore_res(tys: &mut [Type], calls: &mut [Syscall]) {
-    restore_fn_res(calls);
+    restore_call_res(calls);
+    // SAFETY: All calls are guaranteed to be stored staticly.
+    let call_refs: Vec<SyscallRef> = calls
+        .iter()
+        .map(|call| unsafe { mem::transmute(call) })
+        .collect();
+
     for ty in tys.iter_mut() {
-        if let TypeKind::Res { .. } = &mut ty.kind {
-            todo!()
+        if let TypeKind::Res { desc, .. } = &mut ty.kind {
+            let mut consumers = FxHashSet::default();
+            let mut ctors = FxHashSet::default();
+            for call in call_refs.iter() {
+                for res in call.input_res.iter() {
+                    if ty.id == res.id {
+                        consumers.insert(*call);
+                    }
+                }
+                for res in call.output_res.iter() {
+                    if ty.id == res.id {
+                        ctors.insert(*call);
+                    }
+                }
+            }
+            consumers.shrink_to_fit();
+            ctors.shrink_to_fit();
+            desc.consumers = consumers;
+            desc.ctors = ctors;
         }
     }
-    todo!()
 }
 
-fn restore_fn_res(calls: &mut [Syscall]) {
+fn restore_call_res(calls: &mut [Syscall]) {
     for call in calls.iter_mut() {
         let mut in_res = FxHashSet::default();
         let mut out_res = FxHashSet::default();
@@ -484,6 +507,8 @@ fn restore_fn_res(calls: &mut [Syscall]) {
         if let Some(ret) = call.ret {
             out_res.insert(ret);
         }
+        in_res.shrink_to_fit();
+        out_res.shrink_to_fit();
         call.input_res = in_res;
         call.output_res = out_res;
     }

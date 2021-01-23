@@ -2,7 +2,7 @@ use crate::{
     model::{SyscallRef, TypeRef},
     utils::to_boxed_str,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Syscall desciptions in json format of Syzkaller.
 pub mod sys_json;
@@ -37,12 +37,14 @@ pub struct Target {
 
     /// All syscalls of target os.
     pub syscalls: Box<[SyscallRef]>,
-    /// All types of syscalls.
+    /// All types of `syscalls`.
     pub tys: Box<[TypeRef]>,
     /// All resource types of `tys`.
     pub res_tys: Box<[TypeRef]>,
-    /// All compatible resource types.
-    pub res_eq_class: FxHashMap<TypeRef, Box<[TypeRef]>>,
+    /// Subtypes of each resource type.
+    pub subtype_map: FxHashMap<TypeRef, Box<[TypeRef]>>,
+    /// Supertypes of each resource type.
+    pub supertype_map: FxHashMap<TypeRef, Box<[TypeRef]>>,
 }
 
 impl Target {
@@ -50,12 +52,6 @@ impl Target {
         let target = target.as_ref();
         let desc_str = sys_json::load(target)?;
         let desc_json = json::parse(desc_str).unwrap();
-
-        // let mut res_eq_class = Self::cal_res_eq_class(&res_tys);
-        // assert!(res_tys.iter().all(|ty| ty.is_res_kind()));
-        // Self::analyze_syscall_inout_res(&mut calls, &mut tys);
-        // Self::complete_res_ty_info(&mut res_tys, &calls);
-        // Self::filter_unreachable_res(&mut res_tys, &mut res_eq_class);
 
         let (syscalls, tys) = syscalls::parse(target, &desc_json);
         let res_tys = tys
@@ -71,11 +67,35 @@ impl Target {
         let ptr_sz = target_json["PtrSize"].as_u64().unwrap();
         let page_sz = target_json["PageSize"].as_u64().unwrap();
         let page_num = target_json["NumPages"].as_u64().unwrap();
-        let data_offset = target_json["DataOFfset"].as_u64().unwrap();
+        let data_offset = target_json["DataOffset"].as_u64().unwrap();
         let le_endian = target_json["LittleEndian"].as_bool().unwrap();
         let syz_exec_use_shm = target_json["ExecutorUsesShmem"].as_bool().unwrap();
         let syz_exec_use_forksrv = target_json["ExecutorUsesForkServer"].as_bool().unwrap();
         let syz_exec_bin = target_json["ExecutorBin"].as_str().unwrap();
+        let mut subtype_map = FxHashMap::default();
+        let mut supertype_map = FxHashMap::default();
+        for r0 in res_tys.iter().copied() {
+            let mut subtypes = FxHashSet::default();
+            let mut supertypes = FxHashSet::default();
+            for r1 in res_tys.iter().copied() {
+                if Self::is_subtype(r0, r1) {
+                    subtypes.insert(r1);
+                } else if Self::is_supertype(r0, r1) {
+                    supertypes.insert(r1);
+                }
+            }
+            subtype_map.insert(
+                r0,
+                subtypes.into_iter().collect::<Vec<_>>().into_boxed_slice(),
+            );
+            supertype_map.insert(
+                r0,
+                supertypes
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            );
+        }
 
         let target = Self {
             os: to_boxed_str(os),
@@ -96,7 +116,8 @@ impl Target {
             syscalls,
             tys,
             res_tys,
-            res_eq_class: FxHashMap::default(), // TODO
+            subtype_map,
+            supertype_map,
         };
         Some(target)
     }
@@ -105,12 +126,23 @@ impl Target {
         self.data_offset + addr
     }
 
-    // fn is_equivalence_class(r1: TypeRef, r2: TypeRef) -> bool {
-    //     let d1 = r1.res_desc().unwrap();
-    //     let d2 = r2.res_desc().unwrap();
-    //     let min_len = std::cmp::min(d1.kinds.len(), d2.kinds.len());
-    //     (&d1.kinds[0..min_len])
-    //         .iter()
-    //         .eq((&d2.kinds[0..min_len]).iter())
-    // }
+    fn is_subtype(dst: TypeRef, src: TypeRef) -> bool {
+        let dst_desc = dst.res_desc().unwrap();
+        let src_desc = src.res_desc().unwrap();
+        if dst_desc.kinds.len() < src_desc.kinds.len() {
+            *dst_desc.kinds == src_desc.kinds[0..dst_desc.kinds.len()]
+        } else {
+            false
+        }
+    }
+
+    fn is_supertype(dst: TypeRef, src: TypeRef) -> bool {
+        let dst_desc = dst.res_desc().unwrap();
+        let src_desc = src.res_desc().unwrap();
+        if dst_desc.kinds.len() > src_desc.kinds.len() {
+            dst_desc.kinds[0..src_desc.kinds.len()] == *src_desc.kinds
+        } else {
+            false
+        }
+    }
 }
