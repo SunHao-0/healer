@@ -36,10 +36,8 @@ pub struct Syscall {
     /// Attributes of system call.
     pub attr: SyscallAttr,
     /// Resources consumed by current system call.
-    /// Key is resourse type, value is count of that kind of resource .
     pub input_res: FxHashSet<TypeRef>,
     /// Resource produced by current system call.
-    /// Key is resourse type, value is count.
     pub output_res: FxHashSet<TypeRef>,
 }
 
@@ -49,7 +47,7 @@ impl fmt::Display for Syscall {
         if !attr.is_empty() {
             writeln!(f, "{}", attr)?;
         }
-        write!(f, "fn {}(", self.call_name)?;
+        write!(f, "fn {}(", self.name)?;
         for (i, p) in self.params.iter().enumerate() {
             write!(f, "{}", p)?;
             if i != self.params.len() - 1 {
