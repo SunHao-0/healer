@@ -29,7 +29,7 @@ fn check_env() {
         ("wget", "download syzkaller"),
         ("sha384sum", "check download"),
         ("unzip", "unzip syzkaller.zip"),
-        ("patch", "patch sysgen.patch"),
+        ("patch", "patch patches/*.diff"),
         ("make", "build the syzkaller description and executor"),
         ("go", "build the syzkaller"),
     ];

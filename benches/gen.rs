@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use healer::fuzz::ValuePool;
+use healer::fuzz::fuzzer::ValuePool;
 use healer::gen::gen;
 use healer::targets::Target;
 
