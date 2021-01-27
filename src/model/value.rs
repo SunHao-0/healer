@@ -1,6 +1,7 @@
 //! Abstract representation of value structure of different types.
-use super::types::TypeRef;
-use super::Dir;
+use crate::model::types::TypeRef;
+use crate::model::Dir;
+
 use std::hash::{Hash, Hasher};
 use std::{fmt, sync::Arc};
 

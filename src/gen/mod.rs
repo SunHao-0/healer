@@ -1,11 +1,12 @@
-use self::param::alloc::{MemAlloc, VmaAlloc};
-/// resource oriented generation algorithm
-use crate::fuzz::ValuePool;
+use crate::fuzz::fuzzer::ValuePool;
+use crate::gen::param::alloc::{MemAlloc, VmaAlloc};
 use crate::model::*;
 use crate::targets::Target;
+
+use std::sync::Arc;
+
 use rand::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Arc;
 
 // Syscall selection.
 mod select;

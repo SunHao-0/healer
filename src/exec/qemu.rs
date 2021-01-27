@@ -1,13 +1,13 @@
 //! Boot up and manage virtual machine
+use crate::exec::{ssh, QemuConf, SshConf};
+use crate::utils::{into_async_file, LogReader};
 
-use rustc_hash::{FxHashMap, FxHashSet};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, Once};
 use std::{thread::sleep, time::Duration};
-use thiserror::Error;
 
-use super::{ssh, QemuConf, SshConf};
-use crate::utils::{into_async_file, LogReader};
+use rustc_hash::{FxHashMap, FxHashSet};
+use thiserror::Error;
 
 pub struct QemuHandle {
     qemu: Child,
@@ -231,20 +231,6 @@ fn build_qemu_command(conf: &QemuConf) -> Result<(Command, PortGuard), BootError
         .args(&inshm);
 
     Ok((qemu_cmd, ssh_fwd_port))
-}
-
-macro_rules! fxhashmap {
-    ($($key:expr => $value:expr,)+) => { fxhashmap!($($key => $value),+) };
-    ($($key:expr => $value:expr),*) => {
-        {
-            let mut _map = ::rustc_hash::FxHashMap::default();
-            $(
-                let _ = _map.insert($key, $value);
-            )*
-            _map.shrink_to_fit();
-            _map
-        }
-    };
 }
 
 static mut QEMU_STATIC_CONF: Option<FxHashMap<&str, QemuStaticConf>> = None;

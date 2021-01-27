@@ -1,10 +1,11 @@
+use crate::gen::*;
+use crate::model::{Dir, ResValue, TypeKind, Value};
+
+use std::iter::Iterator;
+
 pub(super) mod alloc;
 mod buffer;
 mod scalar;
-
-use super::*;
-use crate::model::{Dir, ResValue, TypeKind, Value};
-use std::iter::Iterator;
 
 #[derive(Default)]
 pub(super) struct GenParamContext {

@@ -6,10 +6,12 @@ use crate::model::{
 };
 use crate::targets::sys_json::TARGETS;
 use crate::utils::to_boxed_str;
-use json::JsonValue;
-use rustc_hash::{FxHashMap, FxHashSet};
+
 use std::mem;
 use std::sync::Mutex;
+
+use json::JsonValue;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 lazy_static! {
     static ref DESCS: Mutex<[Option<(&'static [Syscall], &'static [Type])>; 17]> =

@@ -1,15 +1,15 @@
 //! Abstract representation or AST of system call model.
+use crate::utils::to_boxed_str;
+
+use std::fmt;
+use std::hash::{Hash, Hasher};
+
+use rustc_hash::FxHashSet;
 
 pub mod types;
 pub mod value;
 pub use types::*;
 pub use value::*;
-
-use rustc_hash::FxHashSet;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-
-use crate::utils::to_boxed_str;
 
 /// System call id.
 pub type SId = usize;

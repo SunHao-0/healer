@@ -1,5 +1,6 @@
-use super::*;
+use crate::gen::*;
 use crate::model::{Call, Dir, LenInfo, ResValue, Value};
+
 use std::sync::Arc;
 
 #[allow(clippy::vec_box)]

@@ -1,8 +1,10 @@
-use super::{syz::SyzHandle, CallExecInfo, ExecOpt};
+use crate::exec::{syz::SyzHandle, CallExecInfo, ExecOpt};
 use crate::model::Prog;
-use bytes::{Buf, BufMut};
+
 use std::io::{Read, Write};
 use std::{mem, slice};
+
+use bytes::{Buf, BufMut};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

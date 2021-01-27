@@ -1,4 +1,4 @@
-use super::*;
+use crate::gen::*;
 use crate::model::{Value, ValueKind};
 use rustc_hash::FxHashMap;
 

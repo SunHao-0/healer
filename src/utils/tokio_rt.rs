@@ -1,5 +1,6 @@
 use std::future::pending;
 use std::sync::{Arc, Barrier, Once};
+
 use tokio::runtime::{Builder, Runtime};
 
 static mut RUNTIME: Option<Runtime> = None;

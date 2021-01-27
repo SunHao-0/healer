@@ -1,4 +1,5 @@
-use super::*;
+use crate::gen::*;
+
 use rustc_hash::FxHashSet;
 
 const MAGIC32: [u64; 24] = [
@@ -108,7 +109,7 @@ pub fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
 }
 
 /// Generate a random flag value.
-pub(super) fn gen_flag(pool: Option<&FxHashSet<Value>>, vals: &[u64], bitmask: bool) -> u64 {
+pub(super) fn gen_flag(pool: Option<&FxHashSet<Arc<Value>>>, vals: &[u64], bitmask: bool) -> u64 {
     let mut rng = thread_rng();
     let empty_set = FxHashSet::default();
     let extra_vals = || {

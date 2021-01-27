@@ -15,7 +15,7 @@ use std::{
 
 use healer::{
     exec::{spawn_in_qemu, ExecConf, ExecOpt, ExecResult, QemuConf, SshConf},
-    fuzz::ValuePool,
+    fuzz::fuzzer::ValuePool,
     gen::gen,
     targets::Target,
 };

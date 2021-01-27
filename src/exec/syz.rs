@@ -1,20 +1,20 @@
 //! Start, interactive with syz-executor
-
+use crate::exec::{
+    serialize::serialize,
+    ssh::{scp, ssh_basic_cmd, ScpError},
+    CallExecInfo, EnvFlags, ExecOpt,
+};
 use crate::{model::Prog, utils::into_async_file};
+use crate::{targets::Target, utils::LogReader};
+
 use std::{
     error::Error,
     io::ErrorKind,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Stdio},
 };
-use thiserror::Error;
 
-use super::{
-    serialize::serialize,
-    ssh::{scp, ssh_basic_cmd, ScpError},
-    CallExecInfo, EnvFlags, ExecOpt,
-};
-use crate::{targets::Target, utils::LogReader};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SyzSpawnError {

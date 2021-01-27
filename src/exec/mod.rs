@@ -1,13 +1,13 @@
+use crate::exec::qemu::QemuHandle;
+use crate::exec::syz::{SyzHandle, SyzHandleBuilder};
+use crate::model::Prog;
+use crate::targets::Target;
+
 use std::path::{Path, PathBuf};
 
-use crate::model::Prog;
 use iota::iota;
-use qemu::QemuHandle;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
-use syz::{SyzHandle, SyzHandleBuilder};
 use thiserror::Error;
-
-use crate::targets::Target;
 
 /// Communication with syz-executor.
 mod comm;

@@ -1,4 +1,4 @@
-use super::*;
+use crate::gen::*;
 use crate::targets::Target;
 
 /// Select a syscall to fuzz based on resource usage.

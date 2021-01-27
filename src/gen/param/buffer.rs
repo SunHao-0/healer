@@ -1,7 +1,9 @@
-use super::{scalar::*, *};
+use crate::gen::{param::scalar::*, *};
 use crate::model::{BufferKind, Dir, TextKind, Value};
-use rustc_hash::FxHashSet;
+
 use std::iter::Iterator;
+
+use rustc_hash::FxHashSet;
 
 pub(super) fn gen(
     ctx: &mut GenContext,
@@ -37,7 +39,7 @@ pub(super) fn gen(
 }
 
 fn gen_fname(
-    pool: Option<&FxHashSet<Value>>,
+    pool: Option<&FxHashSet<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -78,7 +80,7 @@ fn mutate_fname(fname: &mut Vec<u8>) {
 }
 
 fn gen_str(
-    pool: Option<&FxHashSet<Value>>,
+    pool: Option<&FxHashSet<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -112,7 +114,7 @@ fn mutate_str(val: &mut Vec<u8>) {
 
 #[allow(clippy::new_without_default)]
 fn gen_str_like<G, M>(
-    pool: Option<&FxHashSet<Value>>,
+    pool: Option<&FxHashSet<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -143,7 +145,7 @@ where
 
 #[allow(clippy::unnecessary_unwrap)]
 fn try_reuse(
-    pool: Option<&FxHashSet<Value>>,
+    pool: Option<&FxHashSet<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
 ) -> Option<Vec<u8>> {
@@ -175,7 +177,7 @@ fn gen_text(_kind: &TextKind) -> Box<[u8]> {
     rand_blob_range(gen_range())
 }
 
-fn gen_blob(pool: Option<&FxHashSet<Value>>, range: Option<(u64, u64)>) -> Box<[u8]> {
+fn gen_blob(pool: Option<&FxHashSet<Arc<Value>>>, range: Option<(u64, u64)>) -> Box<[u8]> {
     let range = range
         .map(|(min, max)| (min as usize, max as usize))
         .unwrap_or_else(gen_range);
@@ -196,7 +198,10 @@ fn gen_range() -> (usize, usize) {
     (min, max)
 }
 
-fn mutate_exist_blob(pool: Option<&FxHashSet<Value>>, (min, max): (usize, usize)) -> Box<[u8]> {
+fn mutate_exist_blob(
+    pool: Option<&FxHashSet<Arc<Value>>>,
+    (min, max): (usize, usize),
+) -> Box<[u8]> {
     match pool {
         Some(ref pool) if !pool.is_empty() => {
             let mut src = pool
@@ -214,7 +219,11 @@ fn mutate_exist_blob(pool: Option<&FxHashSet<Value>>, (min, max): (usize, usize)
     }
 }
 
-fn mutate_blob(src: &mut Vec<u8>, pool: Option<&FxHashSet<Value>>, (min, max): (usize, usize)) {
+fn mutate_blob(
+    src: &mut Vec<u8>,
+    pool: Option<&FxHashSet<Arc<Value>>>,
+    (min, max): (usize, usize),
+) {
     let mut delta = 0.8;
     let mut rng = thread_rng();
     dec_probability_iter(4, || {

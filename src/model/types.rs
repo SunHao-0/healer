@@ -1,7 +1,9 @@
-use super::{to_boxed_str, Dir, SyscallRef};
-use rustc_hash::FxHashSet;
+use crate::model::{to_boxed_str, Dir, SyscallRef};
+
 use std::hash::{Hash, Hasher};
 use std::{fmt, ops::Deref};
+
+use rustc_hash::FxHashSet;
 
 /// Unique id of each type.
 pub type TypeId = usize;

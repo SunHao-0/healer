@@ -1,5 +1,6 @@
 use std::io;
 use std::sync::{Arc, Mutex};
+
 use tokio::{
     io::{AsyncRead, AsyncReadExt},
     task::JoinHandle,
@@ -7,6 +8,20 @@ use tokio::{
 use tokio_rt::runtime;
 
 pub mod tokio_rt;
+
+macro_rules! fxhashmap {
+    ($($key:expr => $value:expr,)+) => { fxhashmap!($($key => $value),+) };
+    ($($key:expr => $value:expr),*) => {
+        {
+            let mut _map = ::rustc_hash::FxHashMap::default();
+            $(
+                let _ = _map.insert($key, $value);
+            )*
+            _map.shrink_to_fit();
+            _map
+        }
+    };
+}
 
 pub(crate) fn to_boxed_str<T: AsRef<str>>(s: T) -> Box<str> {
     let t = s.as_ref();
