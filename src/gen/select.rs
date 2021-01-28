@@ -1,5 +1,8 @@
-use crate::gen::*;
+use crate::gen::context::GenContext;
+use crate::model::{SyscallRef, TypeRef};
 use crate::targets::Target;
+
+use rand::prelude::*;
 
 /// Select a syscall to fuzz based on resource usage.
 pub(super) fn select_syscall(ctx: &GenContext) -> SyscallRef {
@@ -26,24 +29,26 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
     const MIN_RES_NUMBER: usize = 2;
     const MAX_RES_NUMBER: usize = 6;
     let res_count = ctx.generated_res.len();
+    let mut rng = thread_rng();
     if res_count == 0 {
         // always make sure we start from generating a resource.
         true
     } else if res_count >= MAX_RES_NUMBER {
-        random::<f32>() < 0.2 * (MAX_RES_NUMBER as f32 / (res_count as f32 * 2.0))
+        let delta = 0.2 * (MAX_RES_NUMBER as f64 / (res_count as f64 * 2.0));
+        rng.gen_bool(delta)
     } else {
-        let alpha = 1.0 - (res_count as f32) / (MAX_RES_NUMBER as f32);
+        let alpha = 1.0 - (res_count as f64) / (MAX_RES_NUMBER as f64);
         if res_count < MIN_RES_NUMBER {
-            random::<f32>() < 0.8 * alpha
+            rng.gen_bool(0.8 * alpha)
         } else {
-            random::<f32>() < 0.4 * alpha
+            rng.gen_bool(0.4 * alpha)
         }
     }
 }
 
 fn select_syscall_rand(ctx: &GenContext) -> SyscallRef {
     // Try to select a consumer first.
-    if random::<f32>() < 0.96 {
+    if thread_rng().gen_ratio(96, 100) {
         if let Some(syscall) = ctx
             .generated_res
             .iter()
@@ -71,19 +76,19 @@ fn select_res_producer(t: &Target, res: TypeRef) -> Option<SyscallRef> {
     let accurate_ctors = &res_desc.ctors;
     let mut rng = thread_rng();
 
-    if !accurate_ctors.is_empty() && rng.gen::<f32>() < 0.85 {
+    if !accurate_ctors.is_empty() && rng.gen_ratio(85, 100) {
         // Try to choose calls that generate current resource and do not depend on other resources first.
         if let Some(e) = accurate_ctors
             .iter()
             .filter(|s| s.input_res.is_empty())
             .choose(&mut rng)
         {
-            if rng.gen::<f32>() < 0.8 {
+            if rng.gen_ratio(80, 100) {
                 return Some(e);
             }
         }
         accurate_ctors.iter().copied().choose(&mut rng)
-    } else if !subtypes.is_empty() && rng.gen::<f32>() < 0.75 {
+    } else if !subtypes.is_empty() && rng.gen_ratio(75, 100) {
         let subtype = subtypes.choose(&mut rng)?;
         subtype
             .res_desc()

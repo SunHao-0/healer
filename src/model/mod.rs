@@ -4,7 +4,7 @@ use crate::utils::to_boxed_str;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub mod types;
 pub mod value;
@@ -188,6 +188,81 @@ pub struct Prog {
     pub calls: Vec<Call>,
 }
 
+struct CloneCtx {
+    res_addr: FxHashMap<*mut ResValue, *mut ResValue>,
+}
+
+impl Clone for Prog {
+    fn clone(&self) -> Self {
+        let mut ctx = CloneCtx {
+            res_addr: FxHashMap::default(),
+        };
+        let mut calls = Vec::with_capacity(self.calls.len());
+        for c in self.calls.iter() {
+            calls.push(clone_call(&mut ctx, c))
+        }
+        Prog { calls }
+    }
+}
+
+fn clone_call(ctx: &mut CloneCtx, c: &Call) -> Call {
+    let mut args = Vec::with_capacity(c.args.len());
+    for arg in c.args.iter() {
+        args.push(clone_value(ctx, arg));
+    }
+    let mut ret = None;
+    if let Some(call_ret) = c.ret.as_ref() {
+        ret = Some(clone_value(ctx, call_ret));
+    }
+    Call {
+        meta: c.meta,
+        args,
+        ret,
+        val_cnt: c.val_cnt,
+        res_cnt: c.res_cnt,
+    }
+}
+
+fn clone_value(ctx: &mut CloneCtx, v: &Value) -> Value {
+    match &v.kind {
+        ValueKind::Scalar(val) => Value::new(v.dir, v.ty, ValueKind::new_scalar(*val)),
+        ValueKind::Ptr { addr, pointee } => {
+            if let Some(p) = pointee.as_ref() {
+                let pointee = clone_value(ctx, p);
+                Value::new(v.dir, v.ty, ValueKind::new_ptr(*addr, Some(pointee)))
+            } else {
+                Value::new(v.dir, v.ty, ValueKind::new_ptr_null())
+            }
+        }
+        ValueKind::Vma { addr, size } => Value::new(v.dir, v.ty, ValueKind::new_vma(*addr, *size)),
+        ValueKind::Bytes(val) => Value::new(v.dir, v.ty, ValueKind::new_bytes(val.clone())),
+        ValueKind::Group(vals) => {
+            let mut vals_new = Vec::with_capacity(vals.len());
+            for v in vals.iter() {
+                vals_new.push(clone_value(ctx, v));
+            }
+            Value::new(v.dir, v.ty, ValueKind::new_group(vals_new))
+        }
+        ValueKind::Union { idx, val } => {
+            let val_new = clone_value(ctx, val);
+            Value::new(v.dir, v.ty, ValueKind::new_union(*idx, val_new))
+        }
+        ValueKind::Res(val) => {
+            if let Some(id) = val.kind.id() {
+                let mut val_new = Box::new(ResValue::new_res(val.val, id));
+                ctx.res_addr
+                    .insert(&mut **val as *mut ResValue, &mut *val_new as *mut ResValue);
+                Value::new(v.dir, v.ty, ValueKind::new_res(val_new))
+            } else if let Some(src) = val.kind.src() {
+                let src_new = ctx.res_addr[&src];
+                Value::new(v.dir, v.ty, ValueKind::new_res_ref(src_new))
+            } else {
+                Value::new(v.dir, v.ty, ValueKind::new_res_null(val.val))
+            }
+        }
+    }
+}
+
 impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, call) in self.calls.iter().enumerate() {
@@ -211,12 +286,9 @@ pub struct Call {
     pub meta: SyscallRef,
     pub args: Vec<Value>,
     pub ret: Option<Value>,
-}
 
-impl Call {
-    pub fn new(meta: SyscallRef, args: Vec<Value>, ret: Option<Value>) -> Self {
-        Self { meta, args, ret }
-    }
+    pub val_cnt: usize,
+    pub res_cnt: usize,
 }
 
 impl fmt::Display for Call {

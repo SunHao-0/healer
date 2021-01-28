@@ -1,16 +1,19 @@
-use crate::gen::*;
-use crate::model::{Dir, ResValue, TypeKind, Value};
+use crate::gen::{context::GenContext, len};
+use crate::model::{Dir, ResValue, TypeKind, TypeRef, Value, ValueKind};
 
 use std::iter::Iterator;
+use std::sync::Arc;
 
-pub(super) mod alloc;
-mod buffer;
-mod scalar;
+use rand::prelude::*;
+
+pub(crate) mod alloc;
+pub(crate) mod buffer;
+pub(crate) mod scalar;
 
 #[derive(Default)]
-pub(super) struct GenParamContext {
+pub(crate) struct GenParamContext {
     /// Counter of len type of current parameter type.
-    pub(super) len_type_count: u32,
+    pub(crate) len_type_count: u32,
 }
 
 pub(super) fn gen(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Box<Value> {
@@ -18,7 +21,7 @@ pub(super) fn gen(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Box<Value> {
     let mut val = Box::new(gen_inner(ctx, ty, dir)); // make sure address of value won't change during calculating length.
     if ctx.has_len_param_ctx() {
         // Try to calculate length value here.
-        super::len::try_cal(ctx, &mut *val);
+        len::try_cal(ctx, &mut *val);
     }
     val
 }
@@ -27,12 +30,25 @@ fn gen_inner(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
     use crate::model::TypeKind::*;
     match &ty.kind {
         Const { .. } | Int { .. } | Csum { .. } | Len { .. } | Proc { .. } | Flags { .. } => {
+            ctx.call_ctx.val_cnt += 1;
             scalar::gen(ctx, ty, dir)
         }
-        Buffer { .. } => buffer::gen(ctx, ty, dir),
-        Res { .. } => gen_res(ctx, ty, dir),
-        Ptr { .. } => gen_ptr(ctx, ty, dir),
-        Vma { .. } => gen_vma(ctx, ty, dir),
+        Buffer { .. } => {
+            ctx.call_ctx.val_cnt += 1;
+            buffer::gen(ctx, ty, dir)
+        }
+        Res { .. } => {
+            ctx.call_ctx.val_cnt += 1;
+            gen_res(ctx, ty, dir)
+        }
+        Ptr { .. } => {
+            ctx.call_ctx.val_cnt += 1;
+            gen_ptr(ctx, ty, dir)
+        }
+        Vma { .. } => {
+            ctx.call_ctx.val_cnt += 1;
+            gen_vma(ctx, ty, dir)
+        }
         Array { .. } => gen_array(ctx, ty, dir),
         Struct { .. } => gen_struct(ctx, ty, dir),
         Union { .. } => gen_union(ctx, ty, dir),
@@ -146,8 +162,9 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
     };
     let mut rng = thread_rng();
     if dir == Dir::Out || dir == Dir::InOut {
-        let res = Arc::new(ResValue::new_res(0, ctx.next_id()));
-        ctx.add_res(ty, Arc::clone(&res));
+        ctx.call_ctx.res_cnt += 1;
+        let mut res = Box::new(ResValue::new_res(0, ctx.next_id()));
+        ctx.add_res(ty, &mut *res);
         Value::new(dir, ty, ValueKind::new_res(res))
     } else {
         // For most case, we reuse the generated resource even if the resource may not be the
@@ -156,8 +173,8 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
             // If we've already generated required resource, just reuse it.
             if let Some(generated_res) = ctx.generated_res.get(&ty) {
                 if !generated_res.is_empty() {
-                    let res = Arc::clone(generated_res.iter().choose(&mut rng).unwrap());
-                    return Value::new(dir, ty, ValueKind::new_res_ref(res));
+                    let res = generated_res.iter().choose(&mut rng).unwrap();
+                    return Value::new(dir, ty, ValueKind::new_res_ref(*res));
                 }
             }
             // Otherwise, try to find the eq resource. Also handle unreachable resource here.
@@ -168,20 +185,20 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
             for res in subtypes.iter().copied().chain(supertypes.iter().copied()) {
                 if let Some(r) = ctx.generated_res.get(&res) {
                     if !r.is_empty() {
-                        res_vals.extend(r.iter());
+                        res_vals.extend(r.iter().copied());
                     }
                 }
             }
             if !res_vals.is_empty() {
-                let res = Arc::clone(res_vals.into_iter().choose(&mut rng).unwrap());
+                let res = res_vals.into_iter().choose(&mut rng).unwrap();
                 return Value::new(dir, ty, ValueKind::new_res_ref(res));
             }
             // We still haven't found any usable resource, try to choose a arbitrary generated
             // resource. May be we can use resource centric strategy here just like syzkaller.
             if let Some((_, vals)) = ctx.generated_res.iter().choose(&mut rng) {
-                if !vals.is_empty() && rng.gen::<f32>() < 0.9 {
-                    let res = Arc::clone(vals.iter().choose(&mut rng).unwrap());
-                    return Value::new(dir, ty, ValueKind::new_res_ref(res));
+                if !vals.is_empty() && rng.gen_bool(0.9) {
+                    let res = vals.iter().choose(&mut rng).unwrap();
+                    return Value::new(dir, ty, ValueKind::new_res_ref(*res));
                 }
             }
             // This is bad, use special value.

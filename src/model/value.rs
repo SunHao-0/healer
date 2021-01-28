@@ -1,11 +1,12 @@
 //! Abstract representation of value structure of different types.
+use rustc_hash::FxHashSet;
+
 use crate::model::types::TypeRef;
 use crate::model::Dir;
 
-use std::hash::{Hash, Hasher};
-use std::{fmt, sync::Arc};
+use std::fmt;
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Value {
     /// Direction of value.
     pub dir: Dir,
@@ -234,7 +235,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum ValueKind {
     /// For integer, len, csum, proc, flag type, store its scarlar value.
     Scalar(u64),
@@ -253,7 +254,7 @@ pub enum ValueKind {
     Union { idx: usize, val: Box<Value> },
     /// For resource type, store a flag to indicate whether it is
     /// expected to output resource value or ref previous generated resource value.
-    Res(Arc<ResValue>),
+    Res(Box<ResValue>),
 }
 
 impl ValueKind {
@@ -291,16 +292,18 @@ impl ValueKind {
         }
     }
 
-    pub fn new_res_ref(src: Arc<ResValue>) -> Self {
-        ValueKind::Res(Arc::new(ResValue::new_res_ref(src)))
+    pub fn new_res_ref(src: *mut ResValue) -> Self {
+        let mut res_val = Box::new(ResValue::new_res_ref(src));
+        unsafe { (*src).kind.add_res_ref(&mut *res_val as *mut ResValue) }
+        ValueKind::Res(res_val)
     }
 
-    pub fn new_res(kind: Arc<ResValue>) -> Self {
+    pub fn new_res(kind: Box<ResValue>) -> Self {
         ValueKind::Res(kind)
     }
 
     pub fn new_res_null(val: u64) -> Self {
-        ValueKind::Res(Arc::new(ResValue::new_null(val)))
+        ValueKind::Res(Box::new(ResValue::new_null(val)))
     }
 
     pub fn scalar_val(&self) -> Option<u64> {
@@ -315,7 +318,7 @@ impl ValueKind {
 }
 
 /// Value of resource type.
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ResValue {
     pub val: u64,
     pub op_add: u64,
@@ -333,7 +336,7 @@ impl ResValue {
         }
     }
 
-    pub fn new_res_ref(src: Arc<ResValue>) -> Self {
+    pub fn new_res_ref(src: *mut ResValue) -> Self {
         Self {
             val: 0,
             op_add: 0,
@@ -364,7 +367,11 @@ impl fmt::Display for ResValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
             ResValueKind::Own { id, .. } => write!(f, "r{}(out)", *id),
-            ResValueKind::Ref { src } => write!(f, "r{}", src.res_id().unwrap()),
+            ResValueKind::Ref { src } => write!(
+                f,
+                "r{}",
+                unsafe { (*src).as_ref().unwrap() }.res_id().unwrap()
+            ),
             ResValueKind::Null => write!(f, "{:#X}(null)", self.val),
         }
     }
@@ -380,33 +387,32 @@ pub enum ResValueKind {
     /// Current syscall is expected to output this resource.
     Own {
         id: usize,
-        refs: std::cell::Cell<usize>,
+        refs: FxHashSet<*mut ResValue>,
     },
     /// Current syscall ref some other resources outputed by previous calls.
-    Ref { src: Arc<ResValue> },
+    Ref { src: *mut ResValue },
     /// Do not own or ref any resource, only contains special value.
     Null,
 }
 
 impl ResValueKind {
-    fn inc_rc_uncheck(&self) {
+    pub fn add_res_ref(&mut self, r: *mut ResValue) {
         if let ResValueKind::Own { refs, .. } = self {
-            let count = refs.get() + 1;
-            refs.set(count);
+            refs.insert(r);
         } else {
             unreachable!()
         }
     }
 
-    pub fn new_ref_kind(src: Arc<ResValue>) -> Self {
-        src.kind.inc_rc_uncheck();
+    pub fn new_ref_kind(src: *mut ResValue) -> Self {
+        // make sure add current ResValue  to `src`'s refs
         Self::Ref { src }
     }
 
     pub fn new_res_kind(id: usize) -> Self {
         Self::Own {
             id,
-            refs: std::cell::Cell::new(0),
+            refs: FxHashSet::default(),
         }
     }
 
@@ -420,59 +426,17 @@ impl ResValueKind {
 
     pub fn rc(&self) -> Option<usize> {
         if let ResValueKind::Own { refs, .. } = self {
-            Some(refs.get())
+            Some(refs.len())
         } else {
             None
         }
     }
 
-    pub fn src(&self) -> Option<&Arc<ResValue>> {
+    pub fn src(&self) -> Option<*mut ResValue> {
         if let ResValueKind::Ref { src } = self {
-            Some(src)
+            Some(*src)
         } else {
             None
         }
     }
 }
-
-impl Hash for ResValueKind {
-    fn hash<H: Hasher>(&self, h: &mut H) {
-        match self {
-            ResValueKind::Own { id, .. } => {
-                h.write_usize(*id);
-                // encode Own itself.
-                h.write_usize(0x2519567851);
-            }
-            ResValueKind::Ref { src } => {
-                // encode Ref itself.
-                h.write_usize(0x8855738149);
-                src.hash(h);
-            }
-            ResValueKind::Null => {
-                h.write_usize(0x47022874);
-            }
-        }
-    }
-}
-
-impl PartialEq for ResValueKind {
-    fn eq(&self, other: &ResValueKind) -> bool {
-        if let Some(id0) = self.id() {
-            if let Some(id1) = other.id() {
-                id0 == id1
-            } else {
-                false
-            }
-        } else if let Some(src0) = self.src() {
-            if let Some(src1) = other.src() {
-                src0.eq(src1)
-            } else {
-                false
-            }
-        } else {
-            true
-        }
-    }
-}
-
-impl Eq for ResValueKind {}

@@ -13,7 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct Crash;
 
-pub type ValuePool = FxHashMap<TypeRef, FxHashSet<Arc<Value>>>;
+pub type ValuePool = FxHashMap<TypeRef, VecDeque<Arc<Value>>>;
 
 #[allow(dead_code)] // todo
 pub struct Fuzzer {

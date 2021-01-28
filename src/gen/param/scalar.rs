@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::gen::*;
 
 use rustc_hash::FxHashSet;
@@ -29,7 +31,7 @@ const MAGIC32: [u64; 24] = [
     4_294_934_527, // Overflow signed 16-bit
 ];
 
-const MAGIC64: [u64; 24 * 24] = {
+pub const MAGIC64: [u64; 24 * 24] = {
     let mut magic = [0; 24 * 24];
     let mut i = 0;
     let mut j = 0;
@@ -86,7 +88,7 @@ pub fn gen_integer(mut bit: u64, range: Option<(u64, u64)>, mut align: u64) -> u
         val
     };
 
-    if rng.gen::<f32>() < 0.65 {
+    if rng.gen_bool(0.65) {
         shift_align(val)
     } else {
         let magic = MAGIC64
@@ -109,9 +111,9 @@ pub fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
 }
 
 /// Generate a random flag value.
-pub(super) fn gen_flag(pool: Option<&FxHashSet<Arc<Value>>>, vals: &[u64], bitmask: bool) -> u64 {
+pub fn gen_flag(pool: Option<&VecDeque<Arc<Value>>>, vals: &[u64], bitmask: bool) -> u64 {
     let mut rng = thread_rng();
-    let empty_set = FxHashSet::default();
+    let empty_set = Default::default();
     let extra_vals = || {
         pool.unwrap_or(&empty_set)
             .iter()
@@ -121,31 +123,31 @@ pub(super) fn gen_flag(pool: Option<&FxHashSet<Arc<Value>>>, vals: &[u64], bitma
 
     let mut val = 0;
     if !bitmask {
-        if rng.gen::<f32>() < 0.005 {
+        if rng.gen_ratio(5, 1000) {
             if rng.gen::<bool>() {
                 val
             } else {
                 rng.gen::<u64>()
             }
-        } else if rng.gen::<f32>() < 0.1 {
+        } else if rng.gen_ratio(1, 100) {
             extra_vals().choose(&mut rng).unwrap()
         } else {
             let vals = extra_vals().chain(vals.iter().copied());
             let mut val = vals.choose(&mut rng).unwrap();
-            if rng.gen::<f32>() < 0.1 {
+            if rng.gen_ratio(1, 10) {
                 val ^= MAGIC64.iter().copied().choose(&mut rng).unwrap();
             }
             val
         }
     } else {
         let mut t = 0.8;
-        while val == 0 || rng.gen::<f32>() < t {
-            let mut flag = if !vals.is_empty() && rng.gen::<f32>() < 0.8 {
+        while val == 0 || rng.gen_bool(t) {
+            let mut flag = if !vals.is_empty() && rng.gen_ratio(8, 10) {
                 vals.iter().copied().choose(&mut rng).unwrap()
             } else {
                 extra_vals().choose(&mut rng).unwrap()
             };
-            if rng.gen::<f32>() < 0.05 {
+            if rng.gen_ratio(5, 100) {
                 if rng.gen::<bool>() {
                     flag >>= 1;
                 } else {

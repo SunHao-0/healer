@@ -1,5 +1,5 @@
-use crate::gen::*;
-use crate::model::{Value, ValueKind};
+use crate::gen::context::GenContext;
+use crate::model::{LenInfo, TypeKind, Value, ValueKind};
 use rustc_hash::FxHashMap;
 
 /// Finish the calculation of 'len' type.
@@ -236,7 +236,6 @@ fn build_parent_map(val: &Value) -> FxHashMap<*const Value, &Value> {
             } else {
                 continue;
             };
-            assert_eq!(parent_map.insert(val as *const Value, v), None);
         }
     });
     parent_map

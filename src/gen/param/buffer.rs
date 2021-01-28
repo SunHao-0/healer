@@ -1,6 +1,7 @@
 use crate::gen::{param::scalar::*, *};
 use crate::model::{BufferKind, Dir, TextKind, Value};
 
+use std::collections::VecDeque;
 use std::iter::Iterator;
 
 use rustc_hash::FxHashSet;
@@ -39,7 +40,7 @@ pub(super) fn gen(
 }
 
 fn gen_fname(
-    pool: Option<&FxHashSet<Arc<Value>>>,
+    pool: Option<&VecDeque<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -74,13 +75,17 @@ fn filter_noz(s: &mut [u8]) {
     }
 }
 
-fn mutate_fname(fname: &mut Vec<u8>) {
+pub fn mutate_fname(fname: &mut Vec<u8>) {
     // TODO add more mutate operation.
+    if *fname.last().unwrap() == b'\0' {
+        fname.pop();
+    }
+    fname.push(b'/');
     fname.extend(rand_fname_one().iter());
 }
 
 fn gen_str(
-    pool: Option<&FxHashSet<Arc<Value>>>,
+    pool: Option<&VecDeque<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -97,7 +102,7 @@ fn rand_str() -> Vec<u8> {
     let mut ret = Vec::new();
     let mut rng = thread_rng();
     dec_probability_iter(8, || {
-        let b = if rng.gen::<f32>() < 0.1 {
+        let b = if rng.gen_ratio(1, 10) {
             PUNCT.iter().copied().choose(&mut rng).unwrap()
         } else {
             rng.gen::<u8>()
@@ -108,13 +113,13 @@ fn rand_str() -> Vec<u8> {
     ret
 }
 
-fn mutate_str(val: &mut Vec<u8>) {
+pub fn mutate_str(val: &mut Vec<u8>) {
     mutate_blob(val, None, gen_range())
 }
 
 #[allow(clippy::new_without_default)]
 fn gen_str_like<G, M>(
-    pool: Option<&FxHashSet<Arc<Value>>>,
+    pool: Option<&VecDeque<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
     noz: bool,
@@ -128,7 +133,7 @@ where
     let mut val = try_reuse(pool, generated, vals);
     if val.is_none() || val.as_ref().unwrap().is_empty() {
         val = Some(gen_new());
-    } else if random::<f32>() < 0.01 {
+    } else if thread_rng().gen_ratio(1, 100) {
         mutate(val.as_mut().unwrap());
     }
     let mut val = val.unwrap();
@@ -145,25 +150,25 @@ where
 
 #[allow(clippy::unnecessary_unwrap)]
 fn try_reuse(
-    pool: Option<&FxHashSet<Arc<Value>>>,
+    pool: Option<&VecDeque<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,
     vals: &[Box<[u8]>],
 ) -> Option<Vec<u8>> {
     let mut val = None;
     let mut rng = thread_rng();
-    if !vals.is_empty() && rng.gen::<f32>() < 0.8 {
+    if !vals.is_empty() && rng.gen_ratio(8, 10) {
         val = vals
             .iter()
             .filter(|val| !val.is_empty())
             .choose(&mut rng)
             .map(|x| Vec::from(&**x))
-    } else if generated.is_some() && rng.gen::<f32>() < 0.8 {
+    } else if generated.is_some() && rng.gen_ratio(8, 10) {
         val = generated
             .unwrap()
             .iter()
             .choose(&mut rng)
             .map(|x| Vec::from(&**x))
-    } else if pool.is_some() && rng.gen::<f32>() < 0.8 {
+    } else if pool.is_some() && rng.gen_ratio(8, 10) {
         val = pool
             .unwrap()
             .iter()
@@ -177,12 +182,12 @@ fn gen_text(_kind: &TextKind) -> Box<[u8]> {
     rand_blob_range(gen_range())
 }
 
-fn gen_blob(pool: Option<&FxHashSet<Arc<Value>>>, range: Option<(u64, u64)>) -> Box<[u8]> {
+fn gen_blob(pool: Option<&VecDeque<Arc<Value>>>, range: Option<(u64, u64)>) -> Box<[u8]> {
     let range = range
         .map(|(min, max)| (min as usize, max as usize))
         .unwrap_or_else(gen_range);
     let mut rng = thread_rng();
-    if rng.gen::<f32>() < 0.8 {
+    if rng.gen_ratio(8, 10) {
         mutate_exist_blob(pool, range)
     } else {
         rand_blob_range(range)
@@ -198,10 +203,7 @@ fn gen_range() -> (usize, usize) {
     (min, max)
 }
 
-fn mutate_exist_blob(
-    pool: Option<&FxHashSet<Arc<Value>>>,
-    (min, max): (usize, usize),
-) -> Box<[u8]> {
+fn mutate_exist_blob(pool: Option<&VecDeque<Arc<Value>>>, (min, max): (usize, usize)) -> Box<[u8]> {
     match pool {
         Some(ref pool) if !pool.is_empty() => {
             let mut src = pool
@@ -219,9 +221,9 @@ fn mutate_exist_blob(
     }
 }
 
-fn mutate_blob(
+pub fn mutate_blob(
     src: &mut Vec<u8>,
-    pool: Option<&FxHashSet<Arc<Value>>>,
+    pool: Option<&VecDeque<Arc<Value>>>,
     (min, max): (usize, usize),
 ) {
     let mut delta = 0.8;
@@ -233,7 +235,7 @@ fn mutate_blob(
     });
 
     if let Some(pool) = pool {
-        if pool.len() > 2 && src.len() < max && rng.gen::<f32>() < delta {
+        if pool.len() > 2 && src.len() < max && rng.gen_bool(delta) {
             let oth = pool
                 .iter()
                 .choose(&mut rng)
@@ -251,7 +253,7 @@ fn mutate_blob(
     }
 }
 
-const MUTATE_OPERATOR: [fn(&mut Vec<u8>); 3] = [insert_content, bit_flip, replace_content];
+const MUTATE_OPERATOR: [fn(&mut Vec<u8>); 3] = [insert_content, flip_bits, replace_content];
 
 fn insert_content(dst: &mut Vec<u8>) {
     let new_blob = rand_blob_range((4, 32));
@@ -274,7 +276,7 @@ fn do_insert(dst: &mut Vec<u8>, src: &[u8], insert_point: usize) {
     }
 }
 
-fn bit_flip(src: &mut Vec<u8>) {
+fn flip_bits(src: &mut Vec<u8>) {
     // TODO operate on 8 bytes one time.
     let sub = rand_sub_slice(src);
     for n in sub {
