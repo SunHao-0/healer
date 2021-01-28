@@ -236,6 +236,7 @@ fn build_parent_map(val: &Value) -> FxHashMap<*const Value, &Value> {
             } else {
                 continue;
             };
+            parent_map.insert(val as *const _, v);
         }
     });
     parent_map

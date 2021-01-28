@@ -2,7 +2,6 @@ use crate::gen::{context::GenContext, len};
 use crate::model::{Dir, ResValue, TypeKind, TypeRef, Value, ValueKind};
 
 use std::iter::Iterator;
-use std::sync::Arc;
 
 use rand::prelude::*;
 

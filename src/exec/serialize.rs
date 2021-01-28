@@ -188,9 +188,9 @@ impl ExecCtx<'_, '_> {
                     self.write_u64(EXEC_ARG_RESULT);
                     let meta = val.size() | (val.ty.bin_fmt() as u64) << 8;
                     self.write_u64(meta);
-                    self.write_u64(self.res_args[&(&**src as *const _)].idx);
-                    self.write_u64(src.op_div);
-                    self.write_u64(src.op_add);
+                    self.write_u64(self.res_args[&(*src as *const _)].idx);
+                    self.write_u64((unsafe { (*src).as_ref().unwrap() }).op_div);
+                    self.write_u64((unsafe { (*src).as_ref().unwrap() }).op_add);
                     self.write_u64(res_val.val);
                 }
             },

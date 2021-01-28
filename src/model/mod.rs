@@ -189,7 +189,7 @@ pub struct Prog {
 }
 
 struct CloneCtx {
-    res_addr: FxHashMap<*mut ResValue, *mut ResValue>,
+    res_addr: FxHashMap<*const ResValue, *mut ResValue>,
 }
 
 impl Clone for Prog {
@@ -251,10 +251,10 @@ fn clone_value(ctx: &mut CloneCtx, v: &Value) -> Value {
             if let Some(id) = val.kind.id() {
                 let mut val_new = Box::new(ResValue::new_res(val.val, id));
                 ctx.res_addr
-                    .insert(&mut **val as *mut ResValue, &mut *val_new as *mut ResValue);
+                    .insert(&**val as *const ResValue, &mut *val_new as *mut ResValue);
                 Value::new(v.dir, v.ty, ValueKind::new_res(val_new))
             } else if let Some(src) = val.kind.src() {
-                let src_new = ctx.res_addr[&src];
+                let src_new = ctx.res_addr[&(src as *const _)];
                 Value::new(v.dir, v.ty, ValueKind::new_res_ref(src_new))
             } else {
                 Value::new(v.dir, v.ty, ValueKind::new_res_null(val.val))

@@ -3,7 +3,7 @@ use crate::model::Prog;
 
 pub struct Report;
 
-fn repro<T: AsRef<Prog>>(_history: &[T]) -> Report {
+pub fn repro<T: AsRef<Prog>>(_history: &[T]) -> Report {
     // extract the crash info
     // try to repro with past test case
     // generate the target test case in text format

@@ -2,8 +2,6 @@ use std::collections::VecDeque;
 
 use crate::gen::*;
 
-use rustc_hash::FxHashSet;
-
 const MAGIC32: [u64; 24] = [
     0,             //
     1,             //

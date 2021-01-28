@@ -12,6 +12,7 @@ use rustc_hash::FxHashMap;
 /// An input contains a prog that covers new branches. The related performance data,
 /// such as depth, size, execution time, are used to evaluate the quality of current
 /// prog in multiple aspects.  
+#[allow(dead_code)] // todo
 pub struct Input {
     /// Prog that may find new branches.
     pub(crate) p: Arc<Prog>,

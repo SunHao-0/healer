@@ -176,10 +176,10 @@ pub fn insert_call(_p: &Prog) -> Prog {
     todo!()
 }
 
-pub fn seq_reuse(p: &Prog) -> Prog {
+pub fn seq_reuse(_p: &Prog) -> Prog {
     todo!()
 }
 
-pub fn fault_inject(p: &Prog) -> ExecOpt {
+pub fn fault_inject(_p: &Prog) -> ExecOpt {
     todo!()
 }
