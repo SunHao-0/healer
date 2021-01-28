@@ -60,10 +60,10 @@ impl Queue {
 
         Self {
             id,
-            last_culling: Instant::now(),
             inputs: Vec::new(),
             current: 0,
             last_num: 0,
+            last_culling: Instant::now(),
             culling_threshold: 128,
             culling_duration: Duration::from_secs(30 * 60),
             favored: Vec::new(),
@@ -85,26 +85,16 @@ impl Queue {
         let mut rng = thread_rng();
 
         // select pending
-        let choose_weighted = |f: &mut Vec<usize>, inputs: &[Input]| {
-            let idx = *f
-                .choose_weighted_mut(&mut thread_rng(), |&idx| inputs[idx].score)
-                .unwrap();
-            let i = f.iter().position(|&i| i == idx).unwrap();
-            if to_mutate {
-                f.remove(i);
-            }
-            idx
-        };
-
         if !self.pending_favored.is_empty() && rng.gen_range(1..=100) <= 90 {
-            let idx = choose_weighted(&mut self.pending_favored, &self.inputs);
-            return &mut self.inputs[idx];
+            return Self::choose_weighted(&mut self.pending_favored, &mut self.inputs, to_mutate);
         } else if !self.pending_found_re.is_empty() && rng.gen_range(1..=100) <= 60 {
-            let idx = choose_weighted(&mut self.pending_found_re, &self.inputs);
-            return &mut self.inputs[idx];
+            return Self::choose_weighted(&mut self.pending_found_re, &mut self.inputs, to_mutate);
         } else if !self.pending_none_favored.is_empty() && rng.gen_range(1..=100) < 30 {
-            let idx = choose_weighted(&mut self.pending_none_favored, &self.inputs);
-            return &mut self.inputs[idx];
+            return Self::choose_weighted(
+                &mut self.pending_none_favored,
+                &mut self.inputs,
+                to_mutate,
+            );
         };
 
         // select interesting
@@ -148,6 +138,21 @@ impl Queue {
         (&mut self.inputs[start..end])
             .choose_weighted_mut(&mut thread_rng(), |i| i.score)
             .unwrap()
+    }
+
+    fn choose_weighted<'a>(
+        f: &mut Vec<usize>,
+        inputs: &'a mut [Input],
+        to_mutate: bool,
+    ) -> &'a mut Input {
+        let idx = *f
+            .choose_weighted_mut(&mut thread_rng(), |&idx| inputs[idx].score)
+            .unwrap();
+        if to_mutate {
+            let i = f.iter().position(|&i| i == idx).unwrap();
+            f.remove(i);
+        }
+        &mut inputs[idx]
     }
 
     pub fn append(&mut self, inp: Input) {
@@ -285,7 +290,7 @@ impl Queue {
             *avgs.get_mut(&AVG_DEPTH).unwrap() += i.depth;
             *avgs.get_mut(&AVG_EXEC_TM).unwrap() += i.exec_tm;
             *avgs.get_mut(&AVG_RES_CNT).unwrap() += i.res_cnt;
-            *avgs.get_mut(&AVG_NEW_COV).unwrap() += i.res_cnt;
+            *avgs.get_mut(&AVG_NEW_COV).unwrap() += i.new_cov.len();
         }
         avgs.iter_mut().for_each(|(_, avg)| *avg /= inputs.len());
 

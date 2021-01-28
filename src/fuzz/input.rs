@@ -47,6 +47,8 @@ pub struct Input {
     pub(crate) res_cnt: usize,
     /// New coverage this prog found.
     pub(crate) new_cov: Vec<u32>,
+    /// Fault injection count.
+    pub(crate) fault_cnt: usize,
 
     mutation_cnt: usize,
     gain_cnt: usize,
@@ -54,7 +56,37 @@ pub struct Input {
 }
 
 impl Input {
+    pub fn new(p: Arc<Prog>, opt: ExecOpt, info: Vec<CallExecInfo>) -> Self {
+        let len = p.calls.len();
+        let sz = p.calls.iter().map(|c| c.val_cnt).sum();
+        let res_cnt = p.calls.iter().map(|c| c.res_cnt).sum();
+        Self {
+            p,
+            opt,
+            info,
+            was_mutated: false,
+            favored: true,
+            found_new_re: false,   // updated after analysis.
+            self_contained: false, // updated after re-execution.
+            score: 0,              // updated after culling.
+            gaining_rate: 0,       // updated after every mutation.
+            distinct_degree: 0,    // culling
+            age: 0,
+            depth: 0,
+            sz,
+            len,
+            exec_tm: 0,
+            res_cnt,
+            new_cov: Vec::new(),
+            fault_cnt: 0,
+            mutation_cnt: 0,
+            gain_cnt: 0,
+            last_update: 0,
+        }
+    }
+
     pub fn update_gaining_rate(&mut self, gain: bool) -> usize {
+        self.was_mutated = true;
         self.mutation_cnt += 1;
         self.last_update += 1;
         if gain {
