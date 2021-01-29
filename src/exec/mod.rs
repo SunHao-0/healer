@@ -10,11 +10,11 @@ use shared_memory::{Shmem, ShmemConf, ShmemError};
 use thiserror::Error;
 
 /// Communication with syz-executor.
-mod comm;
+pub mod comm;
 /// Spawning qemu.
 pub mod qemu;
 /// Prog Serialization.
-mod serialize;
+pub mod serialize;
 /// Invoking ssh.
 pub mod ssh;
 /// Syz-executor handling.
@@ -101,8 +101,30 @@ pub struct ExecOpt {
 
 impl Default for ExecOpt {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExecOpt {
+    pub const fn new() -> Self {
         Self {
             flags: FLAG_DEDUP_COVER | FLAG_THREADED | FLAG_COLLIDE,
+            fault_call: 0,
+            fault_nth: 0,
+        }
+    }
+
+    pub const fn new_no_collide() -> Self {
+        Self {
+            flags: FLAG_DEDUP_COVER | FLAG_THREADED,
+            fault_call: 0,
+            fault_nth: 0,
+        }
+    }
+
+    pub const fn new_cover() -> Self {
+        Self {
+            flags: FLAG_DEDUP_COVER | FLAG_THREADED | FLAG_COLLECT_COVER,
             fault_call: 0,
             fault_nth: 0,
         }

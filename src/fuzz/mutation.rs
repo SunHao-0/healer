@@ -75,7 +75,7 @@ fn mutate_int(val_old: u64, fmt: &IntFmt, range: Option<(u64, u64)>, align: u64)
     let mut rng = thread_rng();
     let mut val_new = val_old;
     if rng.gen_ratio(1, 10) {
-        val_new = MAGIC64.choose(&mut rng).unwrap() + val_old & 1;
+        val_new = MAGIC64.choose(&mut rng).unwrap() + (val_old & 1);
         if val_new != val_old {
             mutated = true;
         }

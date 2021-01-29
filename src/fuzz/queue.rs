@@ -19,6 +19,7 @@ iota! {
         , AVG_RES_CNT
         , AVG_NEW_COV
         , AVG_LEN
+        , AVG_SCORE
 }
 
 pub struct Queue {
@@ -56,6 +57,7 @@ impl Queue {
             AVG_EXEC_TM => 0,
             AVG_RES_CNT => 0,
             AVG_NEW_COV => 0,
+            AVG_SCORE => 0
         };
 
         Self {
@@ -81,7 +83,20 @@ impl Queue {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inputs.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inputs.len()
+    }
+
     pub fn select(&mut self, to_mutate: bool) -> &mut Input {
+        let idx = self.select_idx(to_mutate);
+        &mut self.inputs[idx]
+    }
+
+    pub fn select_idx(&mut self, to_mutate: bool) -> usize {
         let mut rng = thread_rng();
 
         // select pending
@@ -100,14 +115,11 @@ impl Queue {
         // select interesting
         const WINDOW_SZ: usize = 8;
         if !self.favored.is_empty() && rng.gen_range(1..=100) <= 50 {
-            let idx = self.favored.choose(&mut rng).unwrap();
-            return &mut self.inputs[*idx];
+            return *self.favored.choose(&mut rng).unwrap();
         } else if !self.found_re.is_empty() && rng.gen_range(1..=100) <= 30 {
-            let idx = self.found_re.choose(&mut rng).unwrap();
-            return &mut self.inputs[*idx];
+            return *self.found_re.choose(&mut rng).unwrap();
         } else if !self.self_contained.is_empty() && rng.gen_range(1..=100) <= 10 {
-            let idx = self.self_contained.choose(&mut rng).unwrap();
-            return &mut self.inputs[*idx];
+            return *self.self_contained.choose(&mut rng).unwrap();
         } else if rng.gen_range(1..=100) <= 10 {
             let mut rng = thread_rng();
             let mut start = 0;
@@ -119,10 +131,9 @@ impl Queue {
             let (_, idx) = self.score_sheet[start..end]
                 .choose_weighted(&mut rng, |(s, _)| *s)
                 .unwrap();
-            return &mut self.inputs[*idx];
+            return *idx;
         } else if rng.gen_range(1..=100) <= 2 {
-            let idx = self.input_depth.last().unwrap().choose(&mut rng).unwrap();
-            return &mut self.inputs[*idx];
+            return *self.input_depth.last().unwrap().choose(&mut rng).unwrap();
         };
 
         // select weighted
@@ -135,24 +146,22 @@ impl Queue {
         if self.current >= self.inputs.len() {
             self.current = 0;
         }
-        (&mut self.inputs[start..end])
-            .choose_weighted_mut(&mut thread_rng(), |i| i.score)
+        let candidates = (start..end).collect::<Vec<_>>();
+        *candidates
+            .choose_weighted(&mut thread_rng(), |i| self.inputs[*i].score)
             .unwrap()
     }
 
-    fn choose_weighted<'a>(
-        f: &mut Vec<usize>,
-        inputs: &'a mut [Input],
-        to_mutate: bool,
-    ) -> &'a mut Input {
+    fn choose_weighted(f: &mut Vec<usize>, inputs: &mut [Input], to_mutate: bool) -> usize {
         let idx = *f
             .choose_weighted_mut(&mut thread_rng(), |&idx| inputs[idx].score)
             .unwrap();
         if to_mutate {
             let i = f.iter().position(|&i| i == idx).unwrap();
             f.remove(i);
+            inputs[idx].was_mutated = true;
         }
-        &mut inputs[idx]
+        idx
     }
 
     pub fn append(&mut self, inp: Input) {
@@ -301,10 +310,13 @@ impl Queue {
         queue.last_culling = Instant::now();
         queue.culling_threshold = self.culling_threshold;
         queue.culling_duration = self.culling_duration;
+        let mut score = 0;
         for (idx, mut i) in inputs.into_iter().enumerate() {
             i.update_score(&avgs);
+            score += i.score;
             queue.append_inner(i, idx);
         }
+        avgs.insert(AVG_SCORE, score / queue.inputs.len());
         queue.avgs = avgs;
 
         *self = queue;

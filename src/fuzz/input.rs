@@ -3,8 +3,6 @@ use crate::{
     model::{Prog, SyscallRef},
 };
 
-use std::sync::Arc;
-
 use rustc_hash::FxHashMap;
 
 /// An interesting prog with related fuzz data.
@@ -15,7 +13,7 @@ use rustc_hash::FxHashMap;
 #[allow(dead_code)] // todo
 pub struct Input {
     /// Prog that may find new branches.
-    pub(crate) p: Arc<Prog>,
+    pub(crate) p: Prog,
     /// Execution option of prog.
     pub(crate) opt: ExecOpt,
     /// Execution result of prog, with execution option `opt`.
@@ -57,7 +55,7 @@ pub struct Input {
 }
 
 impl Input {
-    pub fn new(p: Arc<Prog>, opt: ExecOpt, info: Vec<CallExecInfo>) -> Self {
+    pub fn new(p: Prog, opt: ExecOpt, info: Vec<CallExecInfo>) -> Self {
         let len = p.calls.len();
         let sz = p.calls.iter().map(|c| c.val_cnt).sum();
         let res_cnt = p.calls.iter().map(|c| c.res_cnt).sum();

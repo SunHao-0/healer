@@ -280,7 +280,29 @@ impl Prog {
     pub fn new(calls: Vec<Call>) -> Self {
         Prog { calls }
     }
+
+    pub fn sub_prog(&self, n: usize) -> Prog {
+        let mut ctx = CloneCtx {
+            res_addr: FxHashMap::default(),
+        };
+        let mut calls = Vec::with_capacity(n + 1);
+        for i in 0..=n {
+            let call = clone_call(&mut ctx, &self.calls[i]);
+            calls.push(call);
+        }
+        Prog { calls }
+    }
 }
+
+pub struct ProgWrapper(Prog);
+
+impl ProgWrapper {
+    pub fn to_prog(&self) -> Prog {
+        self.0.clone()
+    }
+}
+
+unsafe impl Send for ProgWrapper {}
 
 pub struct Call {
     pub meta: SyscallRef,
