@@ -1,6 +1,6 @@
 [package]
 name = "healer"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Hao Sun <sunhao.th@gmail.com>"]
 edition = "2018"
 description = "Healer: kernel fuzzer inspired by Syzkaller."
@@ -19,6 +19,7 @@ thiserror = "1.0"       # for error hanlding.
 lazy_static = "1.4"
 log = "0.4"
 env_logger = "0.8"
+structopt = "0.3"
 
 [dev-dependencies]  
 criterion = "0.3"

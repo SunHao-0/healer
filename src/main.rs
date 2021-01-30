@@ -1,146 +1,78 @@
-/// Temporary integration test.
-use std::{
-    env::args,
-    fs::{create_dir, write},
-    path::{Path, PathBuf},
-    process::{exit, id},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Barrier, Mutex,
-    },
-    thread,
-    time::{Duration, Instant},
-    writeln,
-};
-
 use healer::{
-    exec::{spawn_in_qemu, ExecConf, ExecOpt, ExecResult, QemuConf, SshConf},
-    fuzz::fuzzer::ValuePool,
-    gen::gen,
-    targets::Target,
+    exec::{ExecConf, QemuConf, SshConf},
+    fuzz::log,
+    Config,
 };
-use rustc_hash::FxHashSet;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
-pub fn main() {
-    let args = args().skip(1).collect::<Vec<_>>();
-    env_logger::init();
-    let target = Arc::new(Target::new("linux/amd64").unwrap());
-    log::info!("Target loaded.");
-
-    let qemu_conf = QemuConf {
-        img_path: PathBuf::from(&args[0]).into_boxed_path(),
-        kernel_path: Some(PathBuf::from(&args[1]).into_boxed_path()),
-        ..Default::default()
-    };
-
-    let ssh_conf = SshConf {
-        ssh_key: PathBuf::from(&args[2]).into_boxed_path(),
-        ..Default::default()
-    };
-
-    let exec_conf = ExecConf {
-        executor: PathBuf::from(&args[3]).into_boxed_path(),
-    };
-    let workdir = build_workdir();
-
-    log::info!("Booting");
-    let now = Instant::now();
-    let brs: Arc<Mutex<FxHashSet<u32>>> = Arc::new(Mutex::new(FxHashSet::default()));
-    let success_cnt = Arc::new(AtomicUsize::new(0));
-    let failed_cnt = Arc::new(AtomicUsize::new(0));
-    let crash_cnt = Arc::new(AtomicUsize::new(0));
-    let barrier = Arc::new(Barrier::new(5));
-
-    for i in 0..4 {
-        let brs = Arc::clone(&brs);
-        let success_cnt = Arc::clone(&success_cnt);
-        let failed_cnt = Arc::clone(&failed_cnt);
-        let crash_cnt = Arc::clone(&crash_cnt);
-        let target = Arc::clone(&target);
-        let workdir = workdir.clone();
-        let barrier = Arc::clone(&barrier);
-        let exec_conf = exec_conf.clone();
-        let qemu_conf = qemu_conf.clone();
-        let ssh_conf = ssh_conf.clone();
-        thread::spawn(move || {
-            let exec_opt = ExecOpt::default();
-            let pool = ValuePool::default();
-            let mut handle = spawn_in_qemu(exec_conf, qemu_conf, ssh_conf, i).unwrap_or_else(|e| {
-                log::info!("{}", e);
-                exit(1);
-            });
-            barrier.wait();
-            loop {
-                let p = gen(&target, &pool);
-                match handle.exec(&exec_opt, &p) {
-                    Ok(ret) => match ret {
-                        ExecResult::Normal(info) => {
-                            let mut brs = brs.lock().unwrap();
-                            for i in &info {
-                                brs.extend(&i.branches);
-                            }
-                            success_cnt.fetch_add(1, Ordering::Acquire);
-                        }
-                        ExecResult::Failed { info, err } => {
-                            let mut brs = brs.lock().unwrap();
-                            for i in &info {
-                                brs.extend(&i.branches);
-                            }
-                            failed_cnt.fetch_add(1, Ordering::Acquire);
-                            log::info!("Failed: {}", err);
-                        }
-                        ExecResult::Crash(c) => {
-                            use std::fmt::Write;
-                            let stdout = String::from_utf8(c.qemu_stdout).unwrap_or_default();
-                            let stderr = String::from_utf8(c.qemu_stderr).unwrap_or_default();
-                            let mut log = String::new();
-                            writeln!(log, "============== QEMU STDOUT ================").unwrap();
-                            writeln!(log, "{}", stdout).unwrap();
-                            writeln!(log, "============== QEMU STDERR ================").unwrap();
-                            writeln!(log, "{}", stderr).unwrap();
-                            writeln!(log, "============== SYZ LOG ================").unwrap();
-                            writeln!(log, "{}", c.syz_out).unwrap();
-                            log::info!("{}", log);
-                            log::info!("============== PROG ================\n{}", p.to_string());
-
-                            let crash_dir =
-                                workdir.join(crash_cnt.load(Ordering::Acquire).to_string());
-                            create_dir(&crash_dir).unwrap();
-                            write(crash_dir.join("qemu-log"), &log).unwrap();
-                            write(crash_dir.join("prog"), p.to_string()).unwrap();
-
-                            crash_cnt.fetch_add(1, Ordering::Acquire);
-                        }
-                    },
-                    Err(e) => {
-                        log::warn!("Error: {}", e);
-                    }
-                }
-            }
-        });
-    }
-
-    barrier.wait();
-    log::info!("Boot finished, cost {}s", now.elapsed().as_secs());
-    log::info!("Let the fuzz begin!");
-    let log_duration = Duration::from_secs(10);
-    loop {
-        thread::sleep(log_duration);
-        let brs = brs.lock().unwrap();
-        log::info!(
-            "br: {}, succ: {}, fail: {}, crash: {}",
-            brs.len(),
-            success_cnt.load(Ordering::Acquire),
-            failed_cnt.load(Ordering::Acquire),
-            crash_cnt.load(Ordering::Acquire)
-        );
-    }
+#[derive(Debug, StructOpt)]
+#[structopt(name = "healer", about = "kernel fuzzer inspired by Syzkaller.")]
+struct Settings {
+    /// Supported target in Os/Arch format, e.g. linux/amd64, linux/arm64. See target/sys_json.rs.
+    #[structopt(short = "t", long)]
+    target: String,
+    /// Working directory of healer, should at least contain bin/syz-executor, bin/syz-symbolizer.
+    #[structopt(short = "w", long, default_value = "./")]
+    work_dir: PathBuf,
+    /// Object file of target kernel, e.g. vmlinux for linux kernel.
+    #[structopt(short = "obj", long)]
+    kernel_obj: Option<PathBuf>,
+    /// Srouce file of target kernel.
+    #[structopt(short = "src", long)]
+    kernel_src: Option<PathBuf>,
+    /// Number of parallel instances.
+    #[structopt(short, long, default_value = "2")]
+    jobs: u64,
+    /// Path to disk image.
+    #[structopt(short, long)]
+    img: PathBuf,
+    /// Path to kernel image, e.g. bzImage for linux kernel.
+    #[structopt(short, long)]
+    kernel_img: Option<PathBuf>,
+    /// Number of cpu cores for each qemu.
+    #[structopt(short = "smp", long, default_value = "2")]
+    qemu_smp: u8,
+    /// Size of memory for each qemu in megabyte.
+    #[structopt(short = "mem", long, default_value = "2048")]
+    qemu_mem: u8,
+    /// Path to ssh key used for logging to test machine.
+    #[structopt(short = "key", long)]
+    ssh_key: PathBuf,
+    /// User name for logging to test machine.
+    #[structopt(short = "user", long, default_value = "root")]
+    ssh_user: String,
 }
 
-fn build_workdir() -> Box<Path> {
-    let d = PathBuf::from(format!("hl-workdir-{}", id()));
-    create_dir(&d).unwrap_or_else(|e| {
-        log::warn!("failed to create workdir {}: {}", d.display(), e);
-    });
-    d.into_boxed_path()
+pub fn main() {
+    let settings = Settings::from_args();
+    log::init();
+    let conf = Config {
+        target: settings.target.clone(),
+        kernel_obj: settings.kernel_obj,
+        kernel_src: settings.kernel_src,
+        jobs: settings.jobs,
+        qemu_conf: QemuConf {
+            target: settings.target,
+            img_path: settings.img.into_boxed_path(),
+            kernel_path: settings.kernel_img.map(|img| img.into_boxed_path()),
+            smp: Some(settings.qemu_smp),
+            mem: Some(settings.qemu_mem),
+            ..Default::default()
+        },
+        exec_conf: ExecConf {
+            executor: settings
+                .work_dir
+                .join("bin")
+                .join("syz-executor")
+                .into_boxed_path(),
+        },
+        ssh_conf: SshConf {
+            ssh_key: settings.ssh_key.into_boxed_path(),
+            ssh_user: Some(settings.ssh_user),
+        },
+        work_dir: settings.work_dir,
+    };
+
+    healer::start(conf)
 }
