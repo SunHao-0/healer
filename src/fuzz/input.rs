@@ -10,7 +10,6 @@ use rustc_hash::FxHashMap;
 /// An input contains a prog that covers new branches. The related performance data,
 /// such as depth, size, execution time, are used to evaluate the quality of current
 /// prog in multiple aspects.  
-#[allow(dead_code)] // todo
 pub struct Input {
     /// Prog that may find new branches.
     pub(crate) p: Prog,
@@ -59,19 +58,20 @@ impl Input {
         let len = p.calls.len();
         let sz = p.calls.iter().map(|c| c.val_cnt).sum();
         let res_cnt = p.calls.iter().map(|c| c.res_cnt).sum();
+        let depth = p.depth;
         Self {
             p,
             opt,
             info,
             was_mutated: false,
             favored: true,
-            found_new_re: false,   // updated after analysis.
+            found_new_re: false,
             self_contained: false, // updated after re-execution.
             score: 0,              // updated after culling.
             gaining_rate: 0,       // updated after every mutation.
-            distinct_degree: 0,    // culling
+            distinct_degree: 0,
             age: 0,
-            depth: 0,
+            depth,
             sz,
             len,
             exec_tm: 0,

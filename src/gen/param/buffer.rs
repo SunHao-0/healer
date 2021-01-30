@@ -117,7 +117,6 @@ pub fn mutate_str(val: &mut Vec<u8>) {
     mutate_blob(val, None, gen_range())
 }
 
-#[allow(clippy::new_without_default)]
 fn gen_str_like<G, M>(
     pool: Option<&VecDeque<Arc<Value>>>,
     generated: Option<&FxHashSet<Box<[u8]>>>,

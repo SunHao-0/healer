@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity)]
-
 use crate::model::{
     BinFmt, BufferKind, CsumKind, Dir, Field, IntFmt, LenInfo, Param, ResDesc, Syscall,
     SyscallAttr, SyscallRef, TextKind, Type, TypeKind, TypeRef,

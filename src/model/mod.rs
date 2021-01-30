@@ -185,6 +185,7 @@ impl fmt::Display for SyscallAttr {
 }
 
 pub struct Prog {
+    pub depth: usize,
     pub calls: Vec<Call>,
 }
 
@@ -201,7 +202,10 @@ impl Clone for Prog {
         for c in self.calls.iter() {
             calls.push(clone_call(&mut ctx, c))
         }
-        Prog { calls }
+        Prog {
+            depth: self.depth,
+            calls,
+        }
     }
 }
 
@@ -278,7 +282,13 @@ impl fmt::Display for Prog {
 
 impl Prog {
     pub fn new(calls: Vec<Call>) -> Self {
-        Prog { calls }
+        Prog { depth: 0, calls }
+    }
+
+    pub fn remove(&self, i: usize) -> Prog {
+        let mut p = self.clone();
+        p.calls.remove(i);
+        p
     }
 
     pub fn sub_prog(&self, n: usize) -> Prog {
@@ -290,7 +300,10 @@ impl Prog {
             let call = clone_call(&mut ctx, &self.calls[i]);
             calls.push(call);
         }
-        Prog { calls }
+        Prog {
+            depth: self.depth,
+            calls,
+        }
     }
 }
 

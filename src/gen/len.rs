@@ -43,6 +43,7 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*cons
         };
         if let ValueKind::Scalar(scalar_val_ref) = &v.kind {
             if let Some(len_info) = v.ty.len_info() {
+                // TODO fix this.
                 #[allow(mutable_transmutes, clippy::transmute_ptr_to_ptr)]
                 let scalar_val_ref: &mut u64 = unsafe { std::mem::transmute(scalar_val_ref) };
                 if &*len_info.path[0] == "syscall" {
