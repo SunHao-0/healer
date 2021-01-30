@@ -4,9 +4,10 @@ use crate::{
         input::Input,
         mutation::{mutate_args, seq_reuse},
         queue::Queue,
+        stats::*,
     },
     gen::gen,
-    model::{Prog, SyscallRef, TypeRef, Value},
+    model::{Prog, ProgWrapper, SyscallRef, TypeRef, Value},
     targets::Target,
 };
 
@@ -14,16 +15,21 @@ use std::{
     cmp::max,
     collections::VecDeque,
     env::temp_dir,
-    fs::write,
+    fmt::Write,
+    fs::{create_dir_all, write},
+    hash::{Hash, Hasher},
+    io::ErrorKind,
     path::PathBuf,
-    process::Command,
+    process::{exit, Command},
     sync::RwLock,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use rand::{thread_rng, Rng};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+
+use super::stats::Stats;
 
 pub struct Crash;
 
@@ -34,28 +40,30 @@ pub struct Fuzzer {
     // shared between different fuzzers.
     // TODO sync prog between diffierent threads.
     // progs: Arc<RwLock<FxHashMap<usize, Vec<ProgWrapper>>>>,
-    max_cov: Arc<RwLock<FxHashSet<u32>>>,
-    calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
-    relations: Arc<RwLock<FxHashSet<(SyscallRef, SyscallRef)>>>,
-    crashes: Arc<Mutex<Vec<Crash>>>,
+    pub(crate) max_cov: Arc<RwLock<FxHashSet<u32>>>,
+    pub(crate) calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
+    pub(crate) relations: Arc<RwLock<FxHashSet<(SyscallRef, SyscallRef)>>>,
+    pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
+    pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
+    pub(crate) stats: Arc<Stats>,
 
     // local data.
-    id: u32,
-    target: Target,
-    local_vals: ValuePool,
-    queue: Queue,
-    exec_handle: ExecHandle,
-    run_history: VecDeque<Prog>,
+    pub(crate) id: u64,
+    pub(crate) target: Target,
+    pub(crate) local_vals: ValuePool,
+    pub(crate) queue: Queue,
+    pub(crate) exec_handle: ExecHandle,
+    pub(crate) run_history: VecDeque<Prog>,
 
-    mode: Mode,
-    mut_gaining: u32,
-    gen_gaining: u32,
-    cycle_len: u32,
-    max_cycle_len: u32,
+    pub(crate) mode: Mode,
+    pub(crate) mut_gaining: u32,
+    pub(crate) gen_gaining: u32,
+    pub(crate) cycle_len: u32,
+    pub(crate) max_cycle_len: u32,
 
-    work_dir: PathBuf,
-    kernel_obj: Option<PathBuf>,
-    kernel_src: Option<PathBuf>,
+    pub(crate) work_dir: PathBuf,
+    pub(crate) kernel_obj: Option<PathBuf>,
+    pub(crate) kernel_src: Option<PathBuf>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -144,6 +152,7 @@ impl Fuzzer {
     fn gen(&mut self) {
         self.gen_gaining = 0;
         for _ in 0..self.cycle_len {
+            self.stats.inc_exec(EXEC_GEN);
             let p = gen(&self.target, &self.local_vals);
             if self.evaluate(p) {
                 self.gen_gaining += 1;
@@ -172,6 +181,7 @@ impl Fuzzer {
 
             for _ in 0..n {
                 let p = mutate_args(&self.queue.inputs[idx].p);
+                self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
                     self.mut_gaining += 1;
                     self.queue.inputs[idx].update_gaining_rate(true);
@@ -184,6 +194,7 @@ impl Fuzzer {
 
             for _ in 0..n {
                 let p = seq_reuse(&self.queue.inputs[idx].p);
+                self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
                     self.mut_gaining += 1;
                     self.queue.inputs[idx].update_gaining_rate(true);
@@ -265,13 +276,20 @@ impl Fuzzer {
         if !has_new {
             return false;
         }
+        for brs in new_brs.iter().filter(|b| b.is_empty()) {
+            self.stats.add(OVERALL_MAX_COV, brs.len() as u64);
+        }
 
         let (succ, _) = self.calibrate_cov(&p, &mut new_brs);
         if !succ {
             return false;
         }
+        for brs in new_brs.iter().filter(|b| b.is_empty()) {
+            self.stats.add(OVERALL_CAL_COV, brs.len() as u64);
+        }
 
         let mut analyzed: FxHashSet<usize> = FxHashSet::default();
+        let mut new_input = false;
         // analyze in reverse order helps us find interesting longger prog.
         for i in (0..info.len()).rev() {
             if info[i].branches.is_empty() || analyzed.contains(&i) {
@@ -293,7 +311,7 @@ impl Fuzzer {
             if !succ {
                 continue;
             }
-
+            new_input = true;
             let new_re = self.detect_relations(&m_p, &m_p_brs);
 
             let mut input = Input::new(m_p, ExecOpt::new_no_collide(), m_p_info);
@@ -306,7 +324,7 @@ impl Fuzzer {
 
             self.queue.append(input);
         }
-        true
+        new_input
     }
 
     fn minimize(
@@ -328,6 +346,7 @@ impl Fuzzer {
         for i in (0..p.calls.len() - 1).rev() {
             let new_p = p.remove(i);
             idx -= 1;
+            self.stats.inc(EXEC_MINIMIZE);
             let ret = self.exec_handle.exec(&opt, &new_p);
             if let Some(info) = self.handle_ret_comm(&new_p, ret) {
                 let brs = info[idx].branches.iter().copied().collect::<FxHashSet<_>>();
@@ -360,6 +379,7 @@ impl Fuzzer {
         let opt = ExecOpt::new_no_collide();
         for i in 0..p.calls.len() - 1 {
             let new_p = p.remove(i);
+            self.stats.inc(EXEC_RDETECT);
             let ret = self.exec_handle.exec(&opt, &new_p);
             if let Some(info) = self.handle_ret_comm(&new_p, ret) {
                 if !brs[i].iter().all(|br| info[i].branches.contains(br)) {
@@ -434,6 +454,7 @@ impl Fuzzer {
             let now = Instant::now();
             let ret = self.exec_handle.exec(&opt, p);
             exec_tm += now.elapsed();
+            self.stats.inc(EXEC_CALIBRATE);
             if let Some(info) = self.handle_ret_comm(p, ret) {
                 let (_, covs) = self.check_brs(&info, &self.calibrated_cov);
                 for i in 0..new_covs.len() {
@@ -476,38 +497,279 @@ impl Fuzzer {
     }
 
     fn handle_crash(&mut self, p: Prog, info: CrashInfo) {
-        let log = &info.qemu_stdout;
-        let _log_str = String::from_utf8_lossy(log);
-        let tmp_file = temp_dir().join(format!("healer-crash-log-{}.tmp", self.id));
+        log::info!(
+            "Fuzzer-{}: kernel crashed, maybe caused by:\n {}",
+            self.id,
+            p.to_string()
+        );
+        log::info!("Fuzzer-{}: trying to extract reports ...", self.id);
+        self.stats.update_time(OVERALL_LAST_CRASH);
+        self.stats.inc(OVERALL_TOTAL_CRASHES);
 
-        if let Err(e) = write(&tmp_file, &log) {
+        let log = info.qemu_stdout;
+        let log_file = temp_dir().join(format!("healer-crash-log-{}.tmp", self.id));
+
+        if let Err(e) = write(&log_file, &log) {
             log::error!(
                 "Fuzzer-{}: failed to write crash log to tmp file '{}': {}",
                 self.id,
-                tmp_file.display(),
+                log_file.display(),
                 e
             );
-            self.save_raw_log(p, info.qemu_stdout);
+            self.save_raw_log(p, log);
             return;
         }
-        let bin_path = self.work_dir.join("bin").join("syz-syz-symbolize");
+
+        let bin_path = self.work_dir.join("bin").join("syz-symbolize");
         let mut syz_symbolize = Command::new(&bin_path);
         syz_symbolize
             .args(vec!["-os", &self.target.os])
             .args(vec!["-arch", &self.target.arch]);
-
         if let Some(kernel_obj) = self.kernel_obj.as_ref() {
             syz_symbolize.arg("-kernel_obj").arg(kernel_obj);
         }
-        if let Some(kernel_src) = self.kernel_obj.as_ref() {
+        if let Some(kernel_src) = self.kernel_src.as_ref() {
             syz_symbolize.arg("-kernel_src").arg(kernel_src);
         }
-        let _out = syz_symbolize.output().unwrap();
+        syz_symbolize.arg(&log_file);
+        let output = syz_symbolize.output().unwrap();
 
-        todo!()
+        if output.status.success() {
+            let mut reports = parse(&output.stdout);
+            if !reports.is_empty() {
+                let mut titles = String::new();
+                for (i, mut r) in reports.iter_mut().enumerate() {
+                    r.prog = Some(ProgWrapper(p.clone()));
+                    write!(titles, "\n\t{}. {}", i + 1, r.title).unwrap();
+                }
+                log::info!("Fuzzer-{}: report extracted: {}", self.id, titles);
+                self.save_reports(reports);
+                return;
+            }
+        }
+
+        let err = String::from_utf8_lossy(&output.stderr);
+        log::warn!(
+            "Fuzzer-{}: failed to extract crash report: {}",
+            self.id,
+            err
+        );
+        self.save_raw_log(p, log);
     }
 
-    fn save_raw_log(&mut self, _p: Prog, _log: Vec<u8>) {
-        todo!()
+    fn save_raw_log(&mut self, p: Prog, log: Vec<u8>) {
+        let mut next_id;
+        let p_str = p.to_string();
+
+        {
+            let mut raw_crashes = self.raw_crashes.lock().unwrap();
+            next_id = raw_crashes.len();
+            if raw_crashes.len() >= 1024 {
+                raw_crashes.pop_front();
+                next_id = raw_crashes.back().unwrap().id + 1;
+            }
+            let r = Report {
+                id: next_id,
+                prog: Some(ProgWrapper(p)),
+                ..Default::default()
+            };
+            raw_crashes.push_back(r);
+        }
+
+        let out_dir = self
+            .work_dir
+            .join("crashes")
+            .join("raw_logs")
+            .join(next_id.to_string());
+        if let Err(e) = create_dir_all(&out_dir) {
+            if e.kind() != ErrorKind::AlreadyExists {
+                log::error!(
+                    "Fuzzer-{}: failed to create dir '{}': {}",
+                    self.id,
+                    out_dir.display(),
+                    e
+                );
+                exit(1);
+            }
+        }
+        write(out_dir.join("log"), &log).unwrap();
+        write(out_dir.join("prog"), p_str).unwrap();
     }
+
+    fn save_reports(&mut self, reports: Vec<Report>) {
+        for r in reports {
+            let mut id = 0;
+            let r1 = r.clone();
+            {
+                let mut crashes = self.crashes.lock().unwrap();
+                if let Some(reports) = crashes.get_mut(&r.title) {
+                    id = reports.len();
+                    if reports.len() >= 1024 {
+                        reports.pop_front();
+                        id = reports.back().unwrap().id + 1;
+                    }
+                    reports.push_back(r);
+                } else {
+                    let t = r.title.clone();
+                    let mut reports = VecDeque::with_capacity(1024);
+                    reports.push_back(r);
+                    crashes.insert(t, reports);
+                }
+            }
+
+            let mut out_dir_name = r1.title.clone();
+            if out_dir_name.len() >= 255 {
+                let mut hasher = FxHasher::default();
+                out_dir_name.hash(&mut hasher);
+                let hash = hasher.finish();
+                out_dir_name = format!("{:X}", hash);
+            }
+            let out_dir = self.work_dir.join("crashes").join(&out_dir_name);
+
+            if id == 0 {
+                self.stats.inc(OVERALL_UNIQUE_CRASHES);
+                if let Err(e) = create_dir_all(&out_dir) {
+                    if e.kind() != ErrorKind::AlreadyExists {
+                        log::error!(
+                            "Fuzzer-{}: failed to create dir '{}': {}",
+                            self.id,
+                            out_dir.display(),
+                            e
+                        );
+                        exit(1);
+                    }
+                }
+                let mut meta = String::new();
+                writeln!(meta, "TITLE: {}.", r1.title).unwrap();
+                if let Some(cor) = r1.corrupted.as_ref() {
+                    writeln!(meta, "CORRUPTED: {}.", cor).unwrap();
+                }
+                if !r1.to_mails.is_empty() {
+                    writeln!(meta, "MAINTAINERS (TO): {:?}.", r1.to_mails).unwrap();
+                }
+                if !r1.cc_mails.is_empty() {
+                    writeln!(meta, "MAINTAINERS (TO): {:?}.", r1.cc_mails).unwrap();
+                }
+                write(out_dir.join("meta"), meta).unwrap();
+            }
+            write(
+                out_dir.join(format!("prog{}", id)),
+                r1.prog.as_ref().unwrap().0.to_string(),
+            )
+            .unwrap();
+            write(out_dir.join(format!("report{}", id)), r1.report).unwrap();
+            write(out_dir.join(format!("log{}", id)), r1.raw_log).unwrap();
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Report {
+    pub(crate) id: usize,
+    pub(crate) title: String,
+    pub(crate) corrupted: Option<String>,
+    pub(crate) to_mails: Vec<String>,
+    pub(crate) cc_mails: Vec<String>,
+    pub(crate) report: String,
+    pub(crate) raw_log: Vec<u8>,
+    pub(crate) prog: Option<ProgWrapper>,
+}
+
+fn parse(content: &[u8]) -> Vec<Report> {
+    let content = String::from_utf8_lossy(content);
+    let mut ret = Vec::new();
+    let mut lines = content.lines();
+
+    loop {
+        let title = parse_line(&mut lines, "TITLE:", |nl| String::from(&nl[7..]));
+        if title.is_none() {
+            break;
+        }
+
+        let corrupted = parse_line(&mut lines, "CORRUPTED:", |nl| {
+            let mut corrupted = None;
+            if nl.contains("true") {
+                let idx = nl.find('(').unwrap();
+                let mut corr = String::from(&nl[idx + 1..]);
+                corr.pop(); // drop ')'
+                corrupted = Some(corr);
+            }
+            corrupted
+        });
+        if corrupted.is_none() {
+            break;
+        }
+
+        let to_mails = parse_line(&mut lines, "MAINTAINERS (TO):", |nl| {
+            let start = nl.find('[').unwrap();
+            let end = nl.rfind(']').unwrap();
+            let mut mails = Vec::new();
+            if start + 1 != end {
+                for mail in nl[start + 1..end].split_ascii_whitespace() {
+                    mails.push(String::from(mail));
+                }
+            }
+            mails
+        });
+        if to_mails.is_none() {
+            break;
+        }
+
+        let cc_mails = parse_line(&mut lines, "MAINTAINERS (CC):", |nl| {
+            let start = nl.find('[').unwrap();
+            let end = nl.rfind(']').unwrap();
+            let mut mails = Vec::new();
+            if start + 1 != end {
+                for mail in nl[start + 1..end].split_ascii_whitespace() {
+                    mails.push(String::from(mail));
+                }
+            }
+            mails
+        });
+        if cc_mails.is_none() {
+            break;
+        }
+
+        if lines.next().is_none() {
+            // skip empty line.
+            break;
+        }
+
+        let mut report = String::new();
+        let mut first_empty = true;
+        for l in &mut lines {
+            if l.is_empty() {
+                if first_empty {
+                    first_empty = false;
+                    continue;
+                } else {
+                    break;
+                }
+            }
+            report.push_str(l);
+        }
+
+        ret.push(Report {
+            title: title.unwrap(),
+            corrupted: corrupted.unwrap(),
+            to_mails: to_mails.unwrap(),
+            cc_mails: cc_mails.unwrap(),
+            report,
+            ..Default::default()
+        });
+    }
+    ret
+}
+
+fn parse_line<F, T>(lines: &mut std::str::Lines<'_>, val: &str, mut f: F) -> Option<T>
+where
+    F: FnMut(&str) -> T,
+{
+    for nl in lines {
+        if nl.contains(val) {
+            let nl = nl.trim();
+            return Some(f(nl));
+        }
+    }
+    None
 }

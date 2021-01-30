@@ -301,7 +301,7 @@ pub struct QemuConf {
     /// Smp, default is 2.
     pub smp: Option<u8>,
     /// Mem size in megabyte.
-    pub mem: Option<u32>,
+    pub mem: Option<u8>,
     /// Shared memory device file path, creadted automatically if use qemu ivshm.
     pub mem_backend_files: Vec<(Box<Path>, usize)>,
 }

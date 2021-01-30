@@ -1,8 +1,7 @@
 pub mod fuzzer;
 pub mod input;
+pub mod log;
 pub mod mutation;
 pub mod queue;
 pub mod repro;
-
-// todo
-pub struct FuzzerBuilder;
+pub mod stats;

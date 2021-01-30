@@ -307,7 +307,8 @@ impl Prog {
     }
 }
 
-pub struct ProgWrapper(Prog);
+#[derive(Clone)]
+pub struct ProgWrapper(pub(crate) Prog);
 
 impl ProgWrapper {
     pub fn to_prog(&self) -> Prog {

@@ -1,7 +1,11 @@
-use crate::{fuzz::input::Input, model::SyscallRef};
+use crate::{
+    fuzz::{input::Input, stats},
+    model::SyscallRef,
+};
 
 use std::{
     mem,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -44,10 +48,11 @@ pub struct Queue {
     pub(crate) current_age: usize,
     pub(crate) avgs: FxHashMap<usize, usize>,
     pub(crate) call_cnt: FxHashMap<SyscallRef, usize>,
+    pub(crate) stats: Option<Arc<stats::Stats>>,
 }
 
 impl Queue {
-    pub fn new(id: usize) -> Self {
+    pub fn new(id: usize, stats: Option<Arc<stats::Stats>>) -> Self {
         let avgs = fxhashmap! {
             AVG_GAINING_RATE => 0,
             AVG_DISTINCT_DEGREE => 0,
@@ -80,6 +85,7 @@ impl Queue {
             current_age: 0,
             avgs,
             call_cnt: FxHashMap::default(),
+            stats,
         }
     }
 
@@ -169,6 +175,10 @@ impl Queue {
             self.culling();
         }
         let idx = self.inputs.len();
+        if let Some(stats) = self.stats.as_ref() {
+            stats.update_time(stats::OVERALL_LAST_INPUT);
+            stats.store(stats::OVERALL_CALLS_FUZZED_NUM, self.call_cnt.len() as u64);
+        }
         self.append_inner(inp, idx);
     }
 
@@ -303,7 +313,13 @@ impl Queue {
         }
         avgs.iter_mut().for_each(|(_, avg)| *avg /= inputs.len());
 
-        let mut queue = Queue::new(self.id);
+        let stats = if let Some(stats) = self.stats.as_ref() {
+            Some(Arc::clone(stats))
+        } else {
+            None
+        };
+
+        let mut queue = Queue::new(self.id, stats);
         queue.call_cnt = call_cnt;
         queue.current_age = self.current_age + 1;
         queue.last_num = old_len;
@@ -320,6 +336,30 @@ impl Queue {
         queue.avgs = avgs;
 
         *self = queue;
+
+        if let Some(stats) = self.stats.as_ref() {
+            stats.update_time(stats::QUEUE_LAST_CULLING);
+            stats.store(stats::QUEUE_LEN, self.inputs.len() as u64);
+            stats.store(stats::QUEUE_FAVOR, self.favored.len() as u64);
+            stats.store(
+                stats::QUEUE_PENDING_FAVOR,
+                self.pending_favored.len() as u64,
+            );
+            stats.store(stats::QUEUE_SCORE, self.avgs[&AVG_SCORE] as u64);
+            stats.store(stats::QUEUE_SELF_CONTAIN, self.self_contained.len() as u64);
+            stats.store(stats::QUEUE_MAX_DEPTH, self.input_depth.len() as u64);
+            stats.store(stats::QUEUE_AGE, self.current_age as u64);
+
+            stats.store(stats::EXEC_AVG_SPEED, self.avgs[&AVG_EXEC_TM] as u64);
+            stats.store(stats::AVG_LEN, self.avgs[&AVG_LEN] as u64);
+            stats.store(stats::AVG_GAINNING, self.avgs[&AVG_GAINING_RATE] as u64);
+            stats.store(stats::AVG_DIST, self.avgs[&AVG_DISTINCT_DEGREE] as u64);
+            stats.store(stats::AVG_DEPTH, self.avgs[&AVG_DEPTH] as u64);
+            stats.store(stats::AVG_SZ, self.avgs[&AVG_SZ] as u64);
+            stats.store(stats::AVG_AGE, self.avgs[&AVG_AGE] as u64);
+            stats.store(stats::AVG_NEW_COV, self.avgs[&AVG_NEW_COV] as u64);
+        }
+
         log::info!(
             "Queue{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
             self.id,

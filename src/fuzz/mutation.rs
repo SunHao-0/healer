@@ -12,6 +12,8 @@ use rand::prelude::*;
 pub fn mutate_args(p: &Prog) -> Prog {
     let mut rng = thread_rng();
     let mut p_new = p.clone();
+    p_new.depth += 1;
+
     let mut n = 1;
     if p.calls.len() > 1 {
         n = rng.gen_range(1..p.calls.len());
