@@ -374,7 +374,7 @@ impl Fuzzer {
 
             let new_p = p.remove(i);
             idx -= 1;
-            self.stats.inc(EXEC_MINIMIZE);
+            self.stats.inc_exec(EXEC_MINIMIZE);
             let ret = self.exec_handle.exec(&opt, &new_p);
             if let Some(info) = self.handle_ret_comm(&new_p, ret) {
                 let brs = info[idx].branches.iter().copied().collect::<FxHashSet<_>>();
@@ -390,16 +390,18 @@ impl Fuzzer {
             }
         }
 
-        if !removed.is_empty() {
+        let reserved = (0..old_len)
+            .filter(|i| !removed.contains(i))
+            .collect::<Vec<_>>();
+        if reserved.len() > 2 {
             log::info!(
                 "Fuzzer-{}: minimized success: {} -> {}.",
                 self.id,
                 old_len,
-                old_len - removed.len()
+                reserved.len()
             );
         }
 
-        let reserved = (0..old_len).filter(|i| !removed.contains(i)).collect();
         Some((
             p,
             reserved,
@@ -426,7 +428,7 @@ impl Fuzzer {
             }
 
             let new_p = p.remove(i);
-            self.stats.inc(EXEC_RDETECT);
+            self.stats.inc_exec(EXEC_RDETECT);
             let ret = self.exec_handle.exec(&opt, &new_p);
             if let Some(info) = self.handle_ret_comm(&new_p, ret) {
                 if !brs[i].iter().all(|br| info[i].branches.contains(br)) {
@@ -449,7 +451,7 @@ impl Fuzzer {
             if !r.contains_key(&s0) {
                 new = true;
             } else {
-                new = r[&s0].contains(&s1);
+                new = !r[&s0].contains(&s1);
             }
             for (key, v) in r.iter() {
                 let entry = self.local_rels.entry(key).or_default();
@@ -514,7 +516,7 @@ impl Fuzzer {
             let now = Instant::now();
             let ret = self.exec_handle.exec(&opt, p);
             exec_tm += now.elapsed();
-            self.stats.inc(EXEC_CALIBRATE);
+            self.stats.inc_exec(EXEC_CALIBRATE);
             if let Some(info) = self.handle_ret_comm(p, ret) {
                 for (i, call_info) in info.into_iter().enumerate() {
                     let brs = FxHashSet::from_iter(call_info.branches.into_iter());
@@ -532,7 +534,7 @@ impl Fuzzer {
             for br in new_covs.iter() {
                 covs.extend(br.iter().copied());
             }
-            self.stats.add(OVERALL_CAL_COV, covs.len() as u64);
+            self.stats.store(OVERALL_CAL_COV, covs.len() as u64);
         }
 
         (succ, exec_tm / 3)
@@ -563,6 +565,10 @@ impl Fuzzer {
     }
 
     fn handle_crash(&mut self, p: Prog, info: CrashInfo) {
+        if self.stop() {
+            return; // killed by ctrlc
+        }
+
         log::info!(
             "Fuzzer-{}: kernel crashed, maybe caused by:\n {}",
             self.id,

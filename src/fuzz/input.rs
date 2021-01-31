@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use crate::{
     exec::{CallExecInfo, ExecOpt},
     model::{Prog, SyscallRef},
@@ -92,8 +94,8 @@ impl Input {
             self.gain_cnt += 1;
         }
         if self.last_update >= 32 {
-            self.gaining_rate =
-                (((self.gain_cnt as f64) / (self.mutation_cnt as f64)) * 100.0) as usize;
+            let cnt = max(1, self.gain_cnt);
+            self.gaining_rate = (((cnt as f64) / (self.mutation_cnt as f64)) * 100.0) as usize;
             self.last_update = 0;
         }
         self.gaining_rate

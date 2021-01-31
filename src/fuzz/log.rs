@@ -1,4 +1,11 @@
 // TODO implement a tui logger.
+use simplelog::*;
+
 pub fn init() {
-    env_logger::init();
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Info,
+        Config::default(),
+        TerminalMode::Mixed,
+    )])
+    .unwrap();
 }

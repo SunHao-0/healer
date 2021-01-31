@@ -127,7 +127,7 @@ impl Queue {
             return *self.found_re.choose(&mut rng).unwrap();
         } else if !self.self_contained.is_empty() && rng.gen_range(1..=100) <= 10 {
             return *self.self_contained.choose(&mut rng).unwrap();
-        } else if rng.gen_range(1..=100) <= 10 {
+        } else if self.current_age >= 1 && rng.gen_range(1..=100) <= 10 {
             let mut rng = thread_rng();
             let mut start = 0;
             let mut end = self.inputs.len();
@@ -135,10 +135,9 @@ impl Queue {
                 start = rng.gen_range(0..self.inputs.len() - WINDOW_SZ);
                 end = start + WINDOW_SZ;
             }
-            let (_, idx) = self.score_sheet[start..end]
-                .choose_weighted(&mut rng, |(s, _)| *s)
-                .unwrap();
-            return *idx;
+            if let Ok(idx) = self.score_sheet[start..end].choose_weighted(&mut rng, |(s, _)| *s) {
+                return idx.1;
+            }
         } else if rng.gen_range(1..=100) <= 2 {
             return *self.input_depth.last().unwrap().choose(&mut rng).unwrap();
         };
@@ -210,7 +209,7 @@ impl Queue {
         if inp.score < self.min_score.0 {
             self.min_score = (inp.score, idx);
         }
-        if inp.depth >= self.input_depth.len() {
+        while inp.depth >= self.input_depth.len() {
             self.input_depth.push(Vec::new());
         }
         self.input_depth[inp.depth].push(idx);
@@ -320,7 +319,8 @@ impl Queue {
             *avgs.get_mut(&AVG_RES_CNT).unwrap() += i.res_cnt;
             *avgs.get_mut(&AVG_NEW_COV).unwrap() += i.new_cov.len();
         }
-        avgs.iter_mut().for_each(|(_, avg)| *avg /= inputs.len());
+        avgs.iter_mut()
+            .for_each(|(_, avg)| *avg = (*avg as f64 / inputs.len() as f64).ceil() as usize);
 
         let stats = if let Some(stats) = self.stats.as_ref() {
             Some(Arc::clone(stats))
