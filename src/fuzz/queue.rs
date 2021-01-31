@@ -268,7 +268,6 @@ impl Queue {
                 for br in info.branches.iter() {
                     if cov.insert(*br) {
                         favored = true;
-                        new_favored += 1;
                         new_cov.insert(*br);
                     }
                 }
@@ -278,7 +277,9 @@ impl Queue {
                 discard += 1;
                 continue;
             }
-
+            if favored {
+                new_favored += 1;
+            }
             i.new_cov = new_cov.into_iter().collect();
             i.new_cov.shrink_to_fit();
             i.favored = favored;
@@ -314,6 +315,7 @@ impl Queue {
             *avgs.get_mut(&AVG_AGE).unwrap() += i.age;
             *avgs.get_mut(&AVG_SZ).unwrap() += i.sz;
             *avgs.get_mut(&AVG_DEPTH).unwrap() += i.depth;
+            *avgs.get_mut(&AVG_LEN).unwrap() += i.len;
             *avgs.get_mut(&AVG_EXEC_TM).unwrap() += i.exec_tm;
             *avgs.get_mut(&AVG_RES_CNT).unwrap() += i.res_cnt;
             *avgs.get_mut(&AVG_NEW_COV).unwrap() += i.new_cov.len();
