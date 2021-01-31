@@ -23,6 +23,15 @@ pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
     gen_inner(&mut ctx)
 }
 
+pub fn gen_seq(target: &Target, pool: &ValuePool, seq: &[SyscallRef]) -> Prog {
+    let mut ctx = GenContext::new(target, pool);
+    let mut calls = Vec::new();
+    for call in seq {
+        calls.push(call::gen(&mut ctx, call));
+    }
+    Prog::new(calls)
+}
+
 fn gen_inner(ctx: &mut GenContext) -> Prog {
     let mut calls: Vec<Call> = Vec::new();
     while !should_stop(calls.len()) {

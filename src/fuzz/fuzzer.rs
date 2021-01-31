@@ -19,19 +19,19 @@ use std::{
     fs::{create_dir_all, write},
     hash::{Hash, Hasher},
     io::ErrorKind,
+    iter::FromIterator,
     path::PathBuf,
     process::{exit, Command},
     sync::RwLock,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant},
 };
 
 use rand::{thread_rng, Rng};
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-
-use super::stats::Stats;
-
-pub struct Crash;
 
 /// Interesting values extracted inputs. not implemented yet.
 pub type ValuePool = FxHashMap<TypeRef, VecDeque<Arc<Value>>>;
@@ -42,7 +42,7 @@ pub struct Fuzzer {
     // progs: Arc<RwLock<FxHashMap<usize, Vec<ProgWrapper>>>>,
     pub(crate) max_cov: Arc<RwLock<FxHashSet<u32>>>,
     pub(crate) calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
-    pub(crate) relations: Arc<RwLock<FxHashSet<(SyscallRef, SyscallRef)>>>,
+    pub(crate) relations: Arc<RwLock<FxHashMap<SyscallRef, FxHashSet<SyscallRef>>>>,
     pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
     pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
     pub(crate) stats: Arc<Stats>,
@@ -51,6 +51,7 @@ pub struct Fuzzer {
     pub(crate) id: u64,
     pub(crate) target: Target,
     pub(crate) local_vals: ValuePool,
+    pub(crate) local_rels: FxHashMap<SyscallRef, FxHashSet<SyscallRef>>,
     pub(crate) queue: Queue,
     pub(crate) exec_handle: ExecHandle,
     pub(crate) run_history: VecDeque<Prog>,
@@ -64,6 +65,8 @@ pub struct Fuzzer {
     pub(crate) work_dir: PathBuf,
     pub(crate) kernel_obj: Option<PathBuf>,
     pub(crate) kernel_src: Option<PathBuf>,
+
+    pub(crate) stop: Arc<AtomicBool>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -77,7 +80,7 @@ impl Fuzzer {
     pub fn fuzz(&mut self) {
         self.sampling();
 
-        loop {
+        while !self.stop() {
             if self.mode == Mode::Explore {
                 self.gen();
             } else {
@@ -89,10 +92,14 @@ impl Fuzzer {
 
     fn sampling(&mut self) {
         let mut i = 0;
-        while self.queue.current_age < 1 && i < 128 {
+        while self.queue.current_age < 1 && i < 128 && !self.stop() {
             self.gen();
             self.mutate();
             i += 1;
+        }
+
+        if self.stop() {
+            return;
         }
 
         let g0 = max(self.mut_gaining, 1);
@@ -120,7 +127,7 @@ impl Fuzzer {
     }
 
     fn update_mode(&mut self) {
-        if self.queue.is_empty() || self.queue.current_age == 0 {
+        if self.stop() || self.queue.is_empty() || self.queue.current_age == 0 {
             self.mode = Mode::Explore;
             return;
         }
@@ -157,6 +164,9 @@ impl Fuzzer {
             if self.evaluate(p) {
                 self.gen_gaining += 1;
             }
+            if self.stop() {
+                break;
+            }
         }
     }
 
@@ -164,14 +174,14 @@ impl Fuzzer {
         use crate::fuzz::queue::AVG_SCORE;
 
         self.mut_gaining = 0;
-        if self.queue.is_empty() {
+        if self.queue.is_empty() || self.stop() {
             return;
         }
 
         let avg_score = self.queue.avgs[&AVG_SCORE];
         let mut mut_n = 0;
 
-        while mut_n < self.cycle_len {
+        while mut_n < self.cycle_len && !self.stop() {
             let idx = self.queue.select_idx(true);
             let n = if self.queue.inputs[idx].score > avg_score {
                 4
@@ -180,6 +190,9 @@ impl Fuzzer {
             };
 
             for _ in 0..n {
+                if self.stop() {
+                    break;
+                }
                 let p = mutate_args(&self.queue.inputs[idx].p);
                 self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
@@ -189,11 +202,18 @@ impl Fuzzer {
                     self.queue.inputs[idx].update_gaining_rate(false);
                 }
             }
-
             mut_n += n;
 
             for _ in 0..n {
-                let p = seq_reuse(&self.queue.inputs[idx].p);
+                if self.stop() {
+                    break;
+                }
+                let p = seq_reuse(
+                    &self.target,
+                    &self.local_vals,
+                    &self.queue.inputs[idx].p,
+                    &self.local_rels,
+                );
                 self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
                     self.mut_gaining += 1;
@@ -202,13 +222,15 @@ impl Fuzzer {
                     self.queue.inputs[idx].update_gaining_rate(false);
                 }
             }
-
             mut_n += n;
             // TODO add more mutation methods.
         }
     }
 
     fn evaluate(&mut self, p: Prog) -> bool {
+        if self.stop() {
+            return false;
+        }
         let r = self.exec_handle.exec(&ExecOpt::new(), &p);
         let exec_ret = match r {
             Ok(ret) => {
@@ -256,43 +278,48 @@ impl Fuzzer {
     ) -> bool {
         log::info!("Fuzzer-{}: prog failed: {}.", self.id, e);
 
-        if !hanlde_info {
+        if !hanlde_info || self.stop() {
             return false;
         }
 
+        let mut has_brs = false;
         for i in (0..info.len()).rev() {
             if info[i].branches.is_empty() {
                 info.remove(i);
                 p.calls.drain(i..p.calls.len());
             } else {
+                has_brs = true;
                 break;
             }
         }
-        self.handle_info(p, info)
+
+        if has_brs {
+            self.handle_info(p, info)
+        } else {
+            false
+        }
     }
 
     fn handle_info(&mut self, p: Prog, info: Vec<CallExecInfo>) -> bool {
-        let (has_new, mut new_brs) = self.check_brs(&info, &self.max_cov);
-        if !has_new {
+        if self.stop() {
             return false;
         }
-        for brs in new_brs.iter().filter(|b| b.is_empty()) {
-            self.stats.add(OVERALL_MAX_COV, brs.len() as u64);
+
+        let (has_new, mut new_brs) = self.check_max_cov(&info);
+        if !has_new {
+            return false;
         }
 
         let (succ, _) = self.calibrate_cov(&p, &mut new_brs);
         if !succ {
             return false;
         }
-        for brs in new_brs.iter().filter(|b| b.is_empty()) {
-            self.stats.add(OVERALL_CAL_COV, brs.len() as u64);
-        }
 
         let mut analyzed: FxHashSet<usize> = FxHashSet::default();
         let mut new_input = false;
         // analyze in reverse order helps us find interesting longger prog.
         for i in (0..info.len()).rev() {
-            if info[i].branches.is_empty() || analyzed.contains(&i) {
+            if info[i].branches.is_empty() || analyzed.contains(&i) || self.stop() {
                 continue;
             }
 
@@ -311,20 +338,17 @@ impl Fuzzer {
             if !succ {
                 continue;
             }
+
             new_input = true;
             let new_re = self.detect_relations(&m_p, &m_p_brs);
 
             let mut input = Input::new(m_p, ExecOpt::new_no_collide(), m_p_info);
             input.found_new_re = new_re;
-            input.update_distinct_degree(&self.queue.call_cnt);
-            input.age = self.queue.current_age;
             input.exec_tm = exec_tm.as_millis() as usize;
             input.new_cov = m_p_brs.into_iter().flatten().collect();
-            input.update_score(&self.queue.avgs);
-
             self.queue.append(input);
         }
-        new_input
+        new_input && !self.stop()
     }
 
     fn minimize(
@@ -333,7 +357,7 @@ impl Fuzzer {
         old_call_infos: &[CallExecInfo],
         new_brs: &FxHashSet<u32>,
     ) -> Option<(Prog, Vec<usize>, Vec<CallExecInfo>)> {
-        if p.calls.len() <= 1 {
+        if p.calls.len() <= 1 || self.stop() {
             return None;
         }
 
@@ -344,6 +368,10 @@ impl Fuzzer {
         let mut idx = p.calls.len() - 1;
 
         for i in (0..p.calls.len() - 1).rev() {
+            if self.stop() {
+                return None;
+            }
+
             let new_p = p.remove(i);
             idx -= 1;
             self.stats.inc(EXEC_MINIMIZE);
@@ -362,6 +390,15 @@ impl Fuzzer {
             }
         }
 
+        if !removed.is_empty() {
+            log::info!(
+                "Fuzzer-{}: minimized success: {} -> {}.",
+                self.id,
+                old_len,
+                old_len - removed.len()
+            );
+        }
+
         let reserved = (0..old_len).filter(|i| !removed.contains(i)).collect();
         Some((
             p,
@@ -371,13 +408,23 @@ impl Fuzzer {
     }
 
     fn detect_relations(&mut self, p: &Prog, brs: &[FxHashSet<u32>]) -> bool {
-        if p.calls.len() == 1 {
+        if p.calls.len() == 1 || self.stop() {
             return false;
         }
 
         let mut detected = false;
         let opt = ExecOpt::new_no_collide();
         for i in 0..p.calls.len() - 1 {
+            if self.stop() {
+                return false;
+            }
+
+            if self.local_rels.contains_key(p.calls[i].meta) {
+                if self.local_rels[p.calls[i].meta].contains(p.calls[i + 1].meta) {
+                    continue;
+                }
+            }
+
             let new_p = p.remove(i);
             self.stats.inc(EXEC_RDETECT);
             let ret = self.exec_handle.exec(&opt, &new_p);
@@ -396,33 +443,41 @@ impl Fuzzer {
     }
 
     fn add_relation(&mut self, (s0, s1): (SyscallRef, SyscallRef)) -> bool {
+        let new;
         {
             let r = self.relations.read().unwrap();
-            if r.contains(&(s0, s1)) {
-                return false;
+            if !r.contains_key(&s0) {
+                new = true;
+            } else {
+                new = r[&s0].contains(&s1);
+            }
+            for (key, v) in r.iter() {
+                let entry = self.local_rels.entry(key).or_default();
+                entry.extend(v.iter().copied());
             }
         }
-
-        log::info!(
-            "Fuzzer-{}: detect new relation: ({}, {}).",
-            self.id,
-            s0.name,
-            s1.name
-        );
-        let mut r = self.relations.write().unwrap();
-        r.insert((s0, s1))
+        let entry = self.local_rels.entry(s0).or_default();
+        entry.insert(s1);
+        if new {
+            log::info!(
+                "Fuzzer-{}: detect new relation: ({}, {}).",
+                self.id,
+                s0.name,
+                s1.name
+            );
+            let mut r = self.relations.write().unwrap();
+            let entry = r.entry(s0).or_default();
+            entry.insert(s1);
+        }
+        new
     }
 
-    fn check_brs(
-        &self,
-        info: &[CallExecInfo],
-        covs: &RwLock<FxHashSet<u32>>,
-    ) -> (bool, Vec<FxHashSet<u32>>) {
+    fn check_max_cov(&self, info: &[CallExecInfo]) -> (bool, Vec<FxHashSet<u32>>) {
         let mut has_new = false;
         let mut new_brs = Vec::with_capacity(info.len());
 
         {
-            let covs = covs.read().unwrap();
+            let covs = self.max_cov.read().unwrap();
             for i in info.iter() {
                 let mut new_br = FxHashSet::default();
                 for br in i.branches.iter().copied() {
@@ -437,10 +492,11 @@ impl Fuzzer {
             }
         }
         if has_new {
-            let mut covs = covs.write().unwrap();
+            let mut covs = self.max_cov.write().unwrap();
             for br in new_brs.iter() {
                 covs.extend(br.iter().copied());
             }
+            self.stats.store(OVERALL_MAX_COV, covs.len() as u64);
         }
         (has_new, new_brs)
     }
@@ -451,14 +507,18 @@ impl Fuzzer {
         let mut exec_tm = Duration::new(0, 0);
 
         for _ in 0..3 {
+            if self.stop() {
+                return (false, Duration::default());
+            }
+
             let now = Instant::now();
             let ret = self.exec_handle.exec(&opt, p);
             exec_tm += now.elapsed();
             self.stats.inc(EXEC_CALIBRATE);
             if let Some(info) = self.handle_ret_comm(p, ret) {
-                let (_, covs) = self.check_brs(&info, &self.calibrated_cov);
-                for i in 0..new_covs.len() {
-                    new_covs[i] = new_covs[i].intersection(&covs[i]).cloned().collect();
+                for (i, call_info) in info.into_iter().enumerate() {
+                    let brs = FxHashSet::from_iter(call_info.branches.into_iter());
+                    new_covs[i] = new_covs[i].intersection(&brs).copied().collect();
                 }
             } else {
                 failed = true;
@@ -466,10 +526,16 @@ impl Fuzzer {
             }
         }
 
-        (
-            !failed && new_covs.iter().any(|c| !c.is_empty()),
-            exec_tm / 3,
-        )
+        let succ = !failed && new_covs.iter().any(|c| !c.is_empty()) && !self.stop();
+        if succ {
+            let mut covs = self.calibrated_cov.write().unwrap();
+            for br in new_covs.iter() {
+                covs.extend(br.iter().copied());
+            }
+            self.stats.add(OVERALL_CAL_COV, covs.len() as u64);
+        }
+
+        (succ, exec_tm / 3)
     }
 
     fn handle_ret_comm(
@@ -660,6 +726,11 @@ impl Fuzzer {
             write(out_dir.join(format!("report{}", id)), r1.report).unwrap();
             write(out_dir.join(format!("log{}", id)), r1.raw_log).unwrap();
         }
+    }
+
+    #[inline(always)]
+    fn stop(&self) -> bool {
+        self.stop.load(Ordering::Relaxed)
     }
 }
 

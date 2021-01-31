@@ -1,13 +1,19 @@
 use crate::{
     exec::ExecOpt,
-    gen::param::{
-        buffer,
-        scalar::{gen_flag, gen_integer, MAGIC64},
+    fuzz::fuzzer::ValuePool,
+    gen::{
+        gen_seq,
+        param::{
+            buffer,
+            scalar::{gen_flag, gen_integer, MAGIC64},
+        },
     },
-    model::{BufferKind, IntFmt, Prog, TypeKind, Value, ValueKind},
+    model::{BufferKind, IntFmt, Prog, SyscallRef, TypeKind, Value, ValueKind},
+    targets::Target,
 };
 
 use rand::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn mutate_args(p: &Prog) -> Prog {
     let mut rng = thread_rng();
@@ -157,13 +163,15 @@ fn mutate_buffer(val: &mut Value) {
             if !vals.is_empty() && rng.gen_ratio(1, 10) {
                 buf = Vec::from(&**vals.choose(&mut rng).unwrap());
             }
-            buffer::mutate_blob(&mut buf, None, (len_old, len_old));
-            if !noz {
-                *buf.last_mut().unwrap() = b'\0';
+            if !buf.is_empty() {
+                buffer::mutate_blob(&mut buf, None, (len_old, len_old));
+                if !noz {
+                    *buf.last_mut().unwrap() = b'\0';
+                }
             }
         }
         BufferKind::BlobRand | BufferKind::BlobRange { .. } | BufferKind::Text { .. } => {
-            if rng.gen_ratio(1, 100) {
+            if !buf.is_empty() && rng.gen_ratio(1, 100) {
                 // Mutation blob has high cost, but low gaining, so keep the mutation frequency low.
                 buffer::mutate_blob(&mut buf, None, (len_old, len_old));
             }
@@ -178,8 +186,53 @@ pub fn insert_call(_p: &Prog) -> Prog {
     todo!()
 }
 
-pub fn seq_reuse(_p: &Prog) -> Prog {
-    todo!()
+pub fn seq_reuse(
+    t: &Target,
+    pool: &ValuePool,
+    p: &Prog,
+    r: &FxHashMap<SyscallRef, FxHashSet<SyscallRef>>,
+) -> Prog {
+    let mut comm = (FxHashSet::default(), 0);
+    let mut idx = 0;
+    let mut seq = p.calls.iter().map(|c| c.meta).collect::<Vec<_>>();
+    let mut rng = thread_rng();
+
+    loop {
+        if let Some(calls) = r.get(seq[idx]) {
+            let calls = calls.clone();
+            if comm.0.is_empty() {
+                comm = (calls, 1);
+            } else {
+                let comm_next = calls
+                    .intersection(&comm.0)
+                    .copied()
+                    .collect::<FxHashSet<_>>();
+                if !comm_next.is_empty() {
+                    comm = (comm_next, comm.1 + 1);
+                } else if comm.1 <= 1 {
+                    comm = (if rng.gen() { comm_next } else { comm.0 }, 1);
+                }
+            }
+        }
+
+        if !comm.0.is_empty() {
+            if (comm.1 <= 1 && rng.gen_ratio(1, 10)) || (comm.1 > 1 && rng.gen_ratio(3, 10)) {
+                let call = comm.0.iter().choose(&mut rng).unwrap();
+                if idx != seq.len() - 1 {
+                    seq.insert(idx + 1, *call)
+                } else {
+                    seq.push(*call);
+                }
+            }
+        }
+
+        idx += 1;
+        if idx >= seq.len() || seq.len() >= 16 {
+            break;
+        }
+    }
+
+    gen_seq(t, pool, &seq)
 }
 
 pub fn fault_inject(_p: &Prog) -> ExecOpt {

@@ -26,7 +26,10 @@ use std::{
     io::ErrorKind,
     path::PathBuf,
     process::exit,
-    sync::{Arc, Barrier, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Barrier, Mutex, RwLock,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -46,11 +49,14 @@ pub struct Config {
 pub fn start(conf: Config) {
     let max_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let calibrated_cov = Arc::new(RwLock::new(FxHashSet::default()));
-    let relations = Arc::new(RwLock::new(FxHashSet::default()));
+    let relations = Arc::new(RwLock::new(FxHashMap::default()));
     let crashes = Arc::new(Mutex::new(FxHashMap::default()));
     let raw_crashes = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
     let stats = Arc::new(Stats::new());
+    let stop = Arc::new(AtomicBool::new(false));
     let barrier = Arc::new(Barrier::new(conf.jobs as usize + 1));
+    let mut fuzzers = Vec::new();
+
     if let Err(e) = create_dir(&conf.work_dir) {
         if e.kind() != ErrorKind::AlreadyExists {
             log::error!(
@@ -77,9 +83,10 @@ pub fn start(conf: Config) {
         let raw_crashes = Arc::clone(&raw_crashes);
         let stats = Arc::clone(&stats);
         let barrier = Arc::clone(&barrier);
+        let stop = Arc::clone(&stop);
         let conf = conf.clone();
 
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let conf = conf.clone();
             let target = Target::new(&conf.target).unwrap();
             let exec_handle =
@@ -94,6 +101,7 @@ pub fn start(conf: Config) {
             let queue = Queue::new(
                 id as usize,
                 if id == 0 {
+                    // only collect stats from queue0.
                     Some(Arc::clone(&stats))
                 } else {
                     None
@@ -108,6 +116,7 @@ pub fn start(conf: Config) {
                 stats,
                 id,
                 target,
+                local_rels: FxHashMap::default(),
                 local_vals: FxHashMap::default(),
                 queue,
                 exec_handle,
@@ -120,12 +129,27 @@ pub fn start(conf: Config) {
                 work_dir: conf.work_dir,
                 kernel_obj: conf.kernel_obj,
                 kernel_src: conf.kernel_src,
+                stop,
             };
             fuzzer.fuzz();
         });
+        fuzzers.push(handle);
     }
 
     barrier.wait();
+
+    ctrlc::set_handler(move || {
+        stop.store(true, Ordering::Relaxed);
+        println!("Waiting fuzzers to exit ...");
+        while !fuzzers.is_empty() {
+            let f = fuzzers.pop().unwrap();
+            f.join().unwrap();
+        }
+        println!("Ok, have a nice day. *-*");
+        exit(0)
+    })
+    .unwrap();
+
     log::info!("Boot finished, cost {}s.", start.elapsed().as_secs());
     log::info!("Let the fuzz begin.");
     bench(Duration::new(10, 0), conf.work_dir, stats);

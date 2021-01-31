@@ -198,10 +198,22 @@ impl Stats {
 
 pub fn bench(du: Duration, work_dir: PathBuf, stats: Arc<Stats>) {
     let mut stats_file = File::create(work_dir.join("stats.json")).unwrap();
+    let mut groups = GROUPS.keys().copied().collect::<Vec<_>>();
+    groups.sort();
+
     loop {
         sleep(du);
+        for g in groups.iter() {
+            let mut info = format!("STATS-{}: ", g);
+            for key in &GROUPS[g] {
+                let sub_stat = format!("{}: {}, ", STATS[key], stats.load(*key));
+                info.push_str(&sub_stat);
+            }
+            info.pop();
+            log::info!("{}", info);
+        }
+
         let stats_json = stats.to_json_str();
-        log::info!("========== Stats ==========\n{}", stats_json);
         stats_file.write_all(stats_json.as_bytes()).unwrap();
     }
 }

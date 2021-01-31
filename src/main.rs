@@ -35,7 +35,7 @@ struct Settings {
     qemu_smp: u8,
     /// Size of memory for each qemu in megabyte.
     #[structopt(short = "mem", long, default_value = "2048")]
-    qemu_mem: u8,
+    qemu_mem: u32,
     /// Path to ssh key used for logging to test machine.
     #[structopt(short = "key", long)]
     ssh_key: PathBuf,

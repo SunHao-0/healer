@@ -62,6 +62,7 @@ impl Queue {
             AVG_EXEC_TM => 0,
             AVG_RES_CNT => 0,
             AVG_NEW_COV => 0,
+            AVG_LEN => 0,
             AVG_SCORE => 0
         };
 
@@ -170,16 +171,21 @@ impl Queue {
         idx
     }
 
-    pub fn append(&mut self, inp: Input) {
+    pub fn append(&mut self, mut inp: Input) {
         if self.should_culling() {
             self.culling();
         }
         let idx = self.inputs.len();
+        inp.age = self.current_age;
         if let Some(stats) = self.stats.as_ref() {
             stats.update_time(stats::OVERALL_LAST_INPUT);
             stats.store(stats::OVERALL_CALLS_FUZZED_NUM, self.call_cnt.len() as u64);
         }
         self.append_inner(inp, idx);
+
+        self.inputs[idx].update_distinct_degree(&self.call_cnt);
+        self.inputs[idx].update_score(&self.avgs);
+        self.update_stats();
     }
 
     fn append_inner(&mut self, inp: Input, idx: usize) {
@@ -290,6 +296,7 @@ impl Queue {
             AVG_AGE => 0,
             AVG_EXEC_TM => 0,
             AVG_RES_CNT => 0,
+            AVG_LEN => 0,
             AVG_NEW_COV => 0,
         };
         let mut call_cnt = FxHashMap::default();
@@ -334,9 +341,23 @@ impl Queue {
         }
         avgs.insert(AVG_SCORE, score / queue.inputs.len());
         queue.avgs = avgs;
-
         *self = queue;
 
+        self.update_stats();
+
+        log::info!(
+            "Queue{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
+            self.id,
+            now.elapsed().as_millis(),
+            self.current_age,
+            discard,
+            old_favored,
+            new_favored,
+            self.pending_favored.len()
+        );
+    }
+
+    fn update_stats(&self) {
         if let Some(stats) = self.stats.as_ref() {
             stats.update_time(stats::QUEUE_LAST_CULLING);
             stats.store(stats::QUEUE_LEN, self.inputs.len() as u64);
@@ -359,16 +380,5 @@ impl Queue {
             stats.store(stats::AVG_AGE, self.avgs[&AVG_AGE] as u64);
             stats.store(stats::AVG_NEW_COV, self.avgs[&AVG_NEW_COV] as u64);
         }
-
-        log::info!(
-            "Queue{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
-            self.id,
-            now.elapsed().as_millis(),
-            self.current_age,
-            discard,
-            old_favored,
-            new_favored,
-            self.pending_favored.len()
-        );
     }
 }
