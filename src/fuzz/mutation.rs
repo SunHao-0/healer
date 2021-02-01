@@ -8,12 +8,14 @@ use crate::{
             scalar::{gen_flag, gen_integer, MAGIC64},
         },
     },
-    model::{BufferKind, IntFmt, Prog, SyscallRef, TypeKind, Value, ValueKind},
+    model::{BufferKind, IntFmt, Prog, TypeKind, Value, ValueKind},
     targets::Target,
 };
 
 use rand::prelude::*;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
+
+use super::relation::Relation;
 
 pub fn mutate_args(p: &Prog) -> Prog {
     let mut rng = thread_rng();
@@ -186,12 +188,7 @@ pub fn insert_call(_p: &Prog) -> Prog {
     todo!()
 }
 
-pub fn seq_reuse(
-    t: &Target,
-    pool: &ValuePool,
-    p: &Prog,
-    r: &FxHashMap<SyscallRef, FxHashSet<SyscallRef>>,
-) -> Prog {
+pub fn seq_reuse(t: &Target, pool: &ValuePool, p: &Prog, r: &Relation) -> Prog {
     let mut comm = (FxHashSet::default(), 0);
     let mut idx = 0;
     let mut seq = p.calls.iter().map(|c| c.meta).collect::<Vec<_>>();
@@ -215,14 +212,14 @@ pub fn seq_reuse(
             }
         }
 
-        if !comm.0.is_empty() {
-            if (comm.1 <= 1 && rng.gen_ratio(1, 10)) || (comm.1 > 1 && rng.gen_ratio(3, 10)) {
-                let call = comm.0.iter().choose(&mut rng).unwrap();
-                if idx != seq.len() - 1 {
-                    seq.insert(idx + 1, *call)
-                } else {
-                    seq.push(*call);
-                }
+        if !comm.0.is_empty()
+            && ((comm.1 <= 1 && rng.gen_ratio(1, 10)) || (comm.1 > 1 && rng.gen_ratio(3, 10)))
+        {
+            let call = comm.0.iter().choose(&mut rng).unwrap();
+            if idx != seq.len() - 1 {
+                seq.insert(idx + 1, *call)
+            } else {
+                seq.push(*call);
             }
         }
 

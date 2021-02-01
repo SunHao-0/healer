@@ -219,6 +219,7 @@ impl ExecHandle {
     pub fn restart(&mut self) -> Result<(), SpawnError> {
         self.syz = None;
         self.qemu = None;
+        self.copy_bin = true;
         self.spawn_syz()
     }
 

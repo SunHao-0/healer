@@ -199,7 +199,7 @@ impl Stats {
 pub fn bench(du: Duration, work_dir: PathBuf, stats: Arc<Stats>) {
     let mut stats_file = File::create(work_dir.join("stats.json")).unwrap();
     let mut groups = GROUPS.keys().copied().collect::<Vec<_>>();
-    groups.sort();
+    groups.sort_unstable();
 
     loop {
         sleep(du);

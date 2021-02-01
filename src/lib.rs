@@ -13,6 +13,7 @@ use exec::SshConf;
 use fuzz::{
     fuzzer::{Fuzzer, Mode},
     queue::Queue,
+    relation::Relation,
     stats::{bench, Stats},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -40,6 +41,7 @@ pub struct Config {
     pub kernel_obj: Option<PathBuf>,
     pub kernel_src: Option<PathBuf>,
     pub jobs: u64,
+    pub relations: Option<PathBuf>,
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
     pub ssh_conf: SshConf,
@@ -49,7 +51,6 @@ pub struct Config {
 pub fn start(conf: Config) {
     let max_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let calibrated_cov = Arc::new(RwLock::new(FxHashSet::default()));
-    let relations = Arc::new(RwLock::new(FxHashMap::default()));
     let crashes = Arc::new(Mutex::new(FxHashMap::default()));
     let raw_crashes = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
     let stats = Arc::new(Stats::new());
@@ -67,12 +68,30 @@ pub fn start(conf: Config) {
             exit(1);
         }
     }
+
     log::info!("Loading target {}...", conf.target);
-    if Target::new(&conf.target).is_none() {
+    let target = Target::new(&conf.target).unwrap_or_else(|| {
         // preloading.
         log::error!("Target {} dose not exist", conf.target);
         exit(1);
-    }
+    });
+
+    let relations_file = if let Some(f) = conf.relations.as_ref() {
+        f.clone()
+    } else {
+        conf.work_dir.join("relations")
+    };
+    let relations = Relation::load(&target, &relations_file).unwrap_or_else(|e| {
+        log::error!(
+            "Failed to load relations '{}': {}",
+            relations_file.display(),
+            e
+        );
+        exit(1);
+    });
+    let relations = Arc::new(relations);
+    log::info!("Initial relations: {}.", relations.len());
+
     log::info!("Boot {} {} on qemu...", conf.jobs, conf.target);
     let start = Instant::now();
     for id in 0..conf.jobs {
@@ -117,7 +136,6 @@ pub fn start(conf: Config) {
                 stats,
                 id,
                 target,
-                local_rels: FxHashMap::default(),
                 local_vals: FxHashMap::default(),
                 queue,
                 exec_handle,

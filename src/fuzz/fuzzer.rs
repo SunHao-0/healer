@@ -4,10 +4,11 @@ use crate::{
         input::Input,
         mutation::{mutate_args, seq_reuse},
         queue::Queue,
+        relation::Relation,
         stats::*,
     },
     gen::gen,
-    model::{Prog, ProgWrapper, SyscallRef, TypeRef, Value},
+    model::{Prog, ProgWrapper, TypeRef, Value},
     targets::Target,
 };
 
@@ -19,7 +20,6 @@ use std::{
     fs::{create_dir_all, write},
     hash::{Hash, Hasher},
     io::ErrorKind,
-    iter::FromIterator,
     path::PathBuf,
     process::{exit, Command},
     sync::RwLock,
@@ -42,7 +42,7 @@ pub struct Fuzzer {
     // progs: Arc<RwLock<FxHashMap<usize, Vec<ProgWrapper>>>>,
     pub(crate) max_cov: Arc<RwLock<FxHashSet<u32>>>,
     pub(crate) calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
-    pub(crate) relations: Arc<RwLock<FxHashMap<SyscallRef, FxHashSet<SyscallRef>>>>,
+    pub(crate) relations: Arc<Relation>,
     pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
     pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
     pub(crate) stats: Arc<Stats>,
@@ -51,7 +51,6 @@ pub struct Fuzzer {
     pub(crate) id: u64,
     pub(crate) target: Target,
     pub(crate) local_vals: ValuePool,
-    pub(crate) local_rels: FxHashMap<SyscallRef, FxHashSet<SyscallRef>>,
     pub(crate) queue: Queue,
     pub(crate) exec_handle: ExecHandle,
     pub(crate) run_history: VecDeque<Prog>,
@@ -223,7 +222,7 @@ impl Fuzzer {
                     &self.target,
                     &self.local_vals,
                     &self.queue.inputs[idx].p,
-                    &self.local_rels,
+                    &self.relations,
                 );
                 self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
@@ -450,10 +449,11 @@ impl Fuzzer {
                 return false;
             }
 
-            if self.local_rels.contains_key(p.calls[i].meta) {
-                if self.local_rels[p.calls[i].meta].contains(p.calls[i + 1].meta) {
-                    continue;
-                }
+            if self
+                .relations
+                .contains(p.calls[i].meta, p.calls[i + 1].meta)
+            {
+                continue;
             }
 
             let new_p = p.remove(i);
@@ -463,44 +463,33 @@ impl Fuzzer {
                 if !brs[i].iter().all(|br| info[i].branches.contains(br)) {
                     let s0 = p.calls[i].meta;
                     let s1 = new_p.calls[i].meta;
-                    if self.add_relation((s0, s1)) {
-                        detected = true
+                    match self.relations.insert(s0, s1) {
+                        Ok(new) => {
+                            if new {
+                                detected = new;
+                                log::info!(
+                                    "Fuzzer-{}: detect new relation: ({}, {})",
+                                    self.id,
+                                    s0.name,
+                                    s1.name
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Fuzzer-{}: failed to persist relation ({}, {}): {}",
+                                self.id,
+                                s0,
+                                s1,
+                                e
+                            );
+                        }
                     }
                 }
             }
         }
 
         detected
-    }
-
-    fn add_relation(&mut self, (s0, s1): (SyscallRef, SyscallRef)) -> bool {
-        let new;
-        {
-            let r = self.relations.read().unwrap();
-            if !r.contains_key(&s0) {
-                new = true;
-            } else {
-                new = !r[&s0].contains(&s1);
-            }
-            for (key, v) in r.iter() {
-                let entry = self.local_rels.entry(key).or_default();
-                entry.extend(v.iter().copied());
-            }
-        }
-        let entry = self.local_rels.entry(s0).or_default();
-        entry.insert(s1);
-        if new {
-            log::info!(
-                "Fuzzer-{}: detect new relation: ({}, {})",
-                self.id,
-                s0.name,
-                s1.name
-            );
-            let mut r = self.relations.write().unwrap();
-            let entry = r.entry(s0).or_default();
-            entry.insert(s1);
-        }
-        new
     }
 
     fn check_max_cov(&self, info: &[CallExecInfo]) -> (bool, Vec<FxHashSet<u32>>) {
@@ -548,7 +537,7 @@ impl Fuzzer {
             self.stats.inc_exec(EXEC_CALIBRATE);
             if let Some(info) = self.handle_ret_comm(p, opt.clone(), ret) {
                 for (i, call_info) in info.into_iter().enumerate() {
-                    let brs = FxHashSet::from_iter(call_info.branches.into_iter());
+                    let brs = call_info.branches.into_iter().collect();
                     new_covs[i] = new_covs[i].intersection(&brs).copied().collect();
                 }
             } else {

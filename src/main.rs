@@ -42,6 +42,9 @@ struct Settings {
     /// User name for logging to test machine.
     #[structopt(short = "user", long, default_value = "root")]
     ssh_user: String,
+    /// Specify the input relations.
+    #[structopt(short, long)]
+    relations: Option<PathBuf>,
 }
 
 pub fn main() {
@@ -52,6 +55,7 @@ pub fn main() {
         kernel_obj: settings.kernel_obj,
         kernel_src: settings.kernel_src,
         jobs: settings.jobs,
+        relations: settings.relations,
         qemu_conf: QemuConf {
             target: settings.target,
             img_path: settings.img.into_boxed_path(),

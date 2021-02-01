@@ -37,6 +37,8 @@ pub struct Target {
 
     /// All syscalls of target os.
     pub syscalls: Box<[SyscallRef]>,
+    /// Name to syscall ref map.
+    pub call_map: FxHashMap<Box<str>, SyscallRef>,
     /// All types of `syscalls`.
     pub tys: Box<[TypeRef]>,
     /// All resource types of `tys`.
@@ -54,6 +56,10 @@ impl Target {
         let desc_json = json::parse(desc_str).unwrap();
 
         let (syscalls, tys) = syscalls::parse(target, &desc_json);
+        let call_map = syscalls
+            .iter()
+            .map(|s| (s.name.clone(), *s))
+            .collect::<FxHashMap<_, _>>();
         let res_tys = tys
             .iter()
             .copied()
@@ -114,6 +120,7 @@ impl Target {
                 Some(to_boxed_str(syz_exec_bin))
             },
             syscalls,
+            call_map,
             tys,
             res_tys,
             subtype_map,

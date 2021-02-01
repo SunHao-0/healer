@@ -7,7 +7,7 @@ use std::{
     fmt::Write,
     fs::{create_dir_all, write},
     mem,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -93,6 +93,10 @@ impl Queue {
             stats,
             work_dir,
         }
+    }
+
+    pub fn load<P: AsRef<Path>>(_f: P) -> Result<Self, std::io::Error> {
+        todo!()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -249,7 +253,7 @@ impl Queue {
                 0
             },
             self.culling_threshold,
-            (now - self.last_culling) / 60,
+            ((now - self.last_culling).as_secs()) / 60,
             self.culling_duration.as_secs() / 60
         );
 

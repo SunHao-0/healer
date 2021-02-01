@@ -206,8 +206,8 @@ impl Input {
         if self.self_contained {
             name.push_str("self,");
         }
-        write!(name, "gain:{}", self.gaining_rate).unwrap();
-        write!(name, "dist:{}", self.distinct_degree).unwrap();
+        write!(name, "gain:{},", self.gaining_rate).unwrap();
+        write!(name, "dist:{},", self.distinct_degree).unwrap();
         if !self.new_cov.is_empty() {
             write!(name, "+cov:{},", self.new_cov.len()).unwrap();
         }
