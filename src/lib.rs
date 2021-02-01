@@ -73,7 +73,7 @@ pub fn start(conf: Config) {
         log::error!("Target {} dose not exist", conf.target);
         exit(1);
     }
-    log::info!("Boot {} {} on qemu ...", conf.jobs, conf.target);
+    log::info!("Boot {} {} on qemu...", conf.jobs, conf.target);
     let start = Instant::now();
     for id in 0..conf.jobs {
         let max_cov = Arc::clone(&max_cov);
@@ -106,6 +106,7 @@ pub fn start(conf: Config) {
                 } else {
                     None
                 },
+                Some(conf.work_dir.clone()),
             );
             let mut fuzzer = Fuzzer {
                 max_cov,
@@ -129,6 +130,7 @@ pub fn start(conf: Config) {
                 work_dir: conf.work_dir,
                 kernel_obj: conf.kernel_obj,
                 kernel_src: conf.kernel_src,
+                last_reboot: Instant::now(),
                 stop,
             };
             fuzzer.fuzz();
@@ -140,7 +142,7 @@ pub fn start(conf: Config) {
 
     ctrlc::set_handler(move || {
         stop.store(true, Ordering::Relaxed);
-        println!("Waiting fuzzers to exit ...");
+        println!("Waiting fuzzers to exit...");
         while !fuzzers.is_empty() {
             let f = fuzzers.pop().unwrap();
             f.join().unwrap();

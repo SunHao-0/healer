@@ -1,9 +1,9 @@
-use std::cmp::max;
-
 use crate::{
     exec::{CallExecInfo, ExecOpt},
     model::{Prog, SyscallRef},
 };
+
+use std::{cmp::max, fmt::Write};
 
 use rustc_hash::FxHashMap;
 
@@ -70,7 +70,7 @@ impl Input {
             found_new_re: false,
             self_contained: false, // updated after re-execution.
             score: 0,              // updated after culling.
-            gaining_rate: 0,       // updated after every mutation.
+            gaining_rate: 100,     // new input always has higher gaining rate.
             distinct_degree: 0,
             age: 0,
             depth,
@@ -186,6 +186,33 @@ impl Input {
     }
 
     pub fn desciption(&self) -> String {
-        todo!()
+        let mut name = format!(
+            "len:{},score:{},dep:{},age:{},",
+            self.p.calls.len(),
+            self.score,
+            self.depth,
+            self.age
+        );
+        if !self.was_mutated {
+            name.push_str("new,")
+        }
+        if self.favored {
+            name.push_str("fav,")
+        }
+
+        if self.found_new_re {
+            name.push_str("re,");
+        }
+        if self.self_contained {
+            name.push_str("self,");
+        }
+        write!(name, "gain:{}", self.gaining_rate).unwrap();
+        write!(name, "dist:{}", self.distinct_degree).unwrap();
+        if !self.new_cov.is_empty() {
+            write!(name, "+cov:{},", self.new_cov.len()).unwrap();
+        }
+
+        name.pop();
+        name
     }
 }

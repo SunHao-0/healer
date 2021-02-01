@@ -4,7 +4,10 @@ use crate::{
 };
 
 use std::{
+    fmt::Write,
+    fs::{create_dir_all, write},
     mem,
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -49,10 +52,11 @@ pub struct Queue {
     pub(crate) avgs: FxHashMap<usize, usize>,
     pub(crate) call_cnt: FxHashMap<SyscallRef, usize>,
     pub(crate) stats: Option<Arc<stats::Stats>>,
+    pub(crate) work_dir: Option<PathBuf>,
 }
 
 impl Queue {
-    pub fn new(id: usize, stats: Option<Arc<stats::Stats>>) -> Self {
+    pub fn new(id: usize, stats: Option<Arc<stats::Stats>>, work_dir: Option<PathBuf>) -> Self {
         let avgs = fxhashmap! {
             AVG_GAINING_RATE => 0,
             AVG_DISTINCT_DEGREE => 0,
@@ -73,7 +77,7 @@ impl Queue {
             last_num: 0,
             last_culling: Instant::now(),
             culling_threshold: 128,
-            culling_duration: Duration::from_secs(30 * 60),
+            culling_duration: Duration::from_secs(15 * 60),
             favored: Vec::new(),
             pending_favored: Vec::new(),
             pending_none_favored: Vec::new(),
@@ -87,6 +91,7 @@ impl Queue {
             avgs,
             call_cnt: FxHashMap::default(),
             stats,
+            work_dir,
         }
     }
 
@@ -171,20 +176,25 @@ impl Queue {
     }
 
     pub fn append(&mut self, mut inp: Input) {
-        if self.should_culling() {
-            self.culling();
-        }
         let idx = self.inputs.len();
         inp.age = self.current_age;
+        for c in &inp.p.calls {
+            let cnt = self.call_cnt.entry(c.meta).or_default();
+            *cnt += 1;
+        }
+        inp.update_distinct_degree(&self.call_cnt);
+        inp.update_score(&self.avgs);
+        self.append_inner(inp, idx);
+
         if let Some(stats) = self.stats.as_ref() {
             stats.update_time(stats::OVERALL_LAST_INPUT);
             stats.store(stats::OVERALL_CALLS_FUZZED_NUM, self.call_cnt.len() as u64);
         }
-        self.append_inner(inp, idx);
 
-        self.inputs[idx].update_distinct_degree(&self.call_cnt);
-        self.inputs[idx].update_score(&self.avgs);
-        self.update_stats();
+        if self.should_culling() {
+            self.culling();
+        }
+        self.update_queue_stats();
     }
 
     fn append_inner(&mut self, inp: Input, idx: usize) {
@@ -213,35 +223,35 @@ impl Queue {
             self.input_depth.push(Vec::new());
         }
         self.input_depth[inp.depth].push(idx);
-        for c in &inp.p.calls {
-            let cnt = self.call_cnt.entry(c.meta).or_default();
-            *cnt += 1;
-        }
 
         self.inputs.push(inp);
     }
 
     fn should_culling(&self) -> bool {
+        let mut culling = false;
         if self.inputs.len() > self.last_num {
-            // TODO update culling threshold based on execution speed dynamiclly
-            let exceeds = self.inputs.len() - self.last_num > self.culling_threshold;
-            // TODO update culling duration based on execution speed dynamiclly
-            let tmout = self.last_culling.elapsed() > self.culling_duration;
-            return exceeds || tmout;
+            culling = self.inputs.len() - self.last_num > self.culling_threshold;
         }
-        false
+        if !culling {
+            culling = (Instant::now() - self.last_culling) > self.culling_duration;
+        }
+        culling
     }
 
     fn culling(&mut self) {
-        log::info!(
-            "Queue{} starts culling, threshold/len: {}/{}, duration/last: {:?}/{:?}.",
-            self.id,
-            self.culling_threshold,
-            self.inputs.len(),
-            self.culling_duration,
-            self.last_culling
-        );
         let now = Instant::now();
+        log::info!(
+            "Queue-{} starts culling, delta_len/threshold: {}/{}, last/duration: {:?}/{:?} (mins)",
+            self.id,
+            if self.inputs.len() > self.last_num {
+                self.inputs.len() - self.last_num
+            } else {
+                0
+            },
+            self.culling_threshold,
+            (now - self.last_culling) / 60,
+            self.culling_duration.as_secs() / 60
+        );
 
         let mut inputs_old = mem::replace(&mut self.inputs, Vec::new());
         let old_len = inputs_old.len();
@@ -323,12 +333,13 @@ impl Queue {
             .for_each(|(_, avg)| *avg = (*avg as f64 / inputs.len() as f64).ceil() as usize);
 
         let stats = if let Some(stats) = self.stats.as_ref() {
+            stats.update_time(stats::QUEUE_LAST_CULLING);
             Some(Arc::clone(stats))
         } else {
             None
         };
 
-        let mut queue = Queue::new(self.id, stats);
+        let mut queue = Queue::new(self.id, stats, self.work_dir.clone());
         queue.call_cnt = call_cnt;
         queue.current_age = self.current_age + 1;
         queue.last_num = old_len;
@@ -345,7 +356,15 @@ impl Queue {
         queue.avgs = avgs;
         *self = queue;
 
-        self.update_stats();
+        if let Some(work_dir) = self.work_dir.as_ref() {
+            let queue_out = work_dir.join(format!("queue-{}", self.id));
+            if let Err(e) = self.dump(&queue_out) {
+                log::warn!("Queue-{}: failed to dump: {}", self.id, e);
+            }
+        }
+
+        self.update_queue_stats();
+        self.update_avg_stats();
 
         log::info!(
             "Queue{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
@@ -359,9 +378,8 @@ impl Queue {
         );
     }
 
-    fn update_stats(&self) {
+    fn update_queue_stats(&self) {
         if let Some(stats) = self.stats.as_ref() {
-            stats.update_time(stats::QUEUE_LAST_CULLING);
             stats.store(stats::QUEUE_LEN, self.inputs.len() as u64);
             stats.store(stats::QUEUE_FAVOR, self.favored.len() as u64);
             stats.store(
@@ -372,7 +390,11 @@ impl Queue {
             stats.store(stats::QUEUE_SELF_CONTAIN, self.self_contained.len() as u64);
             stats.store(stats::QUEUE_MAX_DEPTH, self.input_depth.len() as u64);
             stats.store(stats::QUEUE_AGE, self.current_age as u64);
+        }
+    }
 
+    fn update_avg_stats(&self) {
+        if let Some(stats) = self.stats.as_ref() {
             stats.store(stats::EXEC_AVG_SPEED, self.avgs[&AVG_EXEC_TM] as u64);
             stats.store(stats::AVG_LEN, self.avgs[&AVG_LEN] as u64);
             stats.store(stats::AVG_GAINNING, self.avgs[&AVG_GAINING_RATE] as u64);
@@ -382,5 +404,36 @@ impl Queue {
             stats.store(stats::AVG_AGE, self.avgs[&AVG_AGE] as u64);
             stats.store(stats::AVG_NEW_COV, self.avgs[&AVG_NEW_COV] as u64);
         }
+    }
+
+    pub fn dump(&self, out: &PathBuf) -> Result<(), std::io::Error> {
+        let queue_dir = out.join(self.desciption());
+        create_dir_all(&queue_dir)?;
+        for inp in self.inputs.iter() {
+            let inp_file = queue_dir.join(inp.desciption());
+            write(inp_file, inp.p.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn desciption(&self) -> String {
+        let mut name = format!(
+            "age:{},dep:{},calls:{},score:{},",
+            self.current_age,
+            self.input_depth.len(),
+            self.call_cnt.len(),
+            self.avgs[&AVG_SCORE]
+        );
+        if !self.favored.is_empty() {
+            write!(name, "fav:{},", self.favored.len()).unwrap();
+        }
+        if !self.found_re.is_empty() {
+            write!(name, "nre:{},", self.found_re.len()).unwrap();
+        }
+        if !self.self_contained.is_empty() {
+            write!(name, "self:{}", self.self_contained.len()).unwrap();
+        }
+
+        name
     }
 }

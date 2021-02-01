@@ -216,6 +216,12 @@ impl ExecHandle {
         ret
     }
 
+    pub fn restart(&mut self) -> Result<(), SpawnError> {
+        self.syz = None;
+        self.qemu = None;
+        self.spawn_syz()
+    }
+
     fn spawn_syz(&mut self) -> Result<(), SpawnError> {
         if self.qemu.is_none() {
             self.qemu = Some(qemu::boot(&self.qemu_conf, &self.ssh_conf)?);

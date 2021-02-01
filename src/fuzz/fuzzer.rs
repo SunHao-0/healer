@@ -66,6 +66,7 @@ pub struct Fuzzer {
     pub(crate) kernel_obj: Option<PathBuf>,
     pub(crate) kernel_src: Option<PathBuf>,
 
+    pub(crate) last_reboot: Instant,
     pub(crate) stop: Arc<AtomicBool>,
 }
 
@@ -109,7 +110,7 @@ impl Fuzzer {
 
         if self.queue.current_age == 0 {
             log::warn!(
-                "Fuzzer-{}: no culling occurred during the sampling, current fuzzing efficiency is too low (mutaion/gen: {}/{}).",
+                "Fuzzer-{}: no culling occurred during the sampling, current fuzzing efficiency is too low (mutaion/gen: {}/{})",
                 self.id,
                 r0,
                 r1
@@ -145,7 +146,7 @@ impl Fuzzer {
         let r1 = g1 as f64 / self.cycle_len as f64;
         if self.cycle_len < self.max_cycle_len && (r0 < 0.005 || r1 < 0.005) {
             log::info!(
-                "Fuzzer-{}: gaining too low(mut/gen {}/{}), scaling circle length({} -> {}).",
+                "Fuzzer-{}: gaining too low(mut/gen {}/{}), scaling circle length({} -> {})",
                 self.id,
                 r0,
                 r1,
@@ -193,6 +194,11 @@ impl Fuzzer {
                 if self.stop() {
                     break;
                 }
+                if idx >= self.queue.len() {
+                    // queue was culled, reselect.
+                    break;
+                }
+                mut_n += 1;
                 let p = mutate_args(&self.queue.inputs[idx].p);
                 self.stats.inc_exec(EXEC_MUTATION);
                 if self.evaluate(p) {
@@ -202,12 +208,17 @@ impl Fuzzer {
                     self.queue.inputs[idx].update_gaining_rate(false);
                 }
             }
-            mut_n += n;
 
             for _ in 0..n {
                 if self.stop() {
                     break;
                 }
+                if idx >= self.queue.len() {
+                    // queue was culled, reselect.
+                    break;
+                }
+                mut_n += 1;
+
                 let p = seq_reuse(
                     &self.target,
                     &self.local_vals,
@@ -222,7 +233,7 @@ impl Fuzzer {
                     self.queue.inputs[idx].update_gaining_rate(false);
                 }
             }
-            mut_n += n;
+
             // TODO add more mutation methods.
         }
     }
@@ -231,7 +242,23 @@ impl Fuzzer {
         if self.stop() {
             return false;
         }
-        let r = self.exec_handle.exec(&ExecOpt::new(), &p);
+
+        let auto_restart = Duration::new(30 * 60, 0); // 30 minutes
+        let no_restart = Instant::now() - self.last_reboot;
+        if no_restart > auto_restart {
+            log::info!(
+                "Fuzzer-{}: kernel running for {} minutes, restarting...",
+                self.id,
+                no_restart.as_secs() / 60,
+            );
+            if let Err(e) = self.exec_handle.restart() {
+                log::error!("Fuzzer-{}: failed to restart: {}", self.id, e);
+                exit(1);
+            }
+        }
+
+        let opt = ExecOpt::new();
+        let r = self.exec_handle.exec(&opt, &p);
         let exec_ret = match r {
             Ok(ret) => {
                 if self.run_history.len() >= 64 {
@@ -245,11 +272,12 @@ impl Fuzzer {
                 return false;
             }
         };
+
         match exec_ret {
-            ExecResult::Normal(info) => self.handle_info(p, info),
-            ExecResult::Failed { info, err } => self.handle_failed(p, info, err, true),
+            ExecResult::Normal(info) => self.handle_info(p, opt, info),
+            ExecResult::Failed { info, err } => self.handle_failed(p, opt, info, err, true),
             ExecResult::Crash(crash) => {
-                self.handle_crash(p, crash);
+                self.handle_crash(p, opt, crash);
                 true
             }
         }
@@ -272,11 +300,12 @@ impl Fuzzer {
     fn handle_failed(
         &mut self,
         mut p: Prog,
+        opt: ExecOpt,
         mut info: Vec<CallExecInfo>,
         e: Box<dyn std::error::Error + 'static>,
         hanlde_info: bool,
     ) -> bool {
-        log::info!("Fuzzer-{}: prog failed: {}.", self.id, e);
+        log::info!("Fuzzer-{}: prog failed: {}", self.id, e);
 
         if !hanlde_info || self.stop() {
             return false;
@@ -294,13 +323,13 @@ impl Fuzzer {
         }
 
         if has_brs {
-            self.handle_info(p, info)
+            self.handle_info(p, opt, info)
         } else {
             false
         }
     }
 
-    fn handle_info(&mut self, p: Prog, info: Vec<CallExecInfo>) -> bool {
+    fn handle_info(&mut self, p: Prog, opt: ExecOpt, info: Vec<CallExecInfo>) -> bool {
         if self.stop() {
             return false;
         }
@@ -342,7 +371,7 @@ impl Fuzzer {
             new_input = true;
             let new_re = self.detect_relations(&m_p, &m_p_brs);
 
-            let mut input = Input::new(m_p, ExecOpt::new_no_collide(), m_p_info);
+            let mut input = Input::new(m_p, opt.clone(), m_p_info);
             input.found_new_re = new_re;
             input.exec_tm = exec_tm.as_millis() as usize;
             input.new_cov = m_p_brs.into_iter().flatten().collect();
@@ -376,7 +405,7 @@ impl Fuzzer {
             idx -= 1;
             self.stats.inc_exec(EXEC_MINIMIZE);
             let ret = self.exec_handle.exec(&opt, &new_p);
-            if let Some(info) = self.handle_ret_comm(&new_p, ret) {
+            if let Some(info) = self.handle_ret_comm(&new_p, opt.clone(), ret) {
                 let brs = info[idx].branches.iter().copied().collect::<FxHashSet<_>>();
                 if brs.is_superset(new_brs) {
                     p = new_p;
@@ -395,7 +424,7 @@ impl Fuzzer {
             .collect::<Vec<_>>();
         if reserved.len() > 2 {
             log::info!(
-                "Fuzzer-{}: minimized success: {} -> {}.",
+                "Fuzzer-{}: minimized success: {} -> {}",
                 self.id,
                 old_len,
                 reserved.len()
@@ -430,7 +459,7 @@ impl Fuzzer {
             let new_p = p.remove(i);
             self.stats.inc_exec(EXEC_RDETECT);
             let ret = self.exec_handle.exec(&opt, &new_p);
-            if let Some(info) = self.handle_ret_comm(&new_p, ret) {
+            if let Some(info) = self.handle_ret_comm(&new_p, opt.clone(), ret) {
                 if !brs[i].iter().all(|br| info[i].branches.contains(br)) {
                     let s0 = p.calls[i].meta;
                     let s1 = new_p.calls[i].meta;
@@ -462,7 +491,7 @@ impl Fuzzer {
         entry.insert(s1);
         if new {
             log::info!(
-                "Fuzzer-{}: detect new relation: ({}, {}).",
+                "Fuzzer-{}: detect new relation: ({}, {})",
                 self.id,
                 s0.name,
                 s1.name
@@ -517,7 +546,7 @@ impl Fuzzer {
             let ret = self.exec_handle.exec(&opt, p);
             exec_tm += now.elapsed();
             self.stats.inc_exec(EXEC_CALIBRATE);
-            if let Some(info) = self.handle_ret_comm(p, ret) {
+            if let Some(info) = self.handle_ret_comm(p, opt.clone(), ret) {
                 for (i, call_info) in info.into_iter().enumerate() {
                     let brs = FxHashSet::from_iter(call_info.branches.into_iter());
                     new_covs[i] = new_covs[i].intersection(&brs).copied().collect();
@@ -543,17 +572,18 @@ impl Fuzzer {
     fn handle_ret_comm(
         &mut self,
         p: &Prog,
+        opt: ExecOpt,
         ret: Result<ExecResult, ExecError>,
     ) -> Option<Vec<CallExecInfo>> {
         match ret {
             Ok(exec_ret) => match exec_ret {
                 ExecResult::Normal(info) => Some(info),
                 ExecResult::Failed { info, err } => {
-                    self.handle_failed(p.clone(), info, err, false);
+                    self.handle_failed(p.clone(), opt, info, err, false);
                     None
                 }
                 ExecResult::Crash(c) => {
-                    self.handle_crash(p.clone(), c);
+                    self.handle_crash(p.clone(), opt, c);
                     None
                 }
             },
@@ -564,10 +594,11 @@ impl Fuzzer {
         }
     }
 
-    fn handle_crash(&mut self, p: Prog, info: CrashInfo) {
+    fn handle_crash(&mut self, p: Prog, _opt: ExecOpt, info: CrashInfo) {
         if self.stop() {
             return; // killed by ctrlc
         }
+        self.last_reboot = Instant::now();
 
         log::info!(
             "Fuzzer-{}: kernel crashed, maybe caused by:\n {}",
@@ -612,6 +643,7 @@ impl Fuzzer {
                 let mut titles = String::new();
                 for (i, mut r) in reports.iter_mut().enumerate() {
                     r.prog = Some(ProgWrapper(p.clone()));
+                    r.raw_log = log.clone();
                     write!(titles, "\n\t{}. {}", i + 1, r.title).unwrap();
                 }
                 log::info!("Fuzzer-{}: report extracted: {}", self.id, titles);
@@ -712,15 +744,15 @@ impl Fuzzer {
                     }
                 }
                 let mut meta = String::new();
-                writeln!(meta, "TITLE: {}.", r1.title).unwrap();
+                writeln!(meta, "TITLE: {}", r1.title).unwrap();
                 if let Some(cor) = r1.corrupted.as_ref() {
-                    writeln!(meta, "CORRUPTED: {}.", cor).unwrap();
+                    writeln!(meta, "CORRUPTED: {}", cor).unwrap();
                 }
                 if !r1.to_mails.is_empty() {
-                    writeln!(meta, "MAINTAINERS (TO): {:?}.", r1.to_mails).unwrap();
+                    writeln!(meta, "MAINTAINERS (TO): {:?}", r1.to_mails).unwrap();
                 }
                 if !r1.cc_mails.is_empty() {
-                    writeln!(meta, "MAINTAINERS (TO): {:?}.", r1.cc_mails).unwrap();
+                    writeln!(meta, "MAINTAINERS (TO): {:?}", r1.cc_mails).unwrap();
                 }
                 write(out_dir.join("meta"), meta).unwrap();
             }
@@ -823,7 +855,7 @@ fn parse(content: &[u8]) -> Vec<Report> {
                     break;
                 }
             }
-            report.push_str(l);
+            writeln!(report, "{}", l).unwrap();
         }
 
         ret.push(Report {
