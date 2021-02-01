@@ -118,16 +118,6 @@ pub fn start(conf: Config) {
         let handle = thread::spawn(move || {
             let conf = conf.clone();
             let target = Target::new(&conf.target).unwrap();
-            let exec_handle =
-                match exec::spawn_in_qemu(conf.exec_conf, conf.qemu_conf, conf.ssh_conf, id) {
-                    Ok(handle) => handle,
-                    Err(e) => {
-                        log::error!("failed to boot: {}", e);
-                        exit(1)
-                    }
-                };
-            barrier.wait();
-
             let mut queue = match Queue::with_workdir(id as usize, conf.work_dir.clone()) {
                 Ok(q) => q,
                 Err(e) => {
@@ -139,6 +129,16 @@ pub fn start(conf: Config) {
                 // only record queue-0's stats.
                 queue.set_stats(Arc::clone(&stats));
             }
+
+            let exec_handle =
+                match exec::spawn_in_qemu(conf.exec_conf, conf.qemu_conf, conf.ssh_conf, id) {
+                    Ok(handle) => handle,
+                    Err(e) => {
+                        log::error!("failed to boot: {}", e);
+                        exit(1)
+                    }
+                };
+            barrier.wait();
 
             let mut fuzzer = Fuzzer {
                 symbolizer,
