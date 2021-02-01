@@ -175,19 +175,23 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
             }
         }
 
-        let make = Command::new("make")
-            .current_dir(syz_dir.to_str().unwrap())
-            .arg("executor")
-            .output()
-            .unwrap_or_else(|e| {
-                eprintln!("failed to spawn make: {}", e);
+        let targets = vec!["executor", "symbolize"];
+        for target in targets {
+            let make = Command::new("make")
+                .current_dir(syz_dir.to_str().unwrap())
+                .arg(target)
+                .output()
+                .unwrap_or_else(|e| {
+                    eprintln!("failed to spawn make: {}", e);
+                    exit(1);
+                });
+            if !make.status.success() {
+                let stderr = String::from_utf8(make.stderr).unwrap_or_default();
+                eprintln!("failed to make {}: {}", target, stderr);
                 exit(1);
-            });
-        if !make.status.success() {
-            let stderr = String::from_utf8(make.stderr).unwrap_or_default();
-            eprintln!("failed to make executor: {}", stderr);
-            exit(1);
+            }
         }
+
         println!("cargo:rerun-if-changed={}", syz_dir.join("bin").display());
     }
 
