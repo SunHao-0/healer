@@ -42,6 +42,7 @@ pub struct Config {
     pub kernel_src: Option<PathBuf>,
     pub jobs: u64,
     pub relations: Option<PathBuf>,
+    pub symbolizer: PathBuf,
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
     pub ssh_conf: SshConf,
@@ -59,9 +60,17 @@ pub fn start(conf: Config) {
     let mut fuzzers = Vec::new();
 
     if let Err(e) = create_dir(&conf.work_dir) {
-        if e.kind() != ErrorKind::AlreadyExists {
+        if e.kind() == ErrorKind::AlreadyExists {
+            let crash_dir = conf.work_dir.join("crashes");
+            if crash_dir.exists() {
+                log::warn!(
+                    "Existing crash data ({}) may be overwritten",
+                    crash_dir.display()
+                );
+            }
+        } else {
             log::error!(
-                "failed to create work directory {}: {}",
+                "Failed to create work directory {}: {}",
                 conf.work_dir.display(),
                 e
             );
@@ -104,6 +113,7 @@ pub fn start(conf: Config) {
         let barrier = Arc::clone(&barrier);
         let stop = Arc::clone(&stop);
         let conf = conf.clone();
+        let symbolizer = conf.symbolizer.clone();
 
         let handle = thread::spawn(move || {
             let conf = conf.clone();
@@ -117,17 +127,21 @@ pub fn start(conf: Config) {
                     }
                 };
             barrier.wait();
-            let queue = Queue::new(
-                id as usize,
-                if id == 0 {
-                    // only collect stats from queue0.
-                    Some(Arc::clone(&stats))
-                } else {
-                    None
-                },
-                Some(conf.work_dir.clone()),
-            );
+
+            let mut queue = match Queue::with_workdir(id as usize, conf.work_dir.clone()) {
+                Ok(q) => q,
+                Err(e) => {
+                    log::error!("failed to initialize queue-{}: {}", id, e);
+                    exit(1)
+                }
+            };
+            if id == 0 {
+                // only record queue-0's stats.
+                queue.set_stats(Arc::clone(&stats));
+            }
+
             let mut fuzzer = Fuzzer {
+                symbolizer,
                 max_cov,
                 calibrated_cov,
                 relations,
@@ -170,7 +184,7 @@ pub fn start(conf: Config) {
     })
     .unwrap();
 
-    log::info!("Boot finished, cost {}s.", start.elapsed().as_secs());
-    log::info!("Let the fuzz begin.");
+    log::info!("Boot finished, cost {}s", start.elapsed().as_secs());
+    log::info!("Let the fuzz begin");
     bench(Duration::new(10, 0), conf.work_dir, stats);
 }

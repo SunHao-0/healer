@@ -50,6 +50,7 @@ pub struct Fuzzer {
     // local data.
     pub(crate) id: u64,
     pub(crate) target: Target,
+    pub(crate) symbolizer: PathBuf,
     pub(crate) local_vals: ValuePool,
     pub(crate) queue: Queue,
     pub(crate) exec_handle: ExecHandle,
@@ -242,7 +243,7 @@ impl Fuzzer {
             return false;
         }
 
-        let auto_restart = Duration::new(30 * 60, 0); // 30 minutes
+        let auto_restart = Duration::new(60 * 60, 0); // 60 minutes
         let no_restart = Instant::now() - self.last_reboot;
         if no_restart > auto_restart {
             log::info!(
@@ -254,6 +255,7 @@ impl Fuzzer {
                 log::error!("Fuzzer-{}: failed to restart: {}", self.id, e);
                 exit(1);
             }
+            self.last_reboot = Instant::now();
         }
 
         let opt = ExecOpt::new();
@@ -612,8 +614,7 @@ impl Fuzzer {
             return;
         }
 
-        let bin_path = self.work_dir.join("bin").join("syz-symbolize");
-        let mut syz_symbolize = Command::new(&bin_path);
+        let mut syz_symbolize = Command::new(&self.symbolizer);
         syz_symbolize
             .args(vec!["-os", &self.target.os])
             .args(vec!["-arch", &self.target.arch]);

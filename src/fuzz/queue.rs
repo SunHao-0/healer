@@ -15,6 +15,7 @@ use std::{
 use iota::iota;
 use rand::{prelude::*, random, thread_rng, Rng};
 use rustc_hash::{FxHashMap, FxHashSet};
+use thiserror::Error;
 
 iota! {
     pub const AVG_GAINING_RATE: usize = iota;
@@ -52,11 +53,28 @@ pub struct Queue {
     pub(crate) avgs: FxHashMap<usize, usize>,
     pub(crate) call_cnt: FxHashMap<SyscallRef, usize>,
     pub(crate) stats: Option<Arc<stats::Stats>>,
-    pub(crate) work_dir: Option<PathBuf>,
+    pub(crate) queue_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("{0}")]
+    Unimplemented(String),
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl Queue {
-    pub fn new(id: usize, stats: Option<Arc<stats::Stats>>, work_dir: Option<PathBuf>) -> Self {
+    pub fn with_workdir(id: usize, work_dir: PathBuf) -> Result<Self, Error> {
+        let queue_dir = work_dir.join(format!("queue-{}", id));
+        if queue_dir.exists() {
+            Self::load(id, work_dir)
+        } else {
+            Ok(Self::new(id, Some(queue_dir)))
+        }
+    }
+
+    pub fn new(id: usize, queue_dir: Option<PathBuf>) -> Self {
         let avgs = fxhashmap! {
             AVG_GAINING_RATE => 0,
             AVG_DISTINCT_DEGREE => 0,
@@ -90,13 +108,20 @@ impl Queue {
             current_age: 0,
             avgs,
             call_cnt: FxHashMap::default(),
-            stats,
-            work_dir,
+            stats: None,
+            queue_dir,
         }
     }
 
-    pub fn load<P: AsRef<Path>>(_f: P) -> Result<Self, std::io::Error> {
-        todo!()
+    pub fn load<P: AsRef<Path>>(_id: usize, f: P) -> Result<Self, Error> {
+        Err(Error::Unimplemented(format!(
+            "In-place resume not implemented for queue, please remove old data {} first",
+            f.as_ref().display()
+        )))
+    }
+
+    pub fn set_stats(&mut self, stats: Arc<stats::Stats>) {
+        self.stats = Some(stats)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -117,15 +142,19 @@ impl Queue {
 
         // select pending
         if !self.pending_favored.is_empty() && rng.gen_range(1..=100) <= 90 {
-            return Self::choose_weighted(&mut self.pending_favored, &mut self.inputs, to_mutate);
+            let idx = Self::choose_weighted(&mut self.pending_favored, &mut self.inputs, to_mutate);
+            self.update_queue_stats();
+            return idx;
         } else if !self.pending_found_re.is_empty() && rng.gen_range(1..=100) <= 60 {
-            return Self::choose_weighted(&mut self.pending_found_re, &mut self.inputs, to_mutate);
+            let idx =
+                Self::choose_weighted(&mut self.pending_found_re, &mut self.inputs, to_mutate);
+            self.update_queue_stats();
+            return idx;
         } else if !self.pending_none_favored.is_empty() && rng.gen_range(1..=100) < 30 {
-            return Self::choose_weighted(
-                &mut self.pending_none_favored,
-                &mut self.inputs,
-                to_mutate,
-            );
+            let idx =
+                Self::choose_weighted(&mut self.pending_none_favored, &mut self.inputs, to_mutate);
+            self.update_queue_stats();
+            return idx;
         };
 
         // select interesting
@@ -336,14 +365,7 @@ impl Queue {
         avgs.iter_mut()
             .for_each(|(_, avg)| *avg = (*avg as f64 / inputs.len() as f64).ceil() as usize);
 
-        let stats = if let Some(stats) = self.stats.as_ref() {
-            stats.update_time(stats::QUEUE_LAST_CULLING);
-            Some(Arc::clone(stats))
-        } else {
-            None
-        };
-
-        let mut queue = Queue::new(self.id, stats, self.work_dir.clone());
+        let mut queue = Queue::new(self.id, self.queue_dir.clone());
         queue.call_cnt = call_cnt;
         queue.current_age = self.current_age + 1;
         queue.last_num = old_len;
@@ -358,11 +380,14 @@ impl Queue {
         }
         avgs.insert(AVG_SCORE, score / queue.inputs.len());
         queue.avgs = avgs;
+        if let Some(stats) = self.stats.take() {
+            stats.update_time(stats::QUEUE_LAST_CULLING);
+            queue.set_stats(stats);
+        }
         *self = queue;
 
-        if let Some(work_dir) = self.work_dir.as_ref() {
-            let queue_out = work_dir.join(format!("queue-{}", self.id));
-            if let Err(e) = self.dump(&queue_out) {
+        if let Some(queue_dir) = self.queue_dir.as_ref() {
+            if let Err(e) = self.dump(&queue_dir) {
                 log::warn!("Queue-{}: failed to dump: {}", self.id, e);
             }
         }

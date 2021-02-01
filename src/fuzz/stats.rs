@@ -203,15 +203,18 @@ pub fn bench(du: Duration, work_dir: PathBuf, stats: Arc<Stats>) {
 
     loop {
         sleep(du);
-        for g in groups.iter() {
-            let mut info = format!("STATS-{}: ", g);
-            for key in &GROUPS[g] {
-                let sub_stat = format!("{}: {}, ", STATS[key], stats.load(*key));
-                info.push_str(&sub_stat);
-            }
-            info.pop();
-            log::info!("{}", info);
-        }
+
+        log::info!(
+            "exec: {}, cover cal/max: {}/{}, crashes uniq/all: {}/{}, queue pend/fav/len: {}/{}/{}",
+            stats.load(EXEC_EXEC_ALL),
+            stats.load(OVERALL_CAL_COV),
+            stats.load(OVERALL_MAX_COV),
+            stats.load(OVERALL_UNIQUE_CRASHES),
+            stats.load(OVERALL_TOTAL_CRASHES),
+            stats.load(QUEUE_PENDING_FAVOR),
+            stats.load(QUEUE_FAVOR),
+            stats.load(QUEUE_LEN)
+        );
 
         let stats_json = stats.to_json_str();
         stats_file.write_all(stats_json.as_bytes()).unwrap();

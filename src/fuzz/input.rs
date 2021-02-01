@@ -16,7 +16,7 @@ pub struct Input {
     /// Prog that may find new branches.
     pub(crate) p: Prog,
     /// Execution option of prog.
-    pub(crate) opt: ExecOpt, // TODO
+    pub opt: ExecOpt, // TODO
     /// Execution result of prog, with execution option `opt`.
     pub(crate) info: Vec<CallExecInfo>,
     /// Had mutation since add to queue?  
@@ -48,7 +48,7 @@ pub struct Input {
     /// New coverage this prog found.
     pub(crate) new_cov: Vec<u32>,
     /// Fault injection count.
-    pub(crate) fault_cnt: usize, // TODO
+    pub fault_cnt: usize, // TODO
 
     mutation_cnt: usize,
     gain_cnt: usize,
