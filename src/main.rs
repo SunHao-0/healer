@@ -1,7 +1,5 @@
-use healer::{
-    exec::{ExecConf, QemuConf, SshConf},
-    Config,
-};
+use healer::exec::{ExecConf, QemuConf, SshConf};
+use simplelog::*;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -44,7 +42,7 @@ struct Settings {
     /// Specify the input relations, default is 'workdir/relations'.
     #[structopt(short, long)]
     relations: Option<PathBuf>,
-    /// Path to symbolizer, default is './syz-symbolizer'.
+    /// Path to symbolizer, default is './syz-symbolize'.
     #[structopt(long)]
     symbolizer: Option<PathBuf>,
     /// Path to executor, default is './syz-executor'.
@@ -54,14 +52,10 @@ struct Settings {
 
 pub fn main() {
     let settings = Settings::from_args();
-    simplelog::CombinedLogger::init(vec![simplelog::TermLogger::new(
-        simplelog::LevelFilter::Info,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Mixed,
-    )])
-    .unwrap();
+    let log_conf = ConfigBuilder::new().set_time_format_str("%F %T").build();
+    TermLogger::init(LevelFilter::Info, log_conf, TerminalMode::Stdout).unwrap();
 
-    let conf = Config {
+    let conf = healer::Config {
         target: settings.target.clone(),
         kernel_obj: settings.kernel_obj,
         kernel_src: settings.kernel_src,
@@ -69,7 +63,7 @@ pub fn main() {
         relations: settings.relations,
         symbolizer: settings
             .symbolizer
-            .unwrap_or(PathBuf::from("./syz-symbolizer")),
+            .unwrap_or_else(|| PathBuf::from("./syz-symbolize")),
         qemu_conf: QemuConf {
             target: settings.target,
             img_path: settings.img.into_boxed_path(),
@@ -81,7 +75,7 @@ pub fn main() {
         exec_conf: ExecConf {
             executor: settings
                 .executor
-                .unwrap_or(PathBuf::from("./syz-executor"))
+                .unwrap_or_else(|| PathBuf::from("./syz-executor"))
                 .into_boxed_path(),
         },
         ssh_conf: SshConf {

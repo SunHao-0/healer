@@ -201,11 +201,12 @@ impl Fuzzer {
                 mut_n += 1;
                 let p = mutate_args(&self.queue.inputs[idx].p);
                 self.stats.inc_exec(EXEC_MUTATION);
-                if self.evaluate(p) {
+                let gain = self.evaluate(p);
+                if gain {
                     self.mut_gaining += 1;
-                    self.queue.inputs[idx].update_gaining_rate(true);
-                } else {
-                    self.queue.inputs[idx].update_gaining_rate(false);
+                }
+                if idx < self.queue.len() {
+                    self.queue.inputs[idx].update_gaining_rate(gain);
                 }
             }
 
@@ -226,11 +227,12 @@ impl Fuzzer {
                     &self.relations,
                 );
                 self.stats.inc_exec(EXEC_MUTATION);
-                if self.evaluate(p) {
+                let gain = self.evaluate(p);
+                if gain {
                     self.mut_gaining += 1;
-                    self.queue.inputs[idx].update_gaining_rate(true);
-                } else {
-                    self.queue.inputs[idx].update_gaining_rate(false);
+                }
+                if idx < self.queue.len() {
+                    self.queue.inputs[idx].update_gaining_rate(gain);
                 }
             }
 
