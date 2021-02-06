@@ -4,7 +4,10 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Mutex, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex, RwLock,
+    },
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -12,6 +15,7 @@ use thiserror::Error;
 
 pub struct Relation {
     relations: RwLock<FxHashMap<SyscallRef, FxHashSet<SyscallRef>>>,
+    cnt: AtomicUsize,
     file: Option<Mutex<File>>,
 }
 
@@ -36,6 +40,7 @@ impl Relation {
         Self {
             relations: RwLock::new(FxHashMap::default()),
             file: None,
+            cnt: AtomicUsize::new(0),
         }
     }
 
@@ -60,6 +65,7 @@ impl Relation {
             .open(f)?;
         let mut content = String::new();
         let mut r: FxHashMap<SyscallRef, FxHashSet<SyscallRef>> = FxHashMap::default();
+        let mut cnt = 0;
 
         file.read_to_string(&mut content)?;
         for (n, l) in content.lines().enumerate().filter(|(_, l)| !l.is_empty()) {
@@ -82,12 +88,15 @@ impl Relation {
                     line: n,
                 })?;
             let entry = r.entry(*s0).or_default();
-            entry.insert(*s1);
+            if entry.insert(*s1) {
+                cnt += 1;
+            }
         }
 
         Ok(Self {
             relations: RwLock::new(r),
             file: Some(Mutex::new(file)),
+            cnt: AtomicUsize::new(cnt),
         })
     }
 
@@ -97,6 +106,9 @@ impl Relation {
             let mut r = self.relations.write().unwrap();
             let enrty = r.entry(s0).or_default();
             new = enrty.insert(s1);
+        }
+        if new {
+            self.cnt.fetch_add(1, Ordering::Relaxed);
         }
         if let Some(f) = self.file.as_ref() {
             if new {
@@ -123,12 +135,10 @@ impl Relation {
     }
 
     pub fn len(&self) -> usize {
-        let r = self.relations.read().unwrap();
-        r.len()
+        self.cnt.load(Ordering::Relaxed)
     }
 
     pub fn is_empty(&self) -> bool {
-        let r = self.relations.read().unwrap();
-        r.is_empty()
+        self.len() == 0
     }
 }

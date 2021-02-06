@@ -9,17 +9,15 @@ pub mod gen;
 pub mod model;
 pub mod targets;
 
-use exec::SshConf;
-use fuzz::{
+use crate::exec::{ExecConf, QemuConf, SshConf};
+use crate::fuzz::{
+    features,
     fuzzer::{Fuzzer, Mode},
     queue::Queue,
     relation::Relation,
     stats::{bench, Stats},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
-use targets::Target;
-
-use crate::exec::{ExecConf, QemuConf};
+use crate::targets::Target;
 
 use std::{
     collections::VecDeque,
@@ -34,6 +32,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -130,7 +130,7 @@ pub fn start(conf: Config) {
                 queue.set_stats(Arc::clone(&stats));
             }
 
-            let exec_handle =
+            let mut exec_handle =
                 match exec::spawn_in_qemu(conf.exec_conf, conf.qemu_conf, conf.ssh_conf, id) {
                     Ok(handle) => handle,
                     Err(e) => {
@@ -138,6 +138,7 @@ pub fn start(conf: Config) {
                         exit(1)
                     }
                 };
+            let features = features::check(&mut exec_handle, id == 0);
             barrier.wait();
 
             let mut fuzzer = Fuzzer {
@@ -157,6 +158,7 @@ pub fn start(conf: Config) {
                 mode: Mode::Sampling,
                 mut_gaining: 0,
                 gen_gaining: 0,
+                features,
                 cycle_len: 128,
                 max_cycle_len: 1024,
                 work_dir: conf.work_dir,

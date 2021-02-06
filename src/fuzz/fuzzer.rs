@@ -1,8 +1,12 @@
 use crate::{
-    exec::{serialize, CallExecInfo, CrashInfo, ExecError, ExecHandle, ExecOpt, ExecResult},
+    exec::{
+        serialize, CallExecInfo, CrashInfo, ExecError, ExecHandle, ExecOpt, ExecResult,
+        CALL_FAULT_INJECTED, FLAG_INJECT_FAULT,
+    },
     fuzz::{
+        features::*,
         input::Input,
-        mutation::{mutate_args, seq_reuse},
+        mutation::{seq_reuse, MUTATE_OP},
         queue::Queue,
         relation::Relation,
         stats::*,
@@ -49,6 +53,7 @@ pub struct Fuzzer {
 
     // local data.
     pub(crate) id: u64,
+    pub(crate) features: u64,
     pub(crate) target: Target,
     pub(crate) symbolizer: PathBuf,
     pub(crate) local_vals: ValuePool,
@@ -190,23 +195,25 @@ impl Fuzzer {
                 2
             };
 
-            for _ in 0..n {
-                if self.stop() {
-                    break;
-                }
-                if idx >= self.queue.len() {
-                    // queue was culled, reselect.
-                    break;
-                }
-                mut_n += 1;
-                let p = mutate_args(&self.queue.inputs[idx].p);
-                self.stats.inc_exec(EXEC_MUTATION);
-                let gain = self.evaluate(p);
-                if gain {
-                    self.mut_gaining += 1;
-                }
-                if idx < self.queue.len() {
-                    self.queue.inputs[idx].update_gaining_rate(gain);
+            for mutation_op in MUTATE_OP.iter().copied() {
+                for _ in 0..n {
+                    if self.stop() {
+                        break;
+                    }
+                    if idx >= self.queue.len() {
+                        // queue was culled, reselect.
+                        break;
+                    }
+                    mut_n += 1;
+                    let p = mutation_op(&self.target, &self.local_vals, &self.queue.inputs[idx].p);
+                    self.stats.inc_exec(EXEC_MUTATION);
+                    let gain = self.evaluate(p);
+                    if gain {
+                        self.mut_gaining += 1;
+                    }
+                    if idx < self.queue.len() {
+                        self.queue.inputs[idx].update_gaining_rate(gain);
+                    }
                 }
             }
 
@@ -236,7 +243,33 @@ impl Fuzzer {
                 }
             }
 
+            if self.features & FEATURE_FAULT != 0
+                && idx < self.queue.len()
+                && !self.queue.inputs[idx].fault_injected
+            {
+                let p = self.queue.inputs[idx].p.clone();
+                self.fail_call(p);
+                self.queue.inputs[idx].fault_injected = true;
+            }
+
             // TODO add more mutation methods.
+        }
+    }
+
+    fn fail_call(&mut self, p: Prog) {
+        for i in 0..p.calls.len() {
+            for n in 0..100 {
+                let mut opt = ExecOpt::new();
+                opt.flags |= FLAG_INJECT_FAULT;
+                opt.fault_call = i as i32;
+                opt.fault_nth = n;
+                let ret = self.exec_handle.exec(&opt, &p);
+                if let Some(info) = self.handle_ret_comm(&p, opt, ret) {
+                    if info.len() > i && info[i].flags & CALL_FAULT_INJECTED == 0 {
+                        break;
+                    }
+                }
+            }
         }
     }
 

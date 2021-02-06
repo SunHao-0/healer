@@ -28,29 +28,29 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
     // of generated resource should be [2, 6)
     const MIN_RES_NUMBER: usize = 2;
     const MAX_RES_NUMBER: usize = 6;
-    let res_count = ctx.generated_res.len();
+    let res_count = ctx.res_cnt;
     let mut rng = thread_rng();
     if res_count == 0 {
         // always make sure we start from generating a resource.
         true
     } else if res_count >= MAX_RES_NUMBER {
-        let delta = 0.2 * (MAX_RES_NUMBER as f64 / (res_count as f64 * 2.0));
+        let delta = 0.05 * (MAX_RES_NUMBER as f64 / (res_count as f64 * 2.0));
         rng.gen_bool(delta)
     } else {
         let alpha = 1.0 - (res_count as f64) / (MAX_RES_NUMBER as f64);
         if res_count < MIN_RES_NUMBER {
-            rng.gen_bool(0.8 * alpha)
-        } else {
             rng.gen_bool(0.4 * alpha)
+        } else {
+            rng.gen_bool(0.2 * alpha)
         }
     }
 }
 
 fn select_syscall_rand(ctx: &GenContext) -> SyscallRef {
     // Try to select a consumer first.
-    if thread_rng().gen_ratio(96, 100) {
+    if thread_rng().gen_ratio(70, 100) {
         if let Some(syscall) = ctx
-            .generated_res
+            .res
             .iter()
             .flat_map(|(res_ty, _)| res_ty.res_desc().unwrap().consumers.iter())
             .choose(&mut thread_rng())

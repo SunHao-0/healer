@@ -1,3 +1,4 @@
+pub mod features;
 pub mod fuzzer;
 pub mod input;
 pub mod mutation;

@@ -18,8 +18,9 @@ type ResPool = FxHashMap<TypeRef, Vec<*mut ResValue>>;
 /// A context contains test target, generated resource and buffer value, global value pool.
 pub(crate) struct GenContext<'a, 'b> {
     pub(crate) target: &'a Target,
-    pub(crate) generated_res: ResPool,
-    pub(crate) generated_str: FxHashMap<TypeRef, FxHashSet<Box<[u8]>>>,
+    pub(crate) res: ResPool,
+    pub(crate) res_cnt: usize,
+    pub(crate) strs: FxHashMap<TypeRef, FxHashSet<Box<[u8]>>>,
     pub(crate) pool: &'b ValuePool,
     // id for resource value count.
     pub(crate) id_count: usize,
@@ -36,8 +37,9 @@ impl<'a, 'b> GenContext<'a, 'b> {
     pub fn new(target: &'a Target, pool: &'b ValuePool) -> Self {
         GenContext {
             target,
-            generated_res: FxHashMap::default(),
-            generated_str: FxHashMap::default(),
+            res: FxHashMap::default(),
+            res_cnt: 0,
+            strs: FxHashMap::default(),
             pool,
             id_count: 0,
             mem_alloc: MemAlloc::with_mem_size(target.page_sz * target.page_num),
@@ -48,6 +50,57 @@ impl<'a, 'b> GenContext<'a, 'b> {
         }
     }
 
+    pub fn restore(target: &'a Target, pool: &'b ValuePool, calls: &mut [Call]) -> Self {
+        let mut ctx = Self::new(target, pool);
+        for call in calls.iter_mut() {
+            if let Some(ret) = call.ret.as_mut() {
+                ctx.update(ret);
+            }
+            for arg in call.args.iter_mut() {
+                ctx.update(arg);
+            }
+        }
+        ctx
+    }
+
+    pub fn update(&mut self, val: &mut Value) {
+        match &mut val.kind {
+            ValueKind::Scalar(_) => (),
+            ValueKind::Ptr { addr, pointee } => {
+                if let Some(pointee) = pointee.as_mut() {
+                    self.mem_alloc.do_alloc(*addr, pointee.size());
+                    self.update(pointee)
+                }
+            }
+            ValueKind::Vma { addr, size } => {
+                self.vma_alloc
+                    .do_alloc(*addr / self.target.page_sz, *size / self.target.page_sz);
+            }
+            ValueKind::Bytes(inner_val) => match val.ty.buffer_kind().unwrap() {
+                BufferKind::Filename { .. } | BufferKind::String { .. } => {
+                    self.add_str(val.ty, inner_val.clone());
+                }
+                _ => (),
+            },
+            ValueKind::Group(vals) => {
+                for v in vals {
+                    self.update(v);
+                }
+            }
+            ValueKind::Union { val, .. } => {
+                self.update(val);
+            }
+            ValueKind::Res(res) => {
+                if let ResValueKind::Own { id, .. } = &res.kind {
+                    if self.id_count <= *id {
+                        self.id_count = *id + 1;
+                    }
+                    self.add_res(val.ty, &mut **res as *mut _);
+                }
+            }
+        }
+    }
+
     pub fn next_id(&mut self) -> usize {
         let id = self.id_count;
         self.id_count += 1;
@@ -55,12 +108,13 @@ impl<'a, 'b> GenContext<'a, 'b> {
     }
 
     pub fn add_res(&mut self, ty: TypeRef, res: *mut ResValue) {
-        let entry = self.generated_res.entry(ty).or_default();
+        let entry = self.res.entry(ty).or_default();
         entry.push(res);
+        self.res_cnt += 1;
     }
 
     pub fn add_str(&mut self, ty: TypeRef, new_str: Box<[u8]>) -> bool {
-        let entry = self.generated_str.entry(ty).or_default();
+        let entry = self.strs.entry(ty).or_default();
         entry.insert(new_str)
     }
 

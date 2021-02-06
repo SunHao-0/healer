@@ -15,22 +15,12 @@ pub(super) fn gen(
         BufferKind::BlobRand => gen_blob(ctx.pool.get(&ty), None),
         BufferKind::BlobRange(min, max) => gen_blob(ctx.pool.get(&ty), Some((*min, *max))),
         BufferKind::Filename { vals, noz } => {
-            let fname = gen_fname(
-                ctx.pool.get(&ty),
-                ctx.generated_str.get(&ty),
-                &vals[..],
-                *noz,
-            );
+            let fname = gen_fname(ctx.pool.get(&ty), ctx.strs.get(&ty), &vals[..], *noz);
             ctx.add_str(ty, fname.clone());
             fname
         }
         BufferKind::String { vals, noz } => {
-            let new_str = gen_str(
-                ctx.pool.get(&ty),
-                ctx.generated_str.get(&ty),
-                &vals[..],
-                *noz,
-            );
+            let new_str = gen_str(ctx.pool.get(&ty), ctx.strs.get(&ty), &vals[..], *noz);
             ctx.add_str(ty, new_str.clone());
             new_str
         }

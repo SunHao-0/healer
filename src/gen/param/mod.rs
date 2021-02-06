@@ -168,9 +168,9 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
     } else {
         // For most case, we reuse the generated resource even if the resource may not be the
         // precise one.
-        if !ctx.generated_res.is_empty() && rng.gen::<f32>() < 0.998 {
+        if !ctx.res.is_empty() && rng.gen::<f32>() < 0.998 {
             // If we've already generated required resource, just reuse it.
-            if let Some(generated_res) = ctx.generated_res.get(&ty) {
+            if let Some(generated_res) = ctx.res.get(&ty) {
                 if !generated_res.is_empty() {
                     let res = generated_res.iter().choose(&mut rng).unwrap();
                     return Value::new(dir, ty, ValueKind::new_res_ref(*res));
@@ -182,7 +182,7 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
             let mut res_vals = Vec::new();
 
             for res in subtypes.iter().copied().chain(supertypes.iter().copied()) {
-                if let Some(r) = ctx.generated_res.get(&res) {
+                if let Some(r) = ctx.res.get(&res) {
                     if !r.is_empty() {
                         res_vals.extend(r.iter().copied());
                     }
@@ -194,7 +194,7 @@ fn gen_res(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
             }
             // We still haven't found any usable resource, try to choose a arbitrary generated
             // resource. May be we can use resource centric strategy here just like syzkaller.
-            if let Some((_, vals)) = ctx.generated_res.iter().choose(&mut rng) {
+            if let Some((_, vals)) = ctx.res.iter().choose(&mut rng) {
                 if !vals.is_empty() && rng.gen_bool(0.9) {
                     let res = vals.iter().choose(&mut rng).unwrap();
                     return Value::new(dir, ty, ValueKind::new_res_ref(*res));

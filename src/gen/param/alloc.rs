@@ -57,6 +57,14 @@ impl MemAlloc {
         self.bitmap.clear();
         self.alloc(sz, align)
     }
+
+    pub fn do_alloc(&mut self, addr: u64, sz: u64) {
+        let addr = addr / ALLOC_GRANULE;
+        let sz = (sz + (ALLOC_GRANULE - 1)) / ALLOC_GRANULE;
+        for bit in addr..addr + sz {
+            self.bitmap.set(bit, true);
+        }
+    }
 }
 
 pub(crate) struct VmaAlloc {
@@ -95,5 +103,11 @@ impl VmaAlloc {
         }
         self.used.insert(page);
         page
+    }
+
+    pub fn do_alloc(&mut self, p: u64, n: u64) {
+        for p in p..p + n {
+            self.used.insert(p);
+        }
     }
 }

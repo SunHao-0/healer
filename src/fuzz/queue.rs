@@ -396,7 +396,7 @@ impl Queue {
         self.update_avg_stats();
 
         log::info!(
-            "Queue{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
+            "Queue-{} finished culling({}ms), age: {}, discard: {}, favored: {} -> {}, pending favored: {}",
             self.id,
             now.elapsed().as_millis(),
             self.current_age,

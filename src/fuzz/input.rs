@@ -48,7 +48,7 @@ pub struct Input {
     /// New coverage this prog found.
     pub(crate) new_cov: Vec<u32>,
     /// Fault injection count.
-    pub fault_cnt: usize, // TODO
+    pub(crate) fault_injected: bool, // TODO
 
     mutation_cnt: usize,
     gain_cnt: usize,
@@ -79,7 +79,7 @@ impl Input {
             exec_tm: 0,
             res_cnt,
             new_cov: Vec::new(),
-            fault_cnt: 0,
+            fault_injected: false,
             mutation_cnt: 0,
             gain_cnt: 0,
             last_update: 0,

@@ -48,7 +48,7 @@ fn check_env() {
 }
 
 fn download() -> PathBuf {
-    const SYZ_REVISION: &str = "52e3731913ab2677be27c29ed8142b04e8f28521";
+    const SYZ_REVISION: &str = "0655e081f42239d4eca4345ef7293307085f78f5";
     let repo_url = format!(
         "https://github.com/google/syzkaller/archive/{}.zip",
         SYZ_REVISION
@@ -116,7 +116,7 @@ fn download() -> PathBuf {
 }
 
 fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
-    const CKSUM: &str = "28107aaf037d73b3e6c7057f679cbc7a75e95d3542286ec9c94ef9535a27111070b03fabfafeb97d1626fe6c99b53e04";
+    const CKSUM: &str = "58ce03bb8796b31f12e7d409e00a3ca0f560450eea47ee46668bbc5f386be67069af734d75839ff0ce11c074aa74a886";
     let output = Command::new("sha384sum")
         .arg(syz_zip.as_ref())
         .output()
@@ -135,14 +135,14 @@ fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
 fn build_syz(syz_dir: PathBuf) -> PathBuf {
     if !syz_dir.join("bin").exists() {
         let patch_dir = PathBuf::from("./patches");
-        copy(
-            patch_dir.join("ivshm_setup.h"),
-            syz_dir.join("executor/ivshm_setup.h"),
-        )
-        .unwrap_or_else(|e| {
-            eprintln!("failed to copy ivshm_setup.h: {}", e);
-            exit(1)
-        });
+        let headers = vec!["ivshm_setup.h", "features.h"];
+        for header in headers {
+            let to = format!("executor/{}", header);
+            copy(patch_dir.join(&header), syz_dir.join(&to)).unwrap_or_else(|e| {
+                eprintln!("failed to copy {} to {}: {}", header, to, e);
+                exit(1)
+            });
+        }
 
         for f in read_dir(&patch_dir).unwrap().filter_map(|f| f.ok()) {
             let f = f.path();
