@@ -1,8 +1,11 @@
 //! Start, interactive with syz-executor
-use crate::exec::{
-    serialize::serialize,
-    ssh::{scp, ssh_basic_cmd, ScpError},
-    CallExecInfo, EnvFlags, ExecOpt,
+use crate::{
+    exec::{
+        serialize::serialize,
+        ssh::{scp, ssh_basic_cmd, ScpError},
+        CallExecInfo, EnvFlags, ExecOpt,
+    },
+    fuzz::features,
 };
 use crate::{model::Prog, utils::into_async_file};
 use crate::{targets::Target, utils::LogReader};
@@ -11,13 +14,17 @@ use std::{
     error::Error,
     io::ErrorKind,
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum SyzSpawnError {
+pub enum SyzError {
+    #[error("setup: {0}")]
+    Setup(String),
+    #[error("check features: {0}")]
+    CheckFeatures(String),
     #[error("config: {0}")]
     Config(String),
     #[error("spawn: {0}")]
@@ -125,11 +132,55 @@ impl SyzHandleBuilder {
         self
     }
 
-    pub fn spawn(self) -> Result<SyzHandle, SyzSpawnError> {
+    pub fn check_features(self) -> Result<u64, SyzError> {
+        let builder = self.extra_arg("check");
+        let mut syz = builder.syz_cmd()?;
+        let output = syz.output()?;
+        if output.status.success() {
+            let out = output.stdout;
+            assert_eq!(out.len(), 8);
+            let mut val = [0; 8];
+            val.copy_from_slice(&out[0..]);
+            let ret = u64::from_le_bytes(val);
+            Ok(ret)
+        } else {
+            let err = String::from_utf8_lossy(&output.stderr).into_owned();
+            Err(SyzError::CheckFeatures(err))
+        }
+    }
+
+    pub fn do_setup(self, features: u64) -> Result<(), SyzError> {
+        let mut builder = self.extra_arg("setup");
+        if features & features::FEATURE_LEAK != 0 {
+            builder = builder.extra_arg("leak");
+        }
+        if features & features::FEATURE_FAULT != 0 {
+            builder = builder.extra_arg("fault");
+        }
+        if features & features::FEATURE_KCSAN != 0 {
+            builder = builder.extra_arg("kcsan");
+        }
+        if features & features::FEATURE_USB_EMULATION != 0 {
+            builder = builder.extra_arg("usb");
+        }
+
+        let mut syz = builder.syz_cmd()?;
+        let output = syz.output()?;
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr).into_owned();
+            Err(SyzError::Setup(err))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn spawn(self) -> Result<SyzHandle, SyzError> {
         let pid = self
             .pid
-            .ok_or_else(|| SyzSpawnError::Config("need pid".to_string()))?;
-        let mut syz = self.spawn_remote()?;
+            .ok_or_else(|| SyzError::Config("need pid".to_string()))?;
+        let mut syz = self.syz_cmd()?;
+        let mut syz = syz.spawn()?;
+
         let stdin = syz.stdin.take().unwrap();
         let stdout = syz.stdout.take().unwrap();
         let stderr = LogReader::new(into_async_file(syz.stderr.take().unwrap()));
@@ -146,10 +197,7 @@ impl SyzHandleBuilder {
         if self.use_forksrv {
             if let Err(e) = syz_handle.handshake() {
                 let stderr = String::from_utf8(syz_handle.output()).unwrap_or_default();
-                return Err(SyzSpawnError::HandShake(format!(
-                    "{}\nSTDERR:\n{}",
-                    e, stderr
-                )));
+                return Err(SyzError::HandShake(format!("{}\nSTDERR:\n{}", e, stderr)));
             }
         } else {
             // use fork server by default for now.
@@ -158,13 +206,13 @@ impl SyzHandleBuilder {
         Ok(syz_handle)
     }
 
-    fn spawn_remote(&self) -> Result<Child, SyzSpawnError> {
+    fn syz_cmd(&self) -> Result<Command, SyzError> {
         let from = self
             .executor
             .as_deref()
-            .ok_or_else(|| SyzSpawnError::Config("need executable file".to_string()))?;
+            .ok_or_else(|| SyzError::Config("need executable file".to_string()))?;
         let bin = from.file_name().ok_or_else(|| {
-            SyzSpawnError::Config(format!("bad executable file path: {}", from.display()))
+            SyzError::Config(format!("bad executable file path: {}", from.display()))
         })?;
         let mut to = if let Some(p) = self.scp_path.as_ref() {
             p.to_path_buf()
@@ -176,29 +224,28 @@ impl SyzHandleBuilder {
         let ssh_ip = self
             .ssh_ip
             .as_deref()
-            .ok_or_else(|| SyzSpawnError::Config("need ssh ip".to_string()))?;
+            .ok_or_else(|| SyzError::Config("need ssh ip".to_string()))?;
         let ssh_port = self
             .ssh_port
-            .ok_or_else(|| SyzSpawnError::Config("need ssh port".to_string()))?;
+            .ok_or_else(|| SyzError::Config("need ssh port".to_string()))?;
         let ssh_key = self
             .ssh_key
             .as_ref()
-            .ok_or_else(|| SyzSpawnError::Config("need key".to_string()))?;
+            .ok_or_else(|| SyzError::Config("need key".to_string()))?;
         let ssh_user = self.ssh_user.as_deref().unwrap_or("root");
 
         if self.copy_bin {
             scp(ssh_ip, ssh_port, ssh_key, ssh_user, from, &to)?;
         }
 
-        let mut ssh_cmd = ssh_basic_cmd(ssh_ip, ssh_port, ssh_key, ssh_user);
-        ssh_cmd
-            .arg(to)
+        let mut cmd = ssh_basic_cmd(ssh_ip, ssh_port, ssh_key, ssh_user);
+        cmd.arg(to)
             .args(&self.extra_args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(From::from)
+            .stderr(Stdio::piped());
+
+        Ok(cmd)
     }
 }
 

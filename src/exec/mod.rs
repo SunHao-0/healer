@@ -1,7 +1,7 @@
-use crate::exec::qemu::QemuHandle;
 use crate::exec::syz::{SyzHandle, SyzHandleBuilder};
 use crate::model::Prog;
 use crate::targets::Target;
+use crate::{exec::qemu::QemuHandle, fuzz::features};
 
 use std::path::{Path, PathBuf};
 
@@ -58,7 +58,7 @@ pub struct CrashInfo {
 pub type CallFlags = u32;
 
 iota! {
-    const CALL_EXECUTED : CallFlags = 1 << (iota); // was started at all
+    pub const CALL_EXECUTED : CallFlags = 1 << (iota); // was started at all
     , CALL_FINISHED                                // finished executing (rather than blocked forever)
     , CALL_BLOCKED                                 // finished but blocked during execution
     , CALL_FAULT_INJECTED                          // fault was injected into this call
@@ -153,7 +153,8 @@ pub struct ExecHandle {
     /// Configuration of executor, such as executor path.
     exec_conf: ExecConf,
     /// Env configuration of inner executor.
-    env: EnvFlags,
+    env: Option<EnvFlags>,
+    features: Option<u64>,
     /// Unique id for inner executor, not process id(linux pid).
     pid: u64,
     /// Copy inner executor executable file or not.
@@ -216,6 +217,34 @@ impl ExecHandle {
         ret
     }
 
+    pub fn check_features(&mut self) -> Result<u64, SpawnError> {
+        if let Some(features) = self.features {
+            return Ok(features);
+        }
+
+        let features = self.syz_builder().check_features()?;
+        self.features = Some(features);
+        self.env = Some(new_env_flags(features));
+        if let Some(syz) = self.syz.as_mut() {
+            syz.env_flags = self.env.unwrap();
+        }
+        Ok(features)
+    }
+
+    pub fn setup_env(&mut self) -> Result<(), SpawnError> {
+        if self.qemu.is_none() {
+            self.qemu = Some(qemu::boot(&self.qemu_conf, &self.ssh_conf)?);
+        }
+
+        if self.features.is_none() {
+            self.check_features()?;
+        }
+
+        self.syz_builder()
+            .do_setup(self.features.unwrap())
+            .map_err(From::from)
+    }
+
     pub fn restart(&mut self) -> Result<(), SpawnError> {
         self.syz = None;
         self.qemu = None;
@@ -223,14 +252,21 @@ impl ExecHandle {
         self.spawn_syz()
     }
 
-    fn spawn_syz(&mut self) -> Result<(), SpawnError> {
+    pub fn spawn_syz(&mut self) -> Result<(), SpawnError> {
         if self.qemu.is_none() {
             self.qemu = Some(qemu::boot(&self.qemu_conf, &self.ssh_conf)?);
+            self.setup_env()?;
         }
+        self.syz = Some(self.syz_builder().spawn()?);
+        self.copy_bin = false;
+        Ok(())
+    }
+
+    fn syz_builder(&self) -> SyzHandleBuilder {
         let ssh_conf = &self.ssh_conf;
         let conf = &self.exec_conf;
         let qemu = self.qemu.as_ref().unwrap();
-        let syz = SyzHandleBuilder::new()
+        let mut builder = SyzHandleBuilder::new()
             .ssh_addr(qemu.ssh_ip(), qemu.ssh_port())
             .ssh_identity(
                 ssh_conf.ssh_key.display().to_string(),
@@ -240,12 +276,11 @@ impl ExecHandle {
             .use_shm(self.target.syz_exec_use_shm)
             .executor(conf.executor.clone())
             .copy_bin(self.copy_bin)
-            .pid(self.pid)
-            .env_flags(self.env)
-            .spawn()?;
-        self.syz = Some(syz);
-        self.copy_bin = false;
-        Ok(())
+            .pid(self.pid);
+        if let Some(env) = self.env {
+            builder = builder.env_flags(env);
+        }
+        builder
     }
 }
 
@@ -254,7 +289,7 @@ pub enum SpawnError {
     #[error("failed to boot qemu: {0}")]
     Qemu(#[from] qemu::BootError),
     #[error("failed to spawn syz-executor: {0}")]
-    Syz(#[from] syz::SyzSpawnError),
+    Syz(#[from] syz::SyzError),
     #[error("failed to use shm: {0}")]
     Shm(#[from] ShmemError),
     #[error("io: {0}")]
@@ -279,6 +314,36 @@ iota! {
     , FLAG_ENABLE_DEVLINKPCI                         // setup devlink PCI device
     , FLAG_ENABLE_VHCI_INJECTION                     // setup and use /dev/vhci for hci packet injection
     , FLAG_ENABLE_WIFI                               // setup and use mac80211_hwsim for wifi emulation
+}
+
+fn new_env_flags(features: u64) -> EnvFlags {
+    let mut env = FLAG_SIGNAL;
+
+    if features & features::FEATURE_EXTRA_COVERAGE != 0 {
+        env |= FLAG_EXTRA_COVER;
+    }
+    if features & features::FEATURE_NET_INJECTION != 0 {
+        env |= FLAG_ENABLE_TUN;
+    }
+    if features & features::FEATURE_NET_DEVICES != 0 {
+        env |= FLAG_ENABLE_NETDEV;
+    }
+
+    env |= FLAG_ENABLE_NETRESET;
+    env |= FLAG_ENABLE_CGROUPS;
+    env |= FLAG_ENABLE_CLOSEFDS;
+
+    if features & features::FEATURE_DEVLINK_PCI != 0 {
+        env |= FLAG_ENABLE_DEVLINKPCI;
+    }
+    if features & features::FEATURE_VHCI_INJECTION != 0 {
+        env |= FLAG_ENABLE_VHCI_INJECTION;
+    }
+    if features & features::FEATURE_WIFI_EMULATION != 0 {
+        env |= FLAG_ENABLE_WIFI;
+    }
+
+    env
 }
 
 /// Configuration of executor.
@@ -352,7 +417,6 @@ pub fn spawn_in_qemu(
     pid: u64,
 ) -> Result<ExecHandle, SpawnError> {
     // TODO use env detection to decide this.
-    const ENV: u64 = FLAG_SIGNAL | FLAG_ENABLE_TUN | FLAG_ENABLE_NETDEV | FLAG_ENABLE_CGROUPS;
     const IN_MEM_SIZE: usize = 4 << 20;
     const OUT_MEM_SIZE: usize = 16 << 20;
 
@@ -382,21 +446,21 @@ pub fn spawn_in_qemu(
         ssh_conf.ssh_user = Some(u);
     };
 
-    let qemu = qemu::boot(&qemu_conf, &ssh_conf)?;
     let mut handle = ExecHandle {
         target,
-        qemu: Some(qemu),
+        qemu: None,
         syz: None,
         exec_conf: conf,
         qemu_conf,
         ssh_conf,
-        env: ENV,
+        env: None,
         in_mem,
         out_mem,
         in_shm,
         out_shm,
         pid,
         copy_bin: true,
+        features: None,
     };
     handle.spawn_syz()?;
 

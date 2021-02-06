@@ -10,13 +10,13 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 pub struct QemuHandle {
-    qemu: Child,
-    stdout: LogReader,
-    stderr: LogReader,
-    ssh_ip: String,
-    ssh_port: u16,
-    ssh_key_path: String,
-    ssh_user: String,
+    pub(crate) qemu: Child,
+    pub(crate) stdout: LogReader,
+    pub(crate) stderr: LogReader,
+    pub(crate) ssh_ip: String,
+    pub(crate) ssh_port: u16,
+    pub(crate) ssh_key_path: String,
+    pub(crate) ssh_user: String,
 }
 
 impl Drop for QemuHandle {
