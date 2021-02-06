@@ -78,6 +78,7 @@ pub fn start(conf: Config) {
         }
     }
 
+    println!("{}", HEALER);
     log::info!("Loading target {}...", conf.target);
     let target = Target::new(&conf.target).unwrap_or_else(|| {
         // preloading.
@@ -190,3 +191,13 @@ pub fn start(conf: Config) {
     log::info!("Let the fuzz begin");
     bench(Duration::new(10, 0), conf.work_dir, stats);
 }
+
+const HEALER: &str = r"
+ ___   ___   ______   ________   __       ______   ______
+/__/\ /__/\ /_____/\ /_______/\ /_/\     /_____/\ /_____/\
+\::\ \\  \ \\::::_\/_\::: _  \ \\:\ \    \::::_\/_\:::_ \ \
+ \::\/_\ .\ \\:\/___/\\::(_)  \ \\:\ \    \:\/___/\\:(_) ) )_
+  \:: ___::\ \\::___\/_\:: __  \ \\:\ \____\::___\/_\: __ `\ \
+   \: \ \\::\ \\:\____/\\:.\ \  \ \\:\/___/\\:\____/\\ \ `\ \ \
+    \__\/ \::\/ \_____\/ \__\/\__\/ \_____\/ \_____\/ \_\/ \_\/
+";

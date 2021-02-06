@@ -42,7 +42,7 @@ pub fn check(handle: &mut ExecHandle, verbose: bool) -> u64 {
         .unwrap_or(FEATURE_COVERAGE | FEATURE_SANDBOX_SETUID | FEATURE_NET_DEVICES);
     if verbose {
         for (i, feature) in FEATURES.iter().enumerate() {
-            if features & (1 << i) == 1 {
+            if features & (1 << i) != 0 {
                 log::info!("{:<28}: enabled", feature);
             }
         }
