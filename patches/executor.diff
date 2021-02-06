@@ -1,14 +1,23 @@
---- ./executor/executor.cc	2021-01-23 16:16:57.184718966 +0000
-+++ ./executor/executor.cc	2021-01-23 16:18:34.099578799 +0000
-@@ -360,6 +360,7 @@
+--- ./executor/executor.cc	2021-02-06 14:12:41.368275378 +0000
++++ ./executor/executor.cc	2021-02-06 14:11:37.559564000 +0000
+@@ -360,6 +360,8 @@
  #endif
  
  #include "cov_filter.h"
 +#include "ivshm_setup.h"
++#include "features.h"
  
  #include "test.h"
  
-@@ -398,6 +399,7 @@
+@@ -392,12 +394,15 @@
+ 	if (argc == 2 && strcmp(argv[1], "test") == 0)
+ 		return run_tests();
+ 
++	LINUX_FEATURES_CHECK_SNIPPET1;
++
+ 	start_time_ms = current_time_ms();
+ 
+ 	os_init(argc, argv, (char*)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
  	current_thread = &threads[0];
  
  #if SYZ_EXECUTOR_USES_SHMEM

@@ -1,5 +1,5 @@
---- ./sys/syz-sysgen/sysgen.go	2021-01-23 16:17:40.841742761 +0000
-+++ ./sys/syz-sysgen/sysgen.go	2021-01-23 16:15:03.991819688 +0000
+--- ./sys/syz-sysgen/sysgen.go	2021-02-06 14:12:41.368275378 +0000
++++ ./sys/syz-sysgen/sysgen.go	2021-02-06 14:12:03.618426639 +0000
 @@ -5,6 +5,7 @@
  
  import (

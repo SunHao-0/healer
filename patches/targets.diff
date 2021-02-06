@@ -1,5 +1,5 @@
---- ./sys/targets/targets.go	2021-01-23 16:17:40.841742761 +0000
-+++ ./sys/targets/targets.go	2021-01-23 16:14:25.928603917 +0000
+--- ./sys/targets/targets.go	2021-02-06 14:09:53.550804883 +0000
++++ ./sys/targets/targets.go	2021-02-06 14:12:17.036224223 +0000
 @@ -35,7 +35,7 @@
  	KernelHeaderArch string
  	BrokenCompiler   string
