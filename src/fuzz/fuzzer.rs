@@ -9,11 +9,13 @@ use crate::{
         mutation::{seq_reuse, MUTATE_OP},
         queue::Queue,
         relation::Relation,
+        repro::{Repro, ReproResult},
         stats::*,
     },
     gen::gen,
     model::{Prog, ProgWrapper, TypeRef, Value},
     targets::Target,
+    Config,
 };
 
 use std::{
@@ -24,7 +26,6 @@ use std::{
     fs::{create_dir_all, write},
     hash::{Hash, Hasher},
     io::ErrorKind,
-    path::PathBuf,
     process::{exit, Command},
     sync::RwLock,
     sync::{
@@ -48,28 +49,24 @@ pub struct Fuzzer {
     pub(crate) calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
     pub(crate) relations: Arc<Relation>,
     pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
+    pub(crate) repros: Arc<Mutex<FxHashMap<String, Repro>>>,
     pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
     pub(crate) stats: Arc<Stats>,
 
     // local data.
     pub(crate) id: u64,
+    pub(crate) conf: Config,
     pub(crate) features: u64,
     pub(crate) target: Target,
-    pub(crate) symbolizer: PathBuf,
     pub(crate) local_vals: ValuePool,
     pub(crate) queue: Queue,
     pub(crate) exec_handle: ExecHandle,
-    pub(crate) run_history: VecDeque<Prog>,
+    pub(crate) run_history: VecDeque<(ExecOpt, Prog)>,
 
     pub(crate) mode: Mode,
     pub(crate) mut_gaining: u32,
     pub(crate) gen_gaining: u32,
     pub(crate) cycle_len: u32,
-    pub(crate) max_cycle_len: u32,
-
-    pub(crate) work_dir: PathBuf,
-    pub(crate) kernel_obj: Option<PathBuf>,
-    pub(crate) kernel_src: Option<PathBuf>,
 
     pub(crate) last_reboot: Instant,
     pub(crate) stop: Arc<AtomicBool>,
@@ -146,20 +143,19 @@ impl Fuzzer {
         } else {
             self.mode = Mode::Explore;
         }
-
-        let r0 = g0 as f64 / self.cycle_len as f64;
-        let r1 = g1 as f64 / self.cycle_len as f64;
-        if self.cycle_len < self.max_cycle_len && (r0 < 0.005 || r1 < 0.005) {
-            log::info!(
-                "Fuzzer-{}: gaining too low(mut/gen {}/{}), scaling circle length({} -> {})",
-                self.id,
-                r0,
-                r1,
-                self.cycle_len,
-                self.cycle_len * 2
-            );
-            self.cycle_len *= 2;
-        }
+        // let r0 = g0 as f64 / self.cycle_len as f64;
+        // let r1 = g1 as f64 / self.cycle_len as f64;
+        // if self.cycle_len < self.max_cycle_len && (r0 < 0.005 || r1 < 0.005) {
+        //     log::info!(
+        //         "Fuzzer-{}: gaining too low(mut/gen {}/{}), scaling circle length({} -> {})",
+        //         self.id,
+        //         r0,
+        //         r1,
+        //         self.cycle_len,
+        //         self.cycle_len * 2
+        //     );
+        //     self.cycle_len *= 2;
+        // }
     }
 
     fn gen(&mut self) {
@@ -263,7 +259,7 @@ impl Fuzzer {
                 opt.flags |= FLAG_INJECT_FAULT;
                 opt.fault_call = i as i32;
                 opt.fault_nth = n;
-                let ret = self.exec_handle.exec(&opt, &p);
+                let ret = self.exec(&opt, &p);
                 if let Some(info) = self.handle_ret_comm(&p, opt, ret) {
                     if info.len() > i && info[i].flags & CALL_FAULT_INJECTED == 0 {
                         break;
@@ -294,15 +290,9 @@ impl Fuzzer {
         }
 
         let opt = ExecOpt::new();
-        let r = self.exec_handle.exec(&opt, &p);
+        let r = self.exec(&opt, &p);
         let exec_ret = match r {
-            Ok(ret) => {
-                if self.run_history.len() >= 64 {
-                    self.run_history.pop_front();
-                }
-                self.run_history.push_back(p.clone());
-                ret
-            }
+            Ok(ret) => ret,
             Err(e) => {
                 self.handle_err(e);
                 return false;
@@ -317,6 +307,17 @@ impl Fuzzer {
                 true
             }
         }
+    }
+
+    fn exec(&mut self, opt: &ExecOpt, p: &Prog) -> Result<ExecResult, ExecError> {
+        let ret = self.exec_handle.exec(opt, p);
+        if ret.is_ok() {
+            if self.run_history.len() >= 256 {
+                self.run_history.pop_front();
+            }
+            self.run_history.push_back((opt.clone(), p.clone()));
+        }
+        ret
     }
 
     fn handle_err(&self, e: ExecError) {
@@ -440,7 +441,7 @@ impl Fuzzer {
             let new_p = p.remove(i);
             idx -= 1;
             self.stats.inc_exec(EXEC_MINIMIZE);
-            let ret = self.exec_handle.exec(&opt, &new_p);
+            let ret = self.exec(&opt, &new_p);
             if let Some(info) = self.handle_ret_comm(&new_p, opt.clone(), ret) {
                 let brs = info[idx].branches.iter().copied().collect::<FxHashSet<_>>();
                 if brs.is_superset(new_brs) {
@@ -624,66 +625,73 @@ impl Fuzzer {
         if self.stop() {
             return; // killed by ctrlc
         }
+
         self.last_reboot = Instant::now();
+        self.stats.update_time(OVERALL_LAST_CRASH);
+        self.stats.inc(OVERALL_TOTAL_CRASHES);
 
         log::info!(
             "Fuzzer-{}: kernel crashed, maybe caused by:\n {}",
             self.id,
             p.to_string()
         );
-        log::info!("Fuzzer-{}: trying to extract reports ...", self.id);
-        self.stats.update_time(OVERALL_LAST_CRASH);
-        self.stats.inc(OVERALL_TOTAL_CRASHES);
+        log::info!("Fuzzer-{}: try to extract reports ...", self.id);
 
         let log = info.qemu_stdout;
-        let log_file = temp_dir().join(format!("healer-crash-log-{}.tmp", self.id));
+        let reports = self.extract_report(&p, &log);
+        if !reports.is_empty() {
+            let title = reports[0].title.clone();
+            log::info!("Fuzzer-{}: report extracted: {}", self.id, title);
+            self.save_reports(&title, reports);
+            self.try_repro(&title, log);
+        } else {
+            log::info!(
+                "Fuzzer-{}: failed to extract reports, save log and prog only",
+                self.id
+            );
+            self.save_raw_log(p, log);
+        }
+    }
 
-        if let Err(e) = write(&log_file, &log) {
+    fn extract_report(&self, p: &Prog, raw_log: &[u8]) -> Vec<Report> {
+        let log_file = temp_dir().join(format!("healer-crash-log-{}.tmp", self.id));
+        let mut ret = Vec::new();
+        if let Err(e) = write(&log_file, raw_log) {
             log::error!(
                 "Fuzzer-{}: failed to write crash log to tmp file '{}': {}",
                 self.id,
                 log_file.display(),
                 e
             );
-            self.save_raw_log(p, log);
-            return;
+            return ret;
         }
 
-        let mut syz_symbolize = Command::new(&self.symbolizer);
+        let mut syz_symbolize = Command::new(&self.conf.syz_bin_dir.join("syz-symbolize"));
         syz_symbolize
             .args(vec!["-os", &self.target.os])
             .args(vec!["-arch", &self.target.arch]);
-        if let Some(kernel_obj) = self.kernel_obj.as_ref() {
+        if let Some(kernel_obj) = self.conf.kernel_obj_dir.as_ref() {
             syz_symbolize.arg("-kernel_obj").arg(kernel_obj);
         }
-        if let Some(kernel_src) = self.kernel_src.as_ref() {
+        if let Some(kernel_src) = self.conf.kernel_src_dir.as_ref() {
             syz_symbolize.arg("-kernel_src").arg(kernel_src);
         }
         syz_symbolize.arg(&log_file);
         let output = syz_symbolize.output().unwrap();
 
         if output.status.success() {
-            let mut reports = parse(&output.stdout);
-            if !reports.is_empty() {
-                let mut titles = String::new();
-                for (i, mut r) in reports.iter_mut().enumerate() {
-                    r.prog = Some(ProgWrapper(p.clone()));
-                    r.raw_log = log.clone();
-                    write!(titles, "\n\t{}. {}", i + 1, r.title).unwrap();
-                }
-                log::info!("Fuzzer-{}: report extracted: {}", self.id, titles);
-                self.save_reports(reports);
-                return;
-            }
+            ret = parse(&output.stdout);
+        } else {
+            let err = String::from_utf8_lossy(&output.stderr);
+            log::warn!("Fuzzer-{}: syz-symbolize: {}", self.id, err);
         }
 
-        let err = String::from_utf8_lossy(&output.stderr);
-        log::warn!(
-            "Fuzzer-{}: failed to extract crash report: {}",
-            self.id,
-            err
-        );
-        self.save_raw_log(p, log);
+        for r in ret.iter_mut() {
+            r.prog = Some(ProgWrapper(p.clone()));
+            r.raw_log = Vec::from(raw_log);
+        }
+
+        ret
     }
 
     fn save_raw_log(&mut self, p: Prog, log: Vec<u8>) {
@@ -706,7 +714,8 @@ impl Fuzzer {
         }
 
         let out_dir = self
-            .work_dir
+            .conf
+            .out_dir
             .join("crashes")
             .join("raw_logs")
             .join(next_id.to_string());
@@ -725,37 +734,33 @@ impl Fuzzer {
         write(out_dir.join("prog"), p_str).unwrap();
     }
 
-    fn save_reports(&mut self, reports: Vec<Report>) {
-        for r in reports {
-            let mut id = 0;
-            let r1 = r.clone();
-            {
-                let mut crashes = self.crashes.lock().unwrap();
-                if let Some(reports) = crashes.get_mut(&r.title) {
-                    id = reports.len();
-                    if reports.len() >= 1024 {
-                        reports.pop_front();
-                        id = reports.back().unwrap().id + 1;
+    fn save_reports(&mut self, title: &str, mut reports: Vec<Report>) {
+        let mut id = 0;
+        let n = reports.len();
+
+        {
+            let mut crashes = self.crashes.lock().unwrap();
+            let reports_all = crashes
+                .entry(title.to_string())
+                .or_insert_with(|| VecDeque::with_capacity(1024));
+            if !reports_all.is_empty() {
+                id = reports_all.back().unwrap().id + 1;
+                if reports_all.len() >= 1024 {
+                    for _ in 0..reports.len() {
+                        reports_all.pop_front();
                     }
-                    reports.push_back(r);
-                } else {
-                    let t = r.title.clone();
-                    let mut reports = VecDeque::with_capacity(1024);
-                    reports.push_back(r);
-                    crashes.insert(t, reports);
                 }
             }
-
-            let mut out_dir_name = r1.title.clone();
-            if out_dir_name.len() >= 255 {
-                let mut hasher = FxHasher::default();
-                out_dir_name.hash(&mut hasher);
-                let hash = hasher.finish();
-                out_dir_name = format!("{:X}", hash);
+            for r in reports.iter_mut() {
+                r.id = id;
+                reports_all.push_back(r.clone());
             }
-            let out_dir = self.work_dir.join("crashes").join(&out_dir_name);
+        }
 
-            if id == 0 {
+        let dir_name = Self::dir_name(title);
+        let out_dir = self.conf.out_dir.join("crashes").join(&dir_name);
+        for (sub_id, r) in reports.into_iter().enumerate() {
+            if id == 0 && sub_id == 0 {
                 self.stats.inc(OVERALL_UNIQUE_CRASHES);
                 if let Err(e) = create_dir_all(&out_dir) {
                     if e.kind() != ErrorKind::AlreadyExists {
@@ -769,26 +774,143 @@ impl Fuzzer {
                     }
                 }
                 let mut meta = String::new();
-                writeln!(meta, "TITLE: {}", r1.title).unwrap();
-                if let Some(cor) = r1.corrupted.as_ref() {
+                writeln!(meta, "TITLE: {}", title).unwrap();
+                if let Some(cor) = r.corrupted.as_ref() {
                     writeln!(meta, "CORRUPTED: {}", cor).unwrap();
                 }
-                if !r1.to_mails.is_empty() {
-                    writeln!(meta, "MAINTAINERS (TO): {:?}", r1.to_mails).unwrap();
+                if !r.to_mails.is_empty() {
+                    writeln!(meta, "MAINTAINERS (TO): {:?}", r.to_mails).unwrap();
                 }
-                if !r1.cc_mails.is_empty() {
-                    writeln!(meta, "MAINTAINERS (TO): {:?}", r1.cc_mails).unwrap();
+                if !r.cc_mails.is_empty() {
+                    writeln!(meta, "MAINTAINERS (CC): {:?}", r.cc_mails).unwrap();
                 }
                 write(out_dir.join("meta"), meta).unwrap();
             }
-            write(
-                out_dir.join(format!("prog{}", id)),
-                r1.prog.as_ref().unwrap().0.to_string(),
-            )
-            .unwrap();
-            write(out_dir.join(format!("report{}", id)), r1.report).unwrap();
-            write(out_dir.join(format!("log{}", id)), r1.raw_log).unwrap();
+
+            if sub_id == 0 {
+                write(
+                    out_dir.join(format!("prog{}", id)),
+                    r.prog.as_ref().unwrap().0.to_string(),
+                )
+                .unwrap();
+                write(out_dir.join(format!("log{}", id)), r.raw_log).unwrap();
+            }
+
+            if n != 1 {
+                write(out_dir.join(format!("report{}-{}", id, sub_id)), r.report).unwrap();
+            } else {
+                write(out_dir.join(format!("report{}", id)), r.report).unwrap();
+            }
         }
+    }
+
+    fn dir_name(title: &str) -> String {
+        let mut title = title.replace('/', "~");
+        if title.len() >= 255 {
+            let mut hasher = FxHasher::default();
+            title.hash(&mut hasher);
+            let hash = hasher.finish();
+            title = format!("{:X}", hash);
+        }
+        title
+    }
+
+    fn try_repro(&mut self, title: &str, crash_log: Vec<u8>) {
+        if !self.need_repro(title) || self.stop() {
+            self.run_history.clear();
+            return;
+        }
+
+        log::info!("Fuzzer-{}: try to repro '{}'", self.id, title);
+        let repro_start = Instant::now();
+        let res = self.repro(&crash_log);
+
+        if let Err(e) = res {
+            log::info!("Fuzzer-{}: failed to repro '{}': {}", self.id, title, e);
+        } else {
+            let res = res.unwrap();
+            match res {
+                ReproResult::Succ(repro) => {
+                    log::info!(
+                        "Fuzzer-{}: repro '{}' success ({}s), crepro: {}",
+                        self.id,
+                        title,
+                        repro_start.elapsed().as_secs(),
+                        repro.c_prog.is_some()
+                    );
+                    self.save_repro(title, repro);
+                }
+                ReproResult::Failed(msg) => {
+                    log::info!("Fuzzer-{}: failed to repro '{}': {}", self.id, title, msg);
+                }
+            }
+        }
+        self.run_history.clear();
+    }
+
+    fn need_repro(&self, title: &str) -> bool {
+        // TODO add more filter rule.
+        let repros = self.repros.lock().unwrap();
+        !repros.contains_key(title)
+    }
+
+    fn save_repro(&mut self, title: &str, repro: Repro) {
+        let out_dir = self
+            .conf
+            .out_dir
+            .join("crashes")
+            .join(Self::dir_name(title));
+
+        let mut prog = format!("# {}\n\n", repro.opt);
+        prog.push_str(&repro.p);
+        let fname = out_dir.join("repro.prog");
+        write(&fname, prog.as_bytes()).unwrap_or_else(|e| {
+            log::error!(
+                "Fuzzer-{}: failed to write repro prog to {}: {}",
+                self.id,
+                fname.display(),
+                e
+            );
+            exit(1)
+        });
+
+        let fname = out_dir.join("run_history");
+        write(&fname, repro.log.as_bytes()).unwrap_or_else(|e| {
+            log::error!(
+                "Fuzzer-{}: failed to write run history to {}: {}",
+                self.id,
+                fname.display(),
+                e
+            );
+            exit(1)
+        });
+
+        let fname = out_dir.join("repro.log");
+        write(&fname, repro.repro_log.as_bytes()).unwrap_or_else(|e| {
+            log::error!(
+                "Fuzzer-{}: failed to write repro log to {}: {}",
+                self.id,
+                fname.display(),
+                e
+            );
+            exit(1)
+        });
+
+        if let Some(cprog) = repro.c_prog.as_ref() {
+            let fname = out_dir.join("repro.cprog");
+            write(&fname, cprog.as_bytes()).unwrap_or_else(|e| {
+                log::error!(
+                    "Fuzzer-{}: failed to write repro cprog to {}: {}",
+                    self.id,
+                    fname.display(),
+                    e
+                );
+                exit(1)
+            });
+        }
+
+        let mut repros = self.repros.lock().unwrap();
+        repros.insert(title.to_string(), repro);
     }
 
     #[inline(always)]

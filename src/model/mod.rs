@@ -269,12 +269,8 @@ fn clone_value(ctx: &mut CloneCtx, v: &Value) -> Value {
 
 impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, call) in self.calls.iter().enumerate() {
-            if i != self.calls.len() - 1 {
-                writeln!(f, "{}", call)?
-            } else {
-                write!(f, "{}", call)?
-            }
+        for call in self.calls.iter() {
+            writeln!(f, "{}", call)?
         }
         Ok(())
     }

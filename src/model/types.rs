@@ -143,7 +143,10 @@ impl Type {
     pub fn is_readable_date_type(&self) -> bool {
         match &self.kind {
             TypeKind::Buffer { kind, .. } => {
-                matches!(kind, BufferKind::String { .. } | BufferKind::Filename { .. })
+                matches!(
+                    kind,
+                    BufferKind::String { .. } | BufferKind::Filename { .. }
+                )
             }
             _ => false,
         }
@@ -159,7 +162,10 @@ impl Type {
 
     pub fn is_str_like(&self) -> bool {
         if let TypeKind::Buffer { kind, .. } = &self.kind {
-            matches!(kind, BufferKind::Filename { .. } | BufferKind::String { .. })
+            matches!(
+                kind,
+                BufferKind::Filename { .. } | BufferKind::String { .. }
+            )
         } else {
             false
         }

@@ -495,7 +495,7 @@ fn restore_call_res(calls: &mut [Syscall]) {
         let mut out_res = FxHashSet::default();
         for p in call.params.iter() {
             visit_ty(p.ty, p.dir.unwrap_or(Dir::In), |ty, dir| {
-                if matches!(ty.kind, TypeKind::Res{..}) {
+                if matches!(ty.kind, TypeKind::Res { .. }) {
                     if dir != Dir::In {
                         out_res.insert(ty);
                     } else {

@@ -38,30 +38,32 @@ use rustc_hash::{FxHashMap, FxHashSet};
 #[derive(Debug, Clone)]
 pub struct Config {
     pub target: String,
-    pub kernel_obj: Option<PathBuf>,
-    pub kernel_src: Option<PathBuf>,
-    pub jobs: u64,
+    pub kernel_obj_dir: Option<PathBuf>,
+    pub kernel_src_dir: Option<PathBuf>,
+    pub syz_bin_dir: PathBuf,
+    pub out_dir: PathBuf,
     pub relations: Option<PathBuf>,
-    pub symbolizer: PathBuf,
+    pub jobs: u64,
+
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
     pub ssh_conf: SshConf,
-    pub work_dir: PathBuf,
 }
 
 pub fn start(conf: Config) {
     let max_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let calibrated_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let crashes = Arc::new(Mutex::new(FxHashMap::default()));
+    let repros = Arc::new(Mutex::new(FxHashMap::default()));
     let raw_crashes = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
     let stats = Arc::new(Stats::new());
     let stop = Arc::new(AtomicBool::new(false));
     let barrier = Arc::new(Barrier::new(conf.jobs as usize + 1));
     let mut fuzzers = Vec::new();
 
-    if let Err(e) = create_dir(&conf.work_dir) {
+    if let Err(e) = create_dir(&conf.out_dir) {
         if e.kind() == ErrorKind::AlreadyExists {
-            let crash_dir = conf.work_dir.join("crashes");
+            let crash_dir = conf.out_dir.join("crashes");
             if crash_dir.exists() {
                 log::warn!(
                     "Existing crash data ({}) may be overwritten",
@@ -70,8 +72,8 @@ pub fn start(conf: Config) {
             }
         } else {
             log::error!(
-                "Failed to create work directory {}: {}",
-                conf.work_dir.display(),
+                "Failed to create output directory {}: {}",
+                conf.out_dir.display(),
                 e
             );
             exit(1);
@@ -85,11 +87,17 @@ pub fn start(conf: Config) {
         log::error!("Target {} dose not exist", conf.target);
         exit(1);
     });
+    log::info!("Revision: {}", target.revision);
+    log::info!(
+        "Res/Syscalls: {}/{}",
+        target.res_tys.len(),
+        target.syscalls.len()
+    );
 
     let relations_file = if let Some(f) = conf.relations.as_ref() {
         f.clone()
     } else {
-        conf.work_dir.join("relations")
+        conf.out_dir.join("relations")
     };
     let relations = Relation::load(&target, &relations_file).unwrap_or_else(|e| {
         log::error!(
@@ -109,17 +117,17 @@ pub fn start(conf: Config) {
         let calibrated_cov = Arc::clone(&calibrated_cov);
         let relations = Arc::clone(&relations);
         let crashes = Arc::clone(&crashes);
+        let repros = Arc::clone(&repros);
         let raw_crashes = Arc::clone(&raw_crashes);
         let stats = Arc::clone(&stats);
         let barrier = Arc::clone(&barrier);
         let stop = Arc::clone(&stop);
         let conf = conf.clone();
-        let symbolizer = conf.symbolizer.clone();
 
         let handle = thread::spawn(move || {
             let conf = conf.clone();
             let target = Target::new(&conf.target).unwrap();
-            let mut queue = match Queue::with_workdir(id as usize, conf.work_dir.clone()) {
+            let mut queue = match Queue::with_workdir(id as usize, conf.out_dir.clone()) {
                 Ok(q) => q,
                 Err(e) => {
                     log::error!("failed to initialize queue-{}: {}", id, e);
@@ -131,27 +139,32 @@ pub fn start(conf: Config) {
                 queue.set_stats(Arc::clone(&stats));
             }
 
-            let mut exec_handle =
-                match exec::spawn_in_qemu(conf.exec_conf, conf.qemu_conf, conf.ssh_conf, id) {
-                    Ok(handle) => handle,
-                    Err(e) => {
-                        log::error!("failed to boot: {}", e);
-                        exit(1)
-                    }
-                };
+            let mut exec_handle = match exec::spawn_in_qemu(
+                conf.exec_conf.clone(),
+                conf.qemu_conf.clone(),
+                conf.ssh_conf.clone(),
+                id,
+            ) {
+                Ok(handle) => handle,
+                Err(e) => {
+                    log::error!("failed to boot: {}", e);
+                    exit(1)
+                }
+            };
             let features = features::check(&mut exec_handle, id == 0);
             barrier.wait();
 
             let mut fuzzer = Fuzzer {
-                symbolizer,
                 max_cov,
                 calibrated_cov,
                 relations,
                 crashes,
+                repros,
                 raw_crashes,
                 stats,
                 id,
                 target,
+                conf,
                 local_vals: FxHashMap::default(),
                 queue,
                 exec_handle,
@@ -161,10 +174,6 @@ pub fn start(conf: Config) {
                 gen_gaining: 0,
                 features,
                 cycle_len: 128,
-                max_cycle_len: 1024,
-                work_dir: conf.work_dir,
-                kernel_obj: conf.kernel_obj,
-                kernel_src: conf.kernel_src,
                 last_reboot: Instant::now(),
                 stop,
             };
@@ -189,7 +198,7 @@ pub fn start(conf: Config) {
 
     log::info!("Boot finished, cost {}s", start.elapsed().as_secs());
     log::info!("Let the fuzz begin");
-    bench(Duration::new(10, 0), conf.work_dir, stats);
+    bench(Duration::new(10, 0), conf.out_dir, stats);
 }
 
 const HEALER: &str = r"

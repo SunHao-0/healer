@@ -2,7 +2,7 @@
 use crate::model::types::TypeRef;
 use crate::model::Dir;
 
-use std::fmt;
+use std::{ascii::escape_default, fmt};
 
 use rustc_hash::FxHashSet;
 
@@ -175,47 +175,43 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use super::types::TypeKind;
+        const ENCODING_ADDR_BASE: u64 = 0x7f0000000000;
+
         match &self.kind {
-            ValueKind::Scalar(val) => match &self.ty.kind {
-                TypeKind::Const { .. } => write!(f, "{:#X}(const)", *val),
-                TypeKind::Csum { .. } => write!(f, "{:#X}(csum)", *val),
-                TypeKind::Len { len_info, .. } => {
-                    let mut len_name = "len";
-                    if len_info.offset {
-                        len_name = "offset";
-                    }
-                    if len_info.bit_sz != 0 {
-                        len_name = "bitsize"
-                    }
-                    write!(f, "{:#X}({})", val, len_name)
-                }
-                _ => write!(f, "{:#X}", *val),
-            },
+            ValueKind::Scalar(val) => write!(f, "{:#x}", val),
             ValueKind::Ptr { addr, pointee } => {
                 if let Some(ref pointee) = pointee {
-                    write!(f, "&{:#X}={}", *addr, pointee)
+                    write!(f, "&({:#x})={}", *addr + ENCODING_ADDR_BASE, pointee)
                 } else {
-                    write!(f, "NULL")
+                    write!(f, "&({:#x})=nil", *addr + ENCODING_ADDR_BASE)
                 }
             }
-            ValueKind::Vma { addr, size } => write!(f, "vma=({}, {})", *addr, *size),
+            ValueKind::Vma { addr, size } => {
+                write!(f, "&({:#x}/{:#x})=nil", *addr + ENCODING_ADDR_BASE, *size)
+            }
             ValueKind::Bytes(val) => {
-                if self.ty.is_str_like() {
-                    write!(f, "\"{}\"", String::from_utf8_lossy(val))
+                if self.dir == Dir::Out {
+                    write!(f, "\"\"/{}", val.len())
+                } else if !self.ty.is_str_like() && !is_readable(val) {
+                    write!(f, "\"{}\"", encode_hex(val))
                 } else {
-                    write!(f, "{:X?}", val)
+                    let val = val
+                        .iter()
+                        .copied()
+                        .flat_map(|v| escape_default(v))
+                        .collect::<Vec<_>>();
+                    let val = String::from_utf8(val).unwrap();
+                    write!(f, "\'{}\'", val)
                 }
             }
             ValueKind::Group(vals) => {
                 let mut open_brackets = '[';
                 let mut close_brackets = ']';
-                let mut ty = "array";
                 if let TypeKind::Struct { .. } = &self.ty.kind {
                     open_brackets = '{';
                     close_brackets = '}';
-                    ty = "struct";
                 }
-                write!(f, "{}{}", ty, open_brackets)?;
+                write!(f, "{}", open_brackets)?;
                 for (id, val) in vals.iter().enumerate() {
                     write!(f, "{}", val)?;
                     if id != vals.len() - 1 {
@@ -224,15 +220,36 @@ impl fmt::Display for Value {
                 }
                 write!(f, "{}", close_brackets)
             }
-            ValueKind::Union { val, idx } => write!(
-                f,
-                "union{{{}: {}}}",
-                self.ty.fields().unwrap()[*idx].name,
-                val
-            ),
+            ValueKind::Union { val, idx } => {
+                write!(f, "@{}={}", self.ty.fields().unwrap()[*idx].name, val)
+            }
             ValueKind::Res(r) => write!(f, "{}", r),
         }
     }
+}
+
+fn encode_hex(val: &[u8]) -> String {
+    const HEX: [char; 16] = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    ];
+    let mut ret = String::with_capacity(val.len() * 2);
+    for v in val.iter().copied() {
+        ret.push(HEX[(v >> 4) as usize]);
+        ret.push(HEX[((v & 0x0f) as usize)]);
+    }
+    ret
+}
+
+fn is_readable(data: &[u8]) -> bool {
+    !data.is_empty()
+        && data.iter().all(|v| match *v {
+            0 | 0x7 | 0x8 | 0xC | 0xA | 0xD | b'\t' | 0xB => true,
+            x => is_printable(x),
+        })
+}
+
+fn is_printable(v: u8) -> bool {
+    v >= 0x20 && v < 0x7f
 }
 
 #[derive(Debug)]
@@ -366,13 +383,23 @@ impl ResValue {
 impl fmt::Display for ResValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
-            ResValueKind::Own { id, .. } => write!(f, "r{}(out)", *id),
-            ResValueKind::Ref { src } => write!(
-                f,
-                "r{}",
-                unsafe { (*src).as_ref().unwrap() }.res_id().unwrap()
-            ),
-            ResValueKind::Null => write!(f, "{:#X}(null)", self.val),
+            ResValueKind::Own { id, .. } => write!(f, "<r{}=>{:#x}", *id, self.val),
+            ResValueKind::Ref { src } => {
+                let mut extra = String::new();
+                if self.op_div != 0 {
+                    extra += &format!("/{}", self.op_div);
+                }
+                if self.op_add != 0 {
+                    extra += &format!("+{}", self.op_add);
+                }
+                write!(
+                    f,
+                    "r{}{}",
+                    unsafe { (*src).as_ref().unwrap() }.res_id().unwrap(),
+                    extra
+                )
+            }
+            ResValueKind::Null => write!(f, "{:#x}", self.val),
         }
     }
 }

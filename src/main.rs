@@ -6,18 +6,24 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "healer", about = "kernel fuzzer inspired by Syzkaller.")]
 struct Settings {
-    /// Supported target in Os/Arch format, e.g. linux/amd64, linux/arm64. See target/sys_json.rs.
+    /// Fuzzing target in Os/Arch format, e.g. linux/amd64, linux/arm64.
     #[structopt(short = "t", long)]
     target: String,
-    /// Working directory of healer, output directory of queue, crash, relation.
-    #[structopt(short = "w", long, default_value = "./")]
-    work_dir: PathBuf,
-    /// Object file of target kernel, e.g. vmlinux for linux kernel.
-    #[structopt(short = "obj", long)]
-    kernel_obj: Option<PathBuf>,
-    /// Srouce file of target kernel.
-    #[structopt(short = "src", long)]
-    kernel_src: Option<PathBuf>,
+    /// Output directory, contains queues, crashes, relations.
+    #[structopt(short = "o", long, default_value = "./")]
+    out_dir: PathBuf,
+    /// Directory of object file of target kernel, e.g. vmlinux for linux kernel.
+    #[structopt(long)]
+    kernel_obj_dir: Option<PathBuf>,
+    /// Srouce file directory of target kernel.
+    #[structopt(long)]
+    kernel_src_dir: Option<PathBuf>,
+    /// Syzkaller binary file directory, syz-executor, syz-symbolize, syz-repro should be provided.
+    #[structopt(short = "syz", long, default_value = "./bin")]
+    syz_bin_dir: PathBuf,
+    /// Specify the input relations, [default: 'out_dir/relations].
+    #[structopt(short, long)]
+    relations: Option<PathBuf>,
     /// Number of parallel instances.
     #[structopt(short, long, default_value = "2")]
     jobs: u64,
@@ -28,26 +34,17 @@ struct Settings {
     #[structopt(short, long)]
     kernel_img: Option<PathBuf>,
     /// Number of cpu cores for each qemu.
-    #[structopt(short = "smp", long, default_value = "2")]
+    #[structopt(long, default_value = "2")]
     qemu_smp: u8,
     /// Size of memory for each qemu in megabyte.
-    #[structopt(short = "mem", long, default_value = "2048")]
+    #[structopt(long, default_value = "2048")]
     qemu_mem: u32,
-    /// Path to ssh key used for logging to test machine.
-    #[structopt(short = "key", long)]
+    /// Path to ssh key used for login to test machine.
+    #[structopt(long)]
     ssh_key: PathBuf,
-    /// User name for logging to test machine.
-    #[structopt(short = "user", long, default_value = "root")]
+    /// User name for login to test machine.
+    #[structopt(long, default_value = "root")]
     ssh_user: String,
-    /// Specify the input relations, default is 'workdir/relations'.
-    #[structopt(short, long)]
-    relations: Option<PathBuf>,
-    /// Path to symbolizer, default is './syz-symbolize'.
-    #[structopt(long)]
-    symbolizer: Option<PathBuf>,
-    /// Path to executor, default is './syz-executor'.
-    #[structopt(long)]
-    executor: Option<PathBuf>,
 }
 
 pub fn main() {
@@ -57,32 +54,31 @@ pub fn main() {
 
     let conf = healer::Config {
         target: settings.target.clone(),
-        kernel_obj: settings.kernel_obj,
-        kernel_src: settings.kernel_src,
+        kernel_obj_dir: settings.kernel_obj_dir,
+        kernel_src_dir: settings.kernel_src_dir,
+        out_dir: settings.out_dir,
+        syz_bin_dir: settings.syz_bin_dir.clone(),
         jobs: settings.jobs,
         relations: settings.relations,
-        symbolizer: settings
-            .symbolizer
-            .unwrap_or_else(|| PathBuf::from("./syz-symbolize")),
         qemu_conf: QemuConf {
-            target: settings.target,
+            target: settings.target.clone(),
             img_path: settings.img.into_boxed_path(),
             kernel_path: settings.kernel_img.map(|img| img.into_boxed_path()),
-            smp: Some(settings.qemu_smp),
-            mem: Some(settings.qemu_mem),
+            smp: settings.qemu_smp,
+            mem: settings.qemu_mem,
             ..Default::default()
         },
         exec_conf: ExecConf {
             executor: settings
-                .executor
-                .unwrap_or_else(|| PathBuf::from("./syz-executor"))
+                .syz_bin_dir
+                .join(&settings.target)
+                .join("syz-executor")
                 .into_boxed_path(),
         },
         ssh_conf: SshConf {
             ssh_key: settings.ssh_key.into_boxed_path(),
             ssh_user: Some(settings.ssh_user),
         },
-        work_dir: settings.work_dir,
     };
 
     healer::start(conf)

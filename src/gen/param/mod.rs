@@ -127,7 +127,10 @@ fn gen_ptr(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
 
     // Handle recusive type or circle reference here.
     if ty.optional
-        && matches!(elem_ty.kind, TypeKind::Struct{..} | TypeKind::Union{..} | TypeKind::Array{..})
+        && matches!(
+            elem_ty.kind,
+            TypeKind::Struct { .. } | TypeKind::Union { .. } | TypeKind::Array { .. }
+        )
     {
         let depth = ctx.inc_rec_depth(elem_ty);
         if depth >= 3 {
@@ -140,7 +143,10 @@ fn gen_ptr(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
     let addr = ctx.mem_alloc.alloc(elem_val.size(), elem_ty.align);
     // TODO use a recusive depth guard here.
     if ty.optional
-        && matches!(elem_ty.kind, TypeKind::Struct{..} | TypeKind::Union{..} | TypeKind::Array{..})
+        && matches!(
+            elem_ty.kind,
+            TypeKind::Struct { .. } | TypeKind::Union { .. } | TypeKind::Array { .. }
+        )
     {
         ctx.dec_rec_depth(elem_ty);
     }
