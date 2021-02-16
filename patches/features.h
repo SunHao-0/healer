@@ -19,14 +19,14 @@ typedef unsigned long long u64;
 typedef uint64_t u64;
 #endif
 
-#define LINUX_FEATURES_CHECK_SNIPPET1                               \
-	do {                                                            \
+#define FEATURES_CHECK_SNIPPET                                              \
+	do {                                                                \
 		if (argc == 2 && strcmp(argv[1], "check") == 0) {           \
-			u64 features = to_le(check());                          \
-			if (fwrite(&features, 1, 8, stdout) < 0) {              \
-				fail("failed to write features to stdout");         \
-			}                                                       \
-			return 0;                                               \
+			u64 features = to_le(check());                      \
+			if (fwrite(&features, 1, 8, stdout) < 0) {          \
+				fail("failed to write features to stdout"); \
+			}                                                   \
+			return 0;                                           \
 		}                                                           \
 	} while (0)
 

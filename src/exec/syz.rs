@@ -179,6 +179,10 @@ impl SyzHandleBuilder {
             .pid
             .ok_or_else(|| SyzError::Config("need pid".to_string()))?;
         let mut syz = self.syz_cmd()?;
+        if self.use_shm{
+            syz.arg("use-ivshm");
+        }
+        
         let mut syz = syz.spawn()?;
 
         let stdin = syz.stdin.take().unwrap();

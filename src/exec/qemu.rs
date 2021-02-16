@@ -162,13 +162,9 @@ fn build_qemu_command(conf: &QemuConf) -> Result<(Command, PortGuard), BootError
 
     let arch_args = static_conf.args.split(' ').collect::<Vec<_>>();
 
-    let mem = if let Some(sz) = conf.mem {
-        vec!["-m".to_string(), format!("{}", sz)]
-    } else {
-        vec!["-m".to_string(), "1G,slots=3,maxmem=4G".to_string()]
-    };
+    let mem = vec!["-m".to_string(), conf.mem.to_string()];
 
-    let smp = vec!["-smp".to_string(), format!("{}", conf.smp.unwrap_or(2))];
+    let smp = vec!["-smp".to_string(), conf.smp.to_string()];
 
     let ssh_fwd_port = get_free_port().ok_or(BootError::NoFreePort)?; // TODO find a free port.
     let net = vec![

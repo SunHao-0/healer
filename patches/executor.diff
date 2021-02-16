@@ -13,7 +13,7 @@
  	if (argc == 2 && strcmp(argv[1], "test") == 0)
  		return run_tests();
  
-+	LINUX_FEATURES_CHECK_SNIPPET1;
++	FEATURES_CHECK_SNIPPET;
 +
  	start_time_ms = current_time_ms();
  
@@ -21,7 +21,7 @@
  	current_thread = &threads[0];
  
  #if SYZ_EXECUTOR_USES_SHMEM
-+	ivshm_setup(kInFd, kOutFd);
++	IVSHM_SETUP_SNIPPET;
  	if (mmap(&input_data[0], kMaxInput, PROT_READ, MAP_PRIVATE | MAP_FIXED, kInFd, 0) != &input_data[0])
  		fail("mmap of input file failed");
  	// The output region is the only thing in executor process for which consistency matters.

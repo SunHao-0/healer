@@ -115,6 +115,14 @@ static void ivshm_setup(int in_fd, int out_fd)
 		fail("failed to dup: %d -> %d.", in_fd_inner, in_fd);
 	}
 }
+
+#define IVSHM_SETUP_SNIPPET                                           \
+	do {                                                          \
+		if (argc == 2 && strcmp(argv[1], "use-ivshm") == 0) { \
+			ivshm_setup(kInFd, kOutFd);                   \
+		}                                                     \
+	} while (0)
+
 #else
 #error Currently, ivshm_setup only supports linux.
 #endif

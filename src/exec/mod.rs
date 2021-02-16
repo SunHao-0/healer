@@ -371,9 +371,9 @@ pub struct QemuConf {
     /// Optional Path to kernel bzImage.
     pub kernel_path: Option<Box<Path>>,
     /// Smp, default is 2.
-    pub smp: Option<u8>,
+    pub smp: u8,
     /// Mem size in megabyte.
-    pub mem: Option<u32>,
+    pub mem: u32,
     /// Shared memory device file path, creadted automatically if use qemu ivshm.
     pub mem_backend_files: Vec<(Box<Path>, usize)>,
 }
@@ -384,8 +384,8 @@ impl Default for QemuConf {
             target: "linux/amd64".to_string(),
             kernel_path: None,
             img_path: PathBuf::from("./stretch.img").into_boxed_path(),
-            smp: None,
-            mem: None,
+            smp: 2,
+            mem: 2048,
             mem_backend_files: Vec::new(),
         }
     }
