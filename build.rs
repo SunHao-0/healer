@@ -175,7 +175,7 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
             }
         }
 
-        let targets = vec!["executor", "symbolize"];
+        let targets = vec!["executor", "symbolize", "repro"];
         for target in targets {
             let make = Command::new("make")
                 .current_dir(syz_dir.to_str().unwrap())
