@@ -188,7 +188,7 @@ impl ExecHandle {
                     .as_mut()
                     .unwrap()
                     .is_alive()
-                    .map_err(SpawnError::IO)?
+                    .map_err(SpawnError::Io)?
                 {
                     let qemu = self.qemu.take().unwrap();
                     self.copy_bin = true; // -snapshot is enabled.
@@ -293,7 +293,7 @@ pub enum SpawnError {
     #[error("failed to use shm: {0}")]
     Shm(#[from] ShmemError),
     #[error("io: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 }
 
 /// Env flags to executor.
@@ -378,6 +378,26 @@ pub struct QemuConf {
     pub mem_backend_files: Vec<(Box<Path>, usize)>,
 }
 
+impl QemuConf {
+    pub fn check(&self) -> Result<(), String> {
+        if !self.img_path.is_file() {
+            return Err(format!(
+                "invalid image file path: {}",
+                self.img_path.display()
+            ));
+        }
+        if let Some(p) = self.kernel_path.as_ref() {
+            if !p.is_file() {
+                return Err(format!("invalid kernel image file path: {}", p.display()));
+            }
+        }
+        if self.mem > 1024 * 8 {
+            log::warn!("qemu mem size({}) too big.(Currently, healer only runs one executor per vm, too much memory may be a waste)", self.mem)
+        }
+        Ok(())
+    }
+}
+
 impl Default for QemuConf {
     fn default() -> Self {
         Self {
@@ -398,6 +418,23 @@ pub struct SshConf {
     pub ssh_key: Box<Path>,
     /// Ssh user, default is root.
     pub ssh_user: Option<String>,
+}
+
+impl SshConf {
+    pub fn check(&self) -> Result<(), String> {
+        if !self.ssh_key.is_file() {
+            return Err(format!(
+                "invalid ssh key file '{}'.",
+                self.ssh_key.display()
+            ));
+        }
+        if let Some(user) = self.ssh_user.as_ref() {
+            if user.is_empty() {
+                return Err(format!("invalid ssh user '{}'.", user));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for SshConf {

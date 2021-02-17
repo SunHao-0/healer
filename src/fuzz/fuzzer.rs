@@ -81,6 +81,7 @@ pub enum Mode {
 
 impl Fuzzer {
     pub fn fuzz(&mut self) {
+        self.stats.inc(OVERALL_FUZZ_INSTANCE);
         self.sampling();
 
         while !self.stop() {
@@ -143,19 +144,6 @@ impl Fuzzer {
         } else {
             self.mode = Mode::Explore;
         }
-        // let r0 = g0 as f64 / self.cycle_len as f64;
-        // let r1 = g1 as f64 / self.cycle_len as f64;
-        // if self.cycle_len < self.max_cycle_len && (r0 < 0.005 || r1 < 0.005) {
-        //     log::info!(
-        //         "Fuzzer-{}: gaining too low(mut/gen {}/{}), scaling circle length({} -> {})",
-        //         self.id,
-        //         r0,
-        //         r1,
-        //         self.cycle_len,
-        //         self.cycle_len * 2
-        //     );
-        //     self.cycle_len *= 2;
-        // }
     }
 
     fn gen(&mut self) {
@@ -203,12 +191,8 @@ impl Fuzzer {
                     mut_n += 1;
                     let p = mutation_op(&self.target, &self.local_vals, &self.queue.inputs[idx].p);
                     self.stats.inc_exec(EXEC_MUTATION);
-                    let gain = self.evaluate(p);
-                    if gain {
+                    if self.evaluate(p) {
                         self.mut_gaining += 1;
-                    }
-                    if idx < self.queue.len() {
-                        self.queue.inputs[idx].update_gaining_rate(gain);
                     }
                 }
             }
@@ -230,12 +214,8 @@ impl Fuzzer {
                     &self.relations,
                 );
                 self.stats.inc_exec(EXEC_MUTATION);
-                let gain = self.evaluate(p);
-                if gain {
+                if self.evaluate(p) {
                     self.mut_gaining += 1;
-                }
-                if idx < self.queue.len() {
-                    self.queue.inputs[idx].update_gaining_rate(gain);
                 }
             }
 
@@ -383,7 +363,7 @@ impl Fuzzer {
 
         let mut analyzed: FxHashSet<usize> = FxHashSet::default();
         let mut new_input = false;
-        // analyze in reverse order helps us find interesting longger prog.
+        // analyze in reverse order helps us find longger prog.
         for i in (0..info.len()).rev() {
             if info[i].branches.is_empty() || analyzed.contains(&i) || self.stop() {
                 continue;
@@ -404,17 +384,21 @@ impl Fuzzer {
             if !succ {
                 continue;
             }
-
             new_input = true;
             let new_re = self.detect_relations(&m_p, &m_p_brs);
 
-            let mut input = Input::new(m_p, opt.clone(), m_p_info);
+            let mut input = Input::new(
+                m_p,
+                opt.clone(),
+                m_p_info,
+                m_p_brs.into_iter().flatten().collect(),
+            );
             input.found_new_re = new_re;
             input.exec_tm = exec_tm.as_millis() as usize;
-            input.new_cov = m_p_brs.into_iter().flatten().collect();
             self.queue.append(input);
         }
-        new_input && !self.stop()
+
+        new_input
     }
 
     fn minimize(
@@ -584,7 +568,7 @@ impl Fuzzer {
             }
         }
 
-        let succ = !failed && new_covs.iter().any(|c| !c.is_empty()) && !self.stop();
+        let succ = !failed && new_covs.iter().any(|c| !c.is_empty());
         if succ {
             let mut covs = self.calibrated_cov.write().unwrap();
             for br in new_covs.iter() {
@@ -816,10 +800,13 @@ impl Fuzzer {
     }
 
     fn try_repro(&mut self, title: &str, crash_log: Vec<u8>) {
-        if !self.need_repro(title) || self.stop() {
+        if self.conf.skip_repro || !self.need_repro(title) || self.stop() {
             self.run_history.clear();
             return;
         }
+
+        self.stats.dec(OVERALL_FUZZ_INSTANCE);
+        self.stats.inc(OVERALL_REPRO_INSTANCE);
 
         log::info!("Fuzzer-{}: try to repro '{}'", self.id, title);
         let repro_start = Instant::now();
@@ -845,6 +832,8 @@ impl Fuzzer {
                 }
             }
         }
+        self.stats.inc(OVERALL_FUZZ_INSTANCE);
+        self.stats.dec(OVERALL_REPRO_INSTANCE);
         self.run_history.clear();
     }
 

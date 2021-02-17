@@ -44,13 +44,79 @@ pub struct Config {
     pub out_dir: PathBuf,
     pub relations: Option<PathBuf>,
     pub jobs: u64,
+    pub skip_repro: bool,
 
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
     pub ssh_conf: SshConf,
 }
 
+impl Config {
+    pub fn check(&self) -> Result<(), String> {
+        let supported = targets::sys_json::supported();
+        if !supported.contains(&self.target) {
+            return Err(format!(
+                "unspported target: {}.({:?} are supported)",
+                self.target, supported
+            ));
+        }
+        if let Some(dir) = self.kernel_obj_dir.as_ref() {
+            if !dir.is_dir() {
+                return Err(format!(
+                    "bad kernel object file directory '{}'.",
+                    dir.display()
+                ));
+            }
+        }
+        if let Some(dir) = self.kernel_src_dir.as_ref() {
+            if !dir.is_dir() {
+                return Err(format!(
+                    "bad kernel srouce files directory '{}'.",
+                    dir.display()
+                ));
+            }
+        }
+        if !self.syz_bin_dir.is_dir() {
+            return Err(format!(
+                "bad syzkaller binary files directory '{}'.",
+                self.syz_bin_dir.display()
+            ));
+        }
+
+        let target_bins = vec!["syz-executor", "syz-execprog", "syz-fuzzer"];
+        let dir = self.syz_bin_dir.join(self.target.replace("/", "_"));
+        for bin in &target_bins {
+            let f = dir.join(bin);
+            if !f.is_file() {
+                return Err(format!(
+                    "missing executable file {} in {}",
+                    bin,
+                    dir.display()
+                ));
+            }
+        }
+        let symbolize = self.syz_bin_dir.join("syz-symbolize");
+        if !symbolize.is_file() {
+            return Err(format!(
+                "missing executable file syz-symbolize in {}",
+                self.syz_bin_dir.display()
+            ));
+        }
+        self.qemu_conf
+            .check()
+            .map_err(|e| format!("qemu config: {}", e))?;
+        self.ssh_conf
+            .check()
+            .map_err(|e| format!("ssh config: {}", e))
+    }
+}
+
 pub fn start(conf: Config) {
+    if let Err(e) = conf.check() {
+        log::error!("config error: {}", e);
+        exit(1);
+    }
+
     let max_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let calibrated_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let crashes = Arc::new(Mutex::new(FxHashMap::default()));
@@ -87,7 +153,7 @@ pub fn start(conf: Config) {
         log::error!("Target {} dose not exist", conf.target);
         exit(1);
     });
-    log::info!("Revision: {}", target.revision);
+    log::info!("Revision: {}", &target.revision[0..12]);
     log::info!(
         "Res/Syscalls: {}/{}",
         target.res_tys.len(),
@@ -108,7 +174,7 @@ pub fn start(conf: Config) {
         exit(1);
     });
     let relations = Arc::new(relations);
-    log::info!("Initial relations: {}.", relations.len());
+    log::info!("Initial relations: {}", relations.len());
 
     log::info!("Boot {} {} on qemu...", conf.jobs, conf.target);
     let start = Instant::now();
@@ -127,7 +193,7 @@ pub fn start(conf: Config) {
         let handle = thread::spawn(move || {
             let conf = conf.clone();
             let target = Target::new(&conf.target).unwrap();
-            let mut queue = match Queue::with_workdir(id as usize, conf.out_dir.clone()) {
+            let mut queue = match Queue::with_outdir(id as usize, conf.out_dir.clone()) {
                 Ok(q) => q,
                 Err(e) => {
                     log::error!("failed to initialize queue-{}: {}", id, e);

@@ -10,28 +10,28 @@ struct Settings {
     #[structopt(short = "t", long)]
     target: String,
     /// Output directory, contains queues, crashes, relations.
-    #[structopt(short = "o", long, default_value = "./")]
+    #[structopt(short = "o", long, default_value = "./output")]
     out_dir: PathBuf,
     /// Directory of object file of target kernel, e.g. vmlinux for linux kernel.
-    #[structopt(long)]
+    #[structopt(short = "O", long)]
     kernel_obj_dir: Option<PathBuf>,
     /// Srouce file directory of target kernel.
-    #[structopt(long)]
+    #[structopt(short = "S", long)]
     kernel_src_dir: Option<PathBuf>,
     /// Syzkaller binary file directory, syz-executor, syz-symbolize, syz-repro should be provided.
-    #[structopt(short = "syz", long, default_value = "./bin")]
+    #[structopt(short = "d", long, default_value = "./bin")]
     syz_bin_dir: PathBuf,
     /// Specify the input relations, [default: 'out_dir/relations].
-    #[structopt(short, long)]
+    #[structopt(short = "r", long)]
     relations: Option<PathBuf>,
     /// Number of parallel instances.
-    #[structopt(short, long, default_value = "2")]
+    #[structopt(short = "j", long, default_value = "2")]
     jobs: u64,
     /// Path to disk image.
-    #[structopt(short, long)]
+    #[structopt(short = "i", long)]
     img: PathBuf,
     /// Path to kernel image, e.g. bzImage for linux kernel.
-    #[structopt(short, long)]
+    #[structopt(short = "k", long)]
     kernel_img: Option<PathBuf>,
     /// Number of cpu cores for each qemu.
     #[structopt(long, default_value = "2")]
@@ -45,6 +45,9 @@ struct Settings {
     /// User name for login to test machine.
     #[structopt(long, default_value = "root")]
     ssh_user: String,
+    /// Skip crash reproducing.
+    #[structopt(long)]
+    skip_repro: bool,
 }
 
 pub fn main() {
@@ -60,6 +63,7 @@ pub fn main() {
         syz_bin_dir: settings.syz_bin_dir.clone(),
         jobs: settings.jobs,
         relations: settings.relations,
+        skip_repro: settings.skip_repro,
         qemu_conf: QemuConf {
             target: settings.target.clone(),
             img_path: settings.img.into_boxed_path(),
@@ -71,7 +75,7 @@ pub fn main() {
         exec_conf: ExecConf {
             executor: settings
                 .syz_bin_dir
-                .join(&settings.target)
+                .join(settings.target.replace("/", "_"))
                 .join("syz-executor")
                 .into_boxed_path(),
         },
