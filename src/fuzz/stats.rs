@@ -18,6 +18,8 @@ use rustc_hash::FxHashMap;
 iota! {
             // Overall
     pub const OVERALL_RUN_TIME: u64 = iota;
+            , OVERALL_FUZZ_INSTANCE
+            , OVERALL_REPRO_INSTANCE
             , OVERALL_LAST_INPUT
             , OVERALL_MAX_COV
             , OVERALL_CAL_COV
@@ -39,14 +41,10 @@ iota! {
             , QUEUE_FAVOR               // number of favored
             , QUEUE_PENDING_FAVOR
             , QUEUE_SCORE               // (max/min)
-            , QUEUE_SELF_CONTAIN
             , QUEUE_MAX_DEPTH
             , QUEUE_AGE
             // Average stats of inputs.
             , AVG_LEN
-            , AVG_GAINNING
-            , AVG_DIST
-            , AVG_DEPTH
             , AVG_SZ
             , AVG_AGE
             , AVG_NEW_COV
@@ -58,6 +56,8 @@ lazy_static! {
     pub static ref STATS: FxHashMap<u64, &'static str> = {
         fxhashmap! {
             OVERALL_RUN_TIME            => "run time",
+            OVERALL_FUZZ_INSTANCE       => "fuzz instances",
+            OVERALL_REPRO_INSTANCE      => "repro instanes",
             OVERALL_LAST_INPUT          => "last input",
             OVERALL_MAX_COV             => "max cov",
             OVERALL_CAL_COV             => "cal cov",
@@ -77,13 +77,9 @@ lazy_static! {
             QUEUE_FAVOR                 => "favored",
             QUEUE_PENDING_FAVOR         => "pending fav",
             QUEUE_SCORE                 => "score",
-            QUEUE_SELF_CONTAIN          => "self contain",
             QUEUE_MAX_DEPTH             => "depth",
             QUEUE_AGE                   => "age",
             AVG_LEN                     => "prog len",
-            AVG_GAINNING                => "gain rate",
-            AVG_DIST                    => "dist",
-            AVG_DEPTH                   => "avg depth",
             AVG_SZ                      => "prog size",
             AVG_AGE                     => "avg age",
             AVG_NEW_COV                 => "new cov"
@@ -93,6 +89,8 @@ lazy_static! {
         fxhashmap! {
             "OVERALL" => vec![
                 OVERALL_RUN_TIME,
+                OVERALL_FUZZ_INSTANCE,
+                OVERALL_REPRO_INSTANCE,
                 OVERALL_LAST_INPUT,
                 OVERALL_MAX_COV,
                 OVERALL_CAL_COV,
@@ -116,15 +114,11 @@ lazy_static! {
                 QUEUE_FAVOR,
                 QUEUE_PENDING_FAVOR,
                 QUEUE_SCORE,
-                QUEUE_SELF_CONTAIN,
                 QUEUE_MAX_DEPTH,
                 QUEUE_AGE
             ],
             "AVERAGE" => vec![
                 AVG_LEN,
-                AVG_GAINNING,
-                AVG_DIST,
-                AVG_DEPTH,
                 AVG_SZ,
                 AVG_AGE,
                 AVG_NEW_COV
@@ -156,6 +150,10 @@ impl Stats {
 
     pub fn inc(&self, stat: u64) -> u64 {
         self.stats[stat as usize].fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub fn dec(&self, stat: u64) -> u64 {
+        self.stats[stat as usize].fetch_sub(1, Ordering::Relaxed)
     }
 
     pub fn inc_exec(&self, stat: u64) -> u64 {
@@ -205,8 +203,10 @@ pub fn bench(du: Duration, work_dir: PathBuf, stats: Arc<Stats>) {
         sleep(du);
 
         log::info!(
-            "exec: {}, cover cal/max: {}/{}, crashes uniq/all: {}/{}, queue pend/fav/len: {}/{}/{}",
+            "exec: {}, fuzz/repro: {}/{}, cover cal/max: {}/{}, crashes uniq/all: {}/{}, queue pend/fav/len: {}/{}/{}",
             stats.load(EXEC_EXEC_ALL),
+            stats.load(OVERALL_FUZZ_INSTANCE),
+            stats.load(OVERALL_REPRO_INSTANCE),
             stats.load(OVERALL_CAL_COV),
             stats.load(OVERALL_MAX_COV),
             stats.load(OVERALL_UNIQUE_CRASHES),

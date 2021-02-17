@@ -198,7 +198,7 @@ impl fmt::Display for Value {
                     let val = val
                         .iter()
                         .copied()
-                        .flat_map(|v| escape_default(v))
+                        .flat_map(escape_default)
                         .collect::<Vec<_>>();
                     let val = String::from_utf8(val).unwrap();
                     write!(f, "\'{}\'", val)
@@ -249,7 +249,7 @@ fn is_readable(data: &[u8]) -> bool {
 }
 
 fn is_printable(v: u8) -> bool {
-    v >= 0x20 && v < 0x7f
+    (0x20..0x7f).contains(&v)
 }
 
 #[derive(Debug)]

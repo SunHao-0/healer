@@ -59,6 +59,10 @@ pub fn load<T: AsRef<str>>(target: T) -> Option<&'static str> {
         .map(|(_, desc)| desc)
 }
 
-pub fn supported() -> Vec<&'static str> {
-    TARGETS.iter().copied().map(|(t, _)| t).collect()
+pub fn supported() -> Vec<String> {
+    TARGETS
+        .iter()
+        .copied()
+        .map(|(t, _)| t.to_string())
+        .collect()
 }

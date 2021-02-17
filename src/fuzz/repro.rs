@@ -61,8 +61,7 @@ impl Fuzzer {
 fn parse_repro_log(log: String, repro_log: String) -> ReproResult {
     const FAILED: &str = "reproduction failed:";
     let mut lines = repro_log.lines();
-    loop {
-        let l = if let Some(l) = lines.next() { l } else { break };
+    while let Some(l) = lines.next() {
         if let Some(mut i) = l.rfind(FAILED) {
             i += FAILED.len();
             return ReproResult::Failed(String::from(l[i..].trim()));

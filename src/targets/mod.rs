@@ -7,6 +7,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 /// Syscall desciptions in json format of Syzkaller.
 pub mod sys_json;
 /// Parse syscalls json to ast, maintain internal static data.
+#[allow(clippy::type_complexity)]
 mod syscalls;
 
 /// Information of current test target.
