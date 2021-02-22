@@ -71,7 +71,7 @@ static void scan_pci_device()
 
 	pci_dir = opendir(PCI_SYSFS_PATH);
 	if (!pci_dir) {
-		fail("failed to open %s", PCI_SYSFS_PATH);
+		failmsg("failed to open", "%s", PCI_SYSFS_PATH);
 	}
 	while ((entry = readdir(pci_dir))) {
 		long vendor, device, ragion_sz;
@@ -95,7 +95,7 @@ static void scan_pci_device()
 			} else if (ragion_sz == kMaxInput) {
 				in_fd_inner = fd;
 			} else {
-				fail("unexpect ivshm size: %ld", ragion_sz);
+				failmsg("unexpect ivshm size:", "%ld", ragion_sz);
 			}
 		}
 	}
@@ -109,10 +109,10 @@ static void ivshm_setup(int in_fd, int out_fd)
 		fail("failed to setup ivshm");
 	}
 	if (dup2(in_fd_inner, in_fd) < 0) {
-		fail("failed to dup: %d -> %d.", in_fd_inner, in_fd);
+		failmsg("failed to dup:", "%d -> %d.", in_fd_inner, in_fd);
 	}
 	if (dup2(out_fd_inner, out_fd) < 0) {
-		fail("failed to dup: %d -> %d.", in_fd_inner, in_fd);
+		failmsg("failed to dup:", "%d -> %d.", in_fd_inner, in_fd);
 	}
 }
 

@@ -62,10 +62,10 @@ static bool has_kcov()
 
 static bool has_fault()
 {
-	return access("/proc/self/make-it-fail", F_OK) &&
-	       access("/proc/thread-self/fail-nth", F_OK) &&
+	return access("/proc/self/make-it-fail", F_OK) == 0 &&
+	       access("/proc/thread-self/fail-nth", F_OK) == 0&&
 	       has_debugfs() &&
-	       access("/sys/kernel/debug/failslab/ignore-gfp-wait", F_OK);
+	       access("/sys/kernel/debug/failslab/ignore-gfp-wait", F_OK) == 0;
 }
 
 static bool has_leak()
