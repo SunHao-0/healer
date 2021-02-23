@@ -127,6 +127,7 @@ pub fn start(conf: Config) {
     let calibrated_cov = Arc::new(RwLock::new(FxHashSet::default()));
     let crashes = Arc::new(Mutex::new(FxHashMap::default()));
     let repros = Arc::new(Mutex::new(FxHashMap::default()));
+    let reproducing = Arc::new(Mutex::new(FxHashSet::default()));
     let raw_crashes = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
     let stats = Arc::new(Stats::new());
     let stop = Arc::new(AtomicBool::new(false));
@@ -138,13 +139,13 @@ pub fn start(conf: Config) {
             let crash_dir = conf.out_dir.join("crashes");
             if crash_dir.exists() {
                 log::warn!(
-                    "Existing crash data ({}) may be overwritten",
+                    "existing crash data ({}) may be overwritten",
                     crash_dir.display()
                 );
             }
         } else {
             log::error!(
-                "Failed to create output directory {}: {}",
+                "failed to create output directory {}: {}",
                 conf.out_dir.display(),
                 e
             );
@@ -190,7 +191,7 @@ pub fn start(conf: Config) {
     };
     let relations = Relation::load(&target, &relations_file).unwrap_or_else(|e| {
         log::error!(
-            "Failed to load relations '{}': {}",
+            "failed to load relations '{}': {}",
             relations_file.display(),
             e
         );
@@ -199,13 +200,14 @@ pub fn start(conf: Config) {
     let relations = Arc::new(relations);
     log::info!("Initial relations: {}", relations.len());
 
-    log::info!("Boot {} {} on qemu...", conf.jobs, conf.target);
+    log::info!("Booting {} {} on qemu...", conf.jobs, conf.target);
     let start = Instant::now();
     for id in 0..conf.jobs {
         let max_cov = Arc::clone(&max_cov);
         let calibrated_cov = Arc::clone(&calibrated_cov);
         let relations = Arc::clone(&relations);
         let crashes = Arc::clone(&crashes);
+        let reproducing = Arc::clone(&reproducing);
         let repros = Arc::clone(&repros);
         let raw_crashes = Arc::clone(&raw_crashes);
         let stats = Arc::clone(&stats);
@@ -250,6 +252,7 @@ pub fn start(conf: Config) {
                 relations,
                 crashes,
                 repros,
+                reproducing,
                 raw_crashes,
                 stats,
                 id,

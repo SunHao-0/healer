@@ -50,6 +50,7 @@ pub struct Fuzzer {
     pub(crate) relations: Arc<Relation>,
     pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
     pub(crate) repros: Arc<Mutex<FxHashMap<String, Repro>>>,
+    pub(crate) reproducing: Arc<Mutex<FxHashSet<String>>>,
     pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
     pub(crate) stats: Arc<Stats>,
 
@@ -808,6 +809,11 @@ impl Fuzzer {
         self.stats.dec(OVERALL_FUZZ_INSTANCE);
         self.stats.inc(OVERALL_REPRO_INSTANCE);
 
+        {
+            let mut reproducing = self.reproducing.lock().unwrap();
+            reproducing.insert(title.to_string());
+        }
+
         log::info!("Fuzzer-{}: try to repro '{}'", self.id, title);
         let repro_start = Instant::now();
         let res = self.repro(&crash_log);
@@ -832,13 +838,24 @@ impl Fuzzer {
                 }
             }
         }
+
         self.stats.inc(OVERALL_FUZZ_INSTANCE);
         self.stats.dec(OVERALL_REPRO_INSTANCE);
+        {
+            let mut reproducing = self.reproducing.lock().unwrap();
+            reproducing.remove(title);
+        }
         self.run_history.clear();
     }
 
     fn need_repro(&self, title: &str) -> bool {
         // TODO add more filter rule.
+        {
+            let reproducing = self.reproducing.lock().unwrap();
+            if reproducing.contains(title) {
+                return false;
+            }
+        }
         let repros = self.repros.lock().unwrap();
         !repros.contains_key(title)
     }
