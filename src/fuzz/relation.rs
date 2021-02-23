@@ -27,8 +27,6 @@ impl Default for Relation {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unknown system call '{name}', in line {line}")]
-    UnknownSyscall { name: String, line: usize },
     #[error("bad format, in line {0}")]
     BadFormat(usize),
     #[error("io: {0}")]
@@ -44,7 +42,7 @@ impl Relation {
         }
     }
 
-    pub fn with_workdir(dir: PathBuf) -> Result<Self, std::io::Error> {
+    pub fn with_outdir(dir: PathBuf) -> Result<Self, std::io::Error> {
         let f = OpenOptions::new()
             .create(true)
             .write(true)
@@ -73,23 +71,13 @@ impl Relation {
             if calls.len() != 2 {
                 return Err(Error::BadFormat(n));
             }
-            let s0 = t
-                .call_map
-                .get(calls[0].trim())
-                .ok_or_else(|| Error::UnknownSyscall {
-                    name: String::from(calls[0].trim()),
-                    line: n,
-                })?;
-            let s1 = t
-                .call_map
-                .get(calls[0].trim())
-                .ok_or_else(|| Error::UnknownSyscall {
-                    name: String::from(calls[0].trim()),
-                    line: n,
-                })?;
-            let entry = r.entry(*s0).or_default();
-            if entry.insert(*s1) {
-                cnt += 1;
+            if let Some(s0) = t.call_map.get(calls[0].trim()) {
+                if let Some(s1) = t.call_map.get(calls[1].trim()) {
+                    let entry = r.entry(*s0).or_default();
+                    if entry.insert(*s1) {
+                        cnt += 1;
+                    }
+                }
             }
         }
 
@@ -109,14 +97,13 @@ impl Relation {
         }
         if new {
             self.cnt.fetch_add(1, Ordering::Relaxed);
-        }
-        if let Some(f) = self.file.as_ref() {
-            if new {
+            if let Some(f) = self.file.as_ref() {
                 let record = format!("\n{},{}", s0.name, s1.name);
                 let mut f = f.lock().unwrap();
                 f.write_all(record.as_bytes())?;
             }
         }
+
         Ok(new)
     }
 

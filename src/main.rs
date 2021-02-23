@@ -48,6 +48,9 @@ struct Settings {
     /// Skip crash reproducing.
     #[structopt(long)]
     skip_repro: bool,
+    /// File path of disabled calls list.
+    #[structopt(long)]
+    disabled_calls: Option<PathBuf>,
 }
 
 pub fn main() {
@@ -61,6 +64,7 @@ pub fn main() {
         kernel_src_dir: settings.kernel_src_dir,
         out_dir: settings.out_dir,
         syz_bin_dir: settings.syz_bin_dir.clone(),
+        disabled_calls: settings.disabled_calls,
         jobs: settings.jobs,
         relations: settings.relations,
         skip_repro: settings.skip_repro,

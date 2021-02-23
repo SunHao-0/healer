@@ -6,6 +6,7 @@ use crate::{exec::qemu::QemuHandle, fuzz::features};
 use std::path::{Path, PathBuf};
 
 use iota::iota;
+use rustc_hash::FxHashSet;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use thiserror::Error;
 
@@ -457,7 +458,7 @@ pub fn spawn_in_qemu(
     const IN_MEM_SIZE: usize = 4 << 20;
     const OUT_MEM_SIZE: usize = 16 << 20;
 
-    let target = Target::new(&qemu_conf.target).unwrap();
+    let target = Target::new(&qemu_conf.target, &FxHashSet::default()).unwrap();
     let (mut in_shm, mut out_shm) = (None, None);
     let (mut in_mem, mut out_mem) = (None, None);
     if target.syz_exec_use_shm {

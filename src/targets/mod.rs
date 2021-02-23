@@ -3,6 +3,7 @@ use crate::{
     utils::to_boxed_str,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use thiserror::Error;
 
 /// Syscall desciptions in json format of Syzkaller.
 pub mod sys_json;
@@ -36,8 +37,10 @@ pub struct Target {
     /// Equals to `Some`, when the target image already contains syz-executor.  
     pub syz_exec_bin: Option<Box<str>>,
 
-    /// All syscalls of target os.
+    /// Enabled syscalls of target os.
     pub syscalls: Box<[SyscallRef]>,
+    /// All syscalls of target os.
+    pub all_syscalls: Box<[SyscallRef]>,
     /// Name to syscall ref map.
     pub call_map: FxHashMap<Box<str>, SyscallRef>,
     /// All types of `syscalls`.
@@ -49,14 +52,45 @@ pub struct Target {
     /// Supertypes of each resource type.
     pub supertype_map: FxHashMap<TypeRef, Box<[TypeRef]>>,
 }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("invalid target: {0}")]
+    InvalidTarget(String),
+    #[error("invalid syscalls: {0:?}")]
+    InvalidSyscalls(Vec<String>),
+}
 
 impl Target {
-    pub fn new<T: AsRef<str>>(target: T) -> Option<Self> {
+    pub fn new<T: AsRef<str>>(
+        target: T,
+        disabled_calls: &FxHashSet<String>,
+    ) -> Result<Self, Error> {
         let target = target.as_ref();
-        let desc_str = sys_json::load(target)?;
+        let desc_str =
+            sys_json::load(target).ok_or_else(|| Error::InvalidTarget(target.to_string()))?;
         let desc_json = json::parse(desc_str).unwrap();
+        let (all_syscalls, tys) = syscalls::parse(target, &desc_json);
 
-        let (syscalls, tys) = syscalls::parse(target, &desc_json);
+        let all_call_map = all_syscalls
+            .iter()
+            .map(|&s| (s.name.clone(), s))
+            .collect::<FxHashMap<_, _>>();
+        let invalid_calls = disabled_calls
+            .iter()
+            .filter(|s| !all_call_map.contains_key(&s[..]))
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        if !invalid_calls.is_empty() {
+            return Err(Error::InvalidSyscalls(invalid_calls));
+        }
+
+        let syscalls = all_syscalls
+            .iter()
+            .copied()
+            .filter(|call| !disabled_calls.contains(&*call.name))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
         let call_map = syscalls
             .iter()
             .map(|s| (s.name.clone(), *s))
@@ -120,6 +154,7 @@ impl Target {
             } else {
                 Some(to_boxed_str(syz_exec_bin))
             },
+            all_syscalls,
             syscalls,
             call_map,
             tys,
@@ -127,7 +162,7 @@ impl Target {
             subtype_map,
             supertype_map,
         };
-        Some(target)
+        Ok(target)
     }
 
     pub fn physical_addr(&self, addr: u64) -> u64 {

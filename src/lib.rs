@@ -21,7 +21,7 @@ use crate::targets::Target;
 
 use std::{
     collections::VecDeque,
-    fs::create_dir,
+    fs::{create_dir, read_to_string},
     io::ErrorKind,
     path::PathBuf,
     process::exit,
@@ -45,6 +45,7 @@ pub struct Config {
     pub relations: Option<PathBuf>,
     pub jobs: u64,
     pub skip_repro: bool,
+    pub disabled_calls: Option<PathBuf>,
 
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
@@ -74,6 +75,11 @@ impl Config {
                     "bad kernel srouce files directory '{}'.",
                     dir.display()
                 ));
+            }
+        }
+        if let Some(f) = self.disabled_calls.as_ref() {
+            if !f.is_file() {
+                return Err(format!("bad disabled system calls file: {}", f.display()));
             }
         }
         if !self.syz_bin_dir.is_dir() {
@@ -147,17 +153,34 @@ pub fn start(conf: Config) {
     }
 
     println!("{}", HEALER);
+
     log::info!("Loading target {}...", conf.target);
-    let target = Target::new(&conf.target).unwrap_or_else(|| {
+    let mut disabled_calls = FxHashSet::default();
+    if let Some(f) = conf.disabled_calls.as_ref() {
+        let calls = read_to_string(f).unwrap_or_else(|e| {
+            log::error!(
+                "failed to read disabled system calls file '{}': {}",
+                f.display(),
+                e
+            );
+            exit(1)
+        });
+        disabled_calls = calls
+            .lines()
+            .filter(|&l| !l.is_empty())
+            .map(|c| c.trim().to_string())
+            .collect();
+    }
+    let target = Target::new(&conf.target, &disabled_calls).unwrap_or_else(|e| {
         // preloading.
-        log::error!("Target {} dose not exist", conf.target);
-        exit(1);
+        log::error!("failed to load target '{}': {}", conf.target, e);
+        exit(1)
     });
     log::info!("Revision: {}", &target.revision[0..12]);
     log::info!(
-        "Res/Syscalls: {}/{}",
-        target.res_tys.len(),
-        target.syscalls.len()
+        "Syscalls: {}/{}",
+        target.syscalls.len(),
+        target.all_syscalls.len()
     );
 
     let relations_file = if let Some(f) = conf.relations.as_ref() {
@@ -189,10 +212,11 @@ pub fn start(conf: Config) {
         let barrier = Arc::clone(&barrier);
         let stop = Arc::clone(&stop);
         let conf = conf.clone();
+        let disabled_calls = disabled_calls.clone();
 
         let handle = thread::spawn(move || {
             let conf = conf.clone();
-            let target = Target::new(&conf.target).unwrap();
+            let target = Target::new(&conf.target, &disabled_calls).unwrap();
             let mut queue = match Queue::with_outdir(id as usize, conf.out_dir.clone()) {
                 Ok(q) => q,
                 Err(e) => {
