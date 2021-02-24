@@ -51,6 +51,9 @@ struct Settings {
     /// File path of disabled calls list.
     #[structopt(long)]
     disabled_calls: Option<PathBuf>,
+    /// White list of crash title.
+    #[structopt(long)]
+    white_list: Option<PathBuf>,
 }
 
 pub fn main() {
@@ -65,6 +68,7 @@ pub fn main() {
         out_dir: settings.out_dir,
         syz_bin_dir: settings.syz_bin_dir.clone(),
         disabled_calls: settings.disabled_calls,
+        white_list: settings.white_list,
         jobs: settings.jobs,
         relations: settings.relations,
         skip_repro: settings.skip_repro,

@@ -46,6 +46,7 @@ pub struct Config {
     pub jobs: u64,
     pub skip_repro: bool,
     pub disabled_calls: Option<PathBuf>,
+    pub white_list: Option<PathBuf>,
 
     pub qemu_conf: QemuConf,
     pub exec_conf: ExecConf,
@@ -80,6 +81,11 @@ impl Config {
         if let Some(f) = self.disabled_calls.as_ref() {
             if !f.is_file() {
                 return Err(format!("bad disabled system calls file: {}", f.display()));
+            }
+        }
+        if let Some(f) = self.white_list.as_ref() {
+            if !f.is_file() {
+                return Err(format!("bad white list file: {}", f.display()));
             }
         }
         if !self.syz_bin_dir.is_dir() {
@@ -133,6 +139,19 @@ pub fn start(conf: Config) {
     let stop = Arc::new(AtomicBool::new(false));
     let barrier = Arc::new(Barrier::new(conf.jobs as usize + 1));
     let mut fuzzers = Vec::new();
+    let mut white_list = FxHashSet::default();
+    if let Some(f) = conf.white_list.as_ref() {
+        let l = read_to_string(f).unwrap_or_else(|e| {
+            log::error!("failed to load white list '{}': {}", f.display(), e);
+            exit(1)
+        });
+        white_list = l
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.trim().to_string())
+            .collect();
+    }
+    let white_list = Arc::new(white_list);
 
     if let Err(e) = create_dir(&conf.out_dir) {
         if e.kind() == ErrorKind::AlreadyExists {
@@ -207,6 +226,7 @@ pub fn start(conf: Config) {
         let calibrated_cov = Arc::clone(&calibrated_cov);
         let relations = Arc::clone(&relations);
         let crashes = Arc::clone(&crashes);
+        let white_list = Arc::clone(&white_list);
         let reproducing = Arc::clone(&reproducing);
         let repros = Arc::clone(&repros);
         let raw_crashes = Arc::clone(&raw_crashes);
@@ -251,6 +271,7 @@ pub fn start(conf: Config) {
                 calibrated_cov,
                 relations,
                 crashes,
+                white_list,
                 repros,
                 reproducing,
                 raw_crashes,

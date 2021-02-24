@@ -49,6 +49,7 @@ pub struct Fuzzer {
     pub(crate) calibrated_cov: Arc<RwLock<FxHashSet<u32>>>,
     pub(crate) relations: Arc<Relation>,
     pub(crate) crashes: Arc<Mutex<FxHashMap<String, VecDeque<Report>>>>,
+    pub(crate) white_list: Arc<FxHashSet<String>>,
     pub(crate) repros: Arc<Mutex<FxHashMap<String, Repro>>>,
     pub(crate) reproducing: Arc<Mutex<FxHashSet<String>>>,
     pub(crate) raw_crashes: Arc<Mutex<VecDeque<Report>>>,
@@ -850,6 +851,10 @@ impl Fuzzer {
 
     fn need_repro(&self, title: &str) -> bool {
         // TODO add more filter rule.
+        if self.white_list.contains(title) {
+            return false;
+        }
+
         {
             let reproducing = self.reproducing.lock().unwrap();
             if reproducing.contains(title) {
