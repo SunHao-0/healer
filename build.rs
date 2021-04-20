@@ -48,7 +48,7 @@ fn check_env() {
 }
 
 fn download() -> PathBuf {
-    const SYZ_REVISION: &str = "a659b3f1dc889d5ab5ead017b877765b3d042379";
+    const SYZ_REVISION: &str = "4285c9893412948885280ea885ee73bec358e709";
     let repo_url = format!(
         "https://github.com/google/syzkaller/archive/{}.zip",
         SYZ_REVISION
@@ -116,7 +116,7 @@ fn download() -> PathBuf {
 }
 
 fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
-    const CKSUM: &str = "91c2454deaef860da67aa5a23362ae35957f8aef66cf7499c69a11839e6c86815a0e92c7955208dbcd16bc4f81aeadcf";
+    const CKSUM: &str = "074908c53b09813fe7f8e8ccc39986b3f8678a7fecde69e2f509c2055e37b4d9fb9461aed7adc691eb3a1bc37373f34c";
     let output = Command::new("sha384sum")
         .arg(syz_zip.as_ref())
         .output()
