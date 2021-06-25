@@ -1,6 +1,10 @@
 use iota::iota;
 
-use crate::exec::ExecHandle;
+use crate::{
+    exec::syz::SyzExecHandle,
+    vm::{qemu::QemuHandle, ManageVm},
+};
+
 iota! {
     pub const FEATURE_COVERAGE: u64 = 1 << (iota);
     ,FEATURE_COMPARISONS
@@ -19,8 +23,8 @@ iota! {
     ,FEATURE_WIFI_EMULATION
 }
 
-pub fn check(handle: &mut ExecHandle, verbose: bool) -> u64 {
-    const FEATURES: [&str; 15] = [
+pub fn check(handle: &mut SyzExecHandle<<QemuHandle as ManageVm>::Error>, verbose: bool) -> u64 {
+    const FEATURES: [&str; 16] = [
         "code coverage",
         "comparison tracing",
         "extra coverage",
@@ -36,9 +40,10 @@ pub fn check(handle: &mut ExecHandle, verbose: bool) -> u64 {
         "USB emulation",
         "hci packet injection",
         "wifi device emulation",
+        "802.15.4 emulation",
     ];
     let features = handle
-        .check_features()
+        .features
         .unwrap_or(FEATURE_COVERAGE | FEATURE_SANDBOX_SETUID | FEATURE_NET_DEVICES);
     if verbose {
         for (i, feature) in FEATURES.iter().enumerate() {

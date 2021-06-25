@@ -1,34 +1,32 @@
-use crate::fuzz::fuzzer::ValuePool;
-use crate::gen::context::GenContext;
 use crate::model::*;
 use crate::targets::Target;
-
+use rand::prelude::*;
 use std::sync::Arc;
 
-use rand::prelude::*;
+use self::context::ProgContext;
 
 // Syscall selection.
-pub(crate) mod select;
+pub mod select;
 // Argument value generation.
-pub(crate) mod param;
+pub mod param;
 // Call generation.
-pub(crate) mod call;
+pub mod call;
 // Length type calculation. It's here because length calculation is inter-params.
-pub(crate) mod len;
+pub mod len;
 
-pub(crate) mod context;
+pub mod context;
 
 pub(crate) const MAX_LEN: usize = 32;
 pub(crate) const MIN_LEN: usize = 4;
 
 /// Gnerate test case based current value pool and test target.
-pub fn gen(target: &Target, pool: &ValuePool) -> Prog {
-    let mut ctx = GenContext::new(target, pool);
+pub fn gen(target: &Target) -> Prog {
+    let mut ctx = ProgContext::new(target);
     gen_inner(&mut ctx)
 }
 
-pub fn gen_seq(target: &Target, pool: &ValuePool, seq: &[SyscallRef]) -> Prog {
-    let mut ctx = GenContext::new(target, pool);
+pub fn gen_seq(target: &Target, seq: &[SyscallRef]) -> Prog {
+    let mut ctx = ProgContext::new(target);
     let mut calls = Vec::new();
     for call in seq {
         calls.push(call::gen(&mut ctx, call));
@@ -36,7 +34,7 @@ pub fn gen_seq(target: &Target, pool: &ValuePool, seq: &[SyscallRef]) -> Prog {
     Prog::new(calls)
 }
 
-fn gen_inner(ctx: &mut GenContext) -> Prog {
+fn gen_inner(ctx: &mut ProgContext) -> Prog {
     let mut calls: Vec<Call> = Vec::new();
     while !should_stop(calls.len()) {
         append(ctx, &mut calls);
@@ -44,7 +42,7 @@ fn gen_inner(ctx: &mut GenContext) -> Prog {
     Prog::new(calls)
 }
 
-pub(crate) fn append(ctx: &mut GenContext, calls: &mut Vec<Call>) {
+pub(crate) fn append(ctx: &mut ProgContext, calls: &mut Vec<Call>) {
     let next_syscall = select::select_syscall(ctx);
     calls.push(call::gen(ctx, next_syscall));
 }

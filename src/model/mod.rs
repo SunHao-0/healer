@@ -1,16 +1,13 @@
 //! Abstract representation or AST of system call model.
-use crate::utils::to_boxed_str;
-
-use std::fmt;
-use std::hash::{Hash, Hasher};
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt;
+use std::hash::{Hash, Hasher};
 
 pub mod types;
 pub mod value;
 pub use types::*;
 pub use value::*;
-
 /// System call id.
 pub type SId = usize;
 
@@ -24,13 +21,13 @@ pub struct Syscall {
     /// Call number, set to 0 for system that doesn't use nr.
     pub nr: u64,
     /// Name of specialized call.
-    pub name: Box<str>,
+    pub name: String,
     /// Name of system call.
-    pub call_name: Box<str>,
+    pub call_name: String,
     /// Syzkaller: Number of trailing args that should be zero-filled.
     pub missing_args: u64,
     /// Parameters of calls.
-    pub params: Box<[Param]>,
+    pub params: Vec<Param>,
     /// Return type of system call: a ref to res type or None.
     pub ret: Option<TypeRef>,
     /// Attributes of system call.
@@ -79,19 +76,15 @@ impl Hash for Syscall {
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Param {
     /// Name of Field.
-    pub name: Box<str>,
+    pub name: String,
     /// Typeid of Field.
     pub ty: TypeRef,
     pub dir: Option<Dir>,
 }
 
 impl Param {
-    pub fn new(name: &str, ty: TypeRef, dir: Option<Dir>) -> Self {
-        Self {
-            name: to_boxed_str(name),
-            ty,
-            dir,
-        }
+    pub fn new(name: String, ty: TypeRef, dir: Option<Dir>) -> Self {
+        Self { name, ty, dir }
     }
 }
 
@@ -102,35 +95,6 @@ impl fmt::Display for Param {
             write!(f, " {}", dir)?;
         }
         write!(f, " {}", self.ty)
-    }
-}
-
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
-pub enum Dir {
-    In = 0,
-    Out,
-    InOut,
-}
-
-impl From<u64> for Dir {
-    fn from(val: u64) -> Self {
-        match val {
-            0 => Dir::In,
-            1 => Dir::Out,
-            2 => Dir::InOut,
-            _ => panic!("bad dir value: {}", val),
-        }
-    }
-}
-
-impl fmt::Display for Dir {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let p = match self {
-            Self::In => "In",
-            Self::Out => "Out",
-            Self::InOut => "InOut",
-        };
-        write!(f, "{}", p)
     }
 }
 
@@ -185,7 +149,6 @@ impl fmt::Display for SyscallAttr {
 }
 
 pub struct Prog {
-    pub depth: usize,
     pub calls: Vec<Call>,
 }
 
@@ -202,10 +165,7 @@ impl Clone for Prog {
         for c in self.calls.iter() {
             calls.push(clone_call(&mut ctx, c))
         }
-        Prog {
-            depth: self.depth,
-            calls,
-        }
+        Prog { calls }
     }
 }
 
@@ -222,8 +182,8 @@ fn clone_call(ctx: &mut CloneCtx, c: &Call) -> Call {
         meta: c.meta,
         args,
         ret,
-        val_cnt: c.val_cnt,
-        res_cnt: c.res_cnt,
+        // val_cnt: c.val_cnt,
+        // res_cnt: c.res_cnt,
     }
 }
 
@@ -233,13 +193,19 @@ fn clone_value(ctx: &mut CloneCtx, v: &Value) -> Value {
         ValueKind::Ptr { addr, pointee } => {
             if let Some(p) = pointee.as_ref() {
                 let pointee = clone_value(ctx, p);
-                Value::new(v.dir, v.ty, ValueKind::new_ptr(*addr, Some(pointee)))
+                Value::new(v.dir, v.ty, ValueKind::new_ptr(*addr, pointee))
             } else {
                 Value::new(v.dir, v.ty, ValueKind::new_ptr_null())
             }
         }
         ValueKind::Vma { addr, size } => Value::new(v.dir, v.ty, ValueKind::new_vma(*addr, *size)),
-        ValueKind::Bytes(val) => Value::new(v.dir, v.ty, ValueKind::new_bytes(val.clone())),
+        ValueKind::Bytes { val, sz } => {
+            if val.is_empty() {
+                Value::new(v.dir, v.ty, ValueKind::new_out_bytes(*sz))
+            } else {
+                Value::new(v.dir, v.ty, ValueKind::new_in_bytes(val.clone()))
+            }
+        }
         ValueKind::Group(vals) => {
             let mut vals_new = Vec::with_capacity(vals.len());
             for v in vals.iter() {
@@ -259,7 +225,9 @@ fn clone_value(ctx: &mut CloneCtx, v: &Value) -> Value {
                 Value::new(v.dir, v.ty, ValueKind::new_res(val_new))
             } else if let Some(src) = val.kind.src() {
                 let src_new = ctx.res_addr[&(src as *const _)];
-                Value::new(v.dir, v.ty, ValueKind::new_res_ref(src_new))
+                Value::new(v.dir, v.ty, unsafe {
+                    ValueKind::new_res_ref(src_new.as_mut().unwrap())
+                })
             } else {
                 Value::new(v.dir, v.ty, ValueKind::new_res_null(val.val))
             }
@@ -278,7 +246,7 @@ impl fmt::Display for Prog {
 
 impl Prog {
     pub fn new(calls: Vec<Call>) -> Self {
-        Prog { depth: 0, calls }
+        Prog { calls }
     }
 
     pub fn remove(&self, i: usize) -> Prog {
@@ -296,15 +264,12 @@ impl Prog {
             let call = clone_call(&mut ctx, &self.calls[i]);
             calls.push(call);
         }
-        Prog {
-            depth: self.depth,
-            calls,
-        }
+        Prog { calls }
     }
 }
 
 #[derive(Clone)]
-pub struct ProgWrapper(pub(crate) Prog);
+pub struct ProgWrapper(pub Prog);
 
 impl ProgWrapper {
     pub fn to_prog(&self) -> Prog {
@@ -318,9 +283,6 @@ pub struct Call {
     pub meta: SyscallRef,
     pub args: Vec<Value>,
     pub ret: Option<Value>,
-
-    pub val_cnt: usize,
-    pub res_cnt: usize,
 }
 
 impl fmt::Display for Call {

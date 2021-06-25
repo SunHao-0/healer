@@ -1,10 +1,6 @@
-//! Abstract representation of value structure of different types.
-use crate::model::types::TypeRef;
-use crate::model::Dir;
-
-use std::{ascii::escape_default, fmt};
-
+use crate::model::types::{Dir, TypeKind, TypeRef};
 use rustc_hash::FxHashSet;
+use std::{ascii::escape_default, fmt};
 
 #[derive(Debug)]
 pub struct Value {
@@ -19,6 +15,66 @@ pub struct Value {
 impl Value {
     pub fn new(dir: Dir, ty: TypeRef, kind: ValueKind) -> Self {
         Self { dir, ty, kind }
+    }
+
+    pub fn default_value_of(ty: TypeRef, dir: Dir) -> Self {
+        match &ty.kind {
+            TypeKind::Res { desc, .. } => {
+                Value::new(dir, ty, ValueKind::new_res_null(desc.vals[0]))
+            }
+            TypeKind::Ptr { elem, .. } => {
+                if ty.is_optional() {
+                    Value::new(dir, ty, ValueKind::new_ptr_null())
+                } else {
+                    Value::new(
+                        dir,
+                        ty,
+                        ValueKind::new_ptr(0, Self::default_value_of(*elem, dir)),
+                    )
+                }
+            }
+            TypeKind::Array { elem, range } => {
+                if let Some((_, sz)) = range {
+                    let mut v = Vec::new();
+                    v.resize_with(*sz as usize, || Self::default_value_of(*elem, dir));
+                    Value::new(dir, ty, ValueKind::new_group(v))
+                } else {
+                    Value::new(dir, ty, ValueKind::new_group(Vec::new()))
+                }
+            }
+            TypeKind::Union { fields } => Value::new(
+                dir,
+                ty,
+                ValueKind::new_union(
+                    0,
+                    Self::default_value_of(fields[0].ty, fields[0].dir.unwrap_or(dir)),
+                ),
+            ),
+            TypeKind::Struct { fields, .. } => {
+                let mut v = Vec::with_capacity(fields.len());
+                for f in fields {
+                    v.push(Self::default_value_of(f.ty, f.dir.unwrap_or(dir)));
+                }
+                Value::new(dir, ty, ValueKind::new_group(v))
+            }
+            TypeKind::Buffer { .. } => {
+                if dir == Dir::Out {
+                    let sz = if !ty.is_varlen() { ty.size() } else { 0 };
+                    Value::new(dir, ty, ValueKind::new_out_bytes(sz))
+                } else {
+                    if !ty.is_varlen() {
+                        let mut v = Vec::new();
+                        v.resize(ty.size() as usize, 0);
+                        Value::new(dir, ty, ValueKind::new_in_bytes(v))
+                    } else {
+                        Value::new(dir, ty, ValueKind::new_out_bytes(0))
+                    }
+                }
+            }
+            TypeKind::Vma { .. } => Value::new(dir, ty, ValueKind::new_vma(0, 0)),
+            TypeKind::Proc { .. } => Value::new(dir, ty, ValueKind::Scalar(0xffffffffffffffff)),
+            _ => Value::new(dir, ty, ValueKind::Scalar(0)),
+        }
     }
 
     pub fn inner_val(&self) -> Option<&Value> {
@@ -48,20 +104,18 @@ impl Value {
         }
     }
 
-    pub fn scalar_val(&self) -> (u64, u64) {
-        use super::types::TypeKind;
-
+    pub fn scalar_val(&self) -> Option<(u64, u64)> {
         match &self.ty.kind {
             TypeKind::Int { .. }
             | TypeKind::Flags { .. }
             | TypeKind::Csum { .. }
             | TypeKind::Res { .. }
             | TypeKind::Const { .. }
-            | TypeKind::Len { .. } => (self.kind.scalar_val().unwrap(), 0),
+            | TypeKind::Len { .. } => Some((self.kind.scalar_val().unwrap(), 0)),
             TypeKind::Proc {
                 start, per_proc, ..
-            } => (*start + self.kind.scalar_val().unwrap(), *per_proc),
-            _ => unreachable!(),
+            } => Some((*start + self.kind.scalar_val().unwrap(), *per_proc)),
+            _ => None,
         }
     }
 
@@ -83,8 +137,8 @@ impl Value {
     }
 
     pub fn bytes_val(&self) -> Option<&[u8]> {
-        if let ValueKind::Bytes(v) = &self.kind {
-            Some(v)
+        if let ValueKind::Bytes { val, .. } = &self.kind {
+            Some(&val[..])
         } else {
             None
         }
@@ -128,13 +182,18 @@ impl Value {
     }
 
     pub fn size(&self) -> u64 {
-        use super::types::TypeKind;
         match &self.kind {
             ValueKind::Scalar { .. }
             | ValueKind::Ptr { .. }
             | ValueKind::Vma { .. }
             | ValueKind::Res(_) => self.ty.sz,
-            ValueKind::Bytes(bytes) => bytes.len() as u64,
+            ValueKind::Bytes { val, sz } => {
+                if val.is_empty() {
+                    *sz
+                } else {
+                    val.len() as u64
+                }
+            }
             ValueKind::Group(vals) => {
                 if !self.ty.varlen {
                     self.ty.sz
@@ -174,7 +233,6 @@ impl Value {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use super::types::TypeKind;
         const ENCODING_ADDR_BASE: u64 = 0x7f0000000000;
 
         match &self.kind {
@@ -189,7 +247,7 @@ impl fmt::Display for Value {
             ValueKind::Vma { addr, size } => {
                 write!(f, "&({:#x}/{:#x})=nil", *addr + ENCODING_ADDR_BASE, *size)
             }
-            ValueKind::Bytes(val) => {
+            ValueKind::Bytes { val, .. } => {
                 if self.dir == Dir::Out {
                     write!(f, "\"\"/{}", val.len())
                 } else if !self.ty.is_str_like() && !is_readable(val) {
@@ -264,7 +322,7 @@ pub enum ValueKind {
     /// For vma type, store its relative address and page number.
     Vma { addr: u64, size: u64 },
     /// For buffer type, store its actual bytes value.
-    Bytes(Box<[u8]>),
+    Bytes { val: Vec<u8>, sz: u64 },
     /// For struct and array type, store a slice of value.
     Group(Vec<Value>),
     /// For union, store its value and index of selected field.
@@ -279,23 +337,33 @@ impl ValueKind {
         ValueKind::Scalar(val)
     }
 
-    pub fn new_ptr(addr: u64, pointee: Option<Value>) -> Self {
+    pub fn new_ptr(addr: u64, pointee: Value) -> Self {
         ValueKind::Ptr {
             addr,
-            pointee: pointee.map(Box::new),
+            pointee: Some(Box::new(pointee)),
         }
     }
 
     pub fn new_ptr_null() -> Self {
-        ValueKind::new_ptr(0, None)
+        ValueKind::Ptr {
+            addr: 0,
+            pointee: None,
+        }
     }
 
     pub fn new_vma(addr: u64, size: u64) -> Self {
         ValueKind::Vma { addr, size }
     }
 
-    pub fn new_bytes<T: Into<Box<[u8]>>>(vals: T) -> Self {
-        ValueKind::Bytes(vals.into())
+    pub fn new_in_bytes(val: Vec<u8>) -> Self {
+        ValueKind::Bytes { val, sz: 0 }
+    }
+
+    pub fn new_out_bytes(sz: u64) -> Self {
+        ValueKind::Bytes {
+            val: Vec::new(),
+            sz,
+        }
     }
 
     pub fn new_group(vals: Vec<Value>) -> Self {
@@ -309,9 +377,9 @@ impl ValueKind {
         }
     }
 
-    pub(crate) fn new_res_ref(src: *mut ResValue) -> Self {
-        let mut res_val = Box::new(ResValue::new_res_ref(src));
-        unsafe { (*src).kind.add_ref(&mut *res_val as *mut ResValue) }
+    pub unsafe fn new_res_ref(src: &mut ResValue) -> Self {
+        let mut res_val = Box::new(ResValue::new_res_ref(src as *mut _));
+        src.kind.add_ref(&mut *res_val as *mut ResValue);
         ValueKind::Res(res_val)
     }
 
@@ -346,10 +414,10 @@ pub struct ResValue {
 impl ResValue {
     pub fn new_res(val: u64, id: usize) -> Self {
         Self {
+            val,
             op_add: 0,
             op_div: 0,
             kind: ResValueKind::new_res_kind(id),
-            val,
         }
     }
 
@@ -445,16 +513,12 @@ impl ResValueKind {
     pub fn remove_ref(&mut self, r: *mut ResValue) {
         if let ResValueKind::Own { refs, .. } = self {
             refs.remove(&r);
-        } else {
-            unreachable!()
         }
     }
 
     pub fn add_ref(&mut self, r: *mut ResValue) {
         if let ResValueKind::Own { refs, .. } = self {
             refs.insert(r);
-        } else {
-            unreachable!()
         }
     }
 

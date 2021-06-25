@@ -15,6 +15,8 @@ use std::{
 use iota::iota;
 use rustc_hash::FxHashMap;
 
+use crate::utils::stop_soon;
+
 iota! {
             // Overall
     pub const OVERALL_RUN_TIME: u64 = iota;
@@ -54,7 +56,7 @@ iota! {
 
 lazy_static! {
     pub static ref STATS: FxHashMap<u64, &'static str> = {
-        fxhashmap! {
+        hashmap! {
             OVERALL_RUN_TIME            => "run time",
             OVERALL_FUZZ_INSTANCE       => "fuzz instances",
             OVERALL_REPRO_INSTANCE      => "repro instanes",
@@ -86,7 +88,7 @@ lazy_static! {
         }
     };
     pub static ref GROUPS: FxHashMap<&'static str, Vec<u64>> = {
-        fxhashmap! {
+        hashmap! {
             "OVERALL" => vec![
                 OVERALL_RUN_TIME,
                 OVERALL_FUZZ_INSTANCE,
@@ -200,6 +202,9 @@ pub fn bench(du: Duration, work_dir: PathBuf, stats: Arc<Stats>) {
     groups.sort_unstable();
 
     loop {
+        if stop_soon() {
+            break;
+        }
         sleep(du);
 
         log::info!(

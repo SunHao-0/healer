@@ -32,13 +32,13 @@ iota! {
 const EXEC_NO_COPYOUT: u64 = u64::MAX;
 
 #[derive(Debug, Error)]
-pub(crate) enum SerializeError {
+pub enum SerializeError {
     #[error("buffer two small to serialize the prog, provided size: {provided} bytes")]
     BufferTooSmall { provided: usize },
 }
 
 /// Serialize a prog into packed binary format.
-pub(crate) fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, SerializeError> {
+pub fn serialize(t: &Target, p: &Prog, buf: &mut [u8]) -> Result<usize, SerializeError> {
     let mut ctx = ExecCtx {
         target: t,
         buf,
@@ -169,7 +169,7 @@ impl ExecCtx<'_, '_> {
     fn write_arg(&mut self, val: &Value) {
         match &val.kind {
             ValueKind::Scalar(_) => {
-                let (scalar_val, pid_stride) = val.scalar_val();
+                let (scalar_val, pid_stride) = val.scalar_val().unwrap();
                 self.write_const_arg(
                     val.unit_sz(),
                     scalar_val,
@@ -181,7 +181,7 @@ impl ExecCtx<'_, '_> {
             }
             ValueKind::Res(res_val) => match &res_val.kind {
                 ResValueKind::Own { .. } | ResValueKind::Null => {
-                    let (scalar_val, _) = val.scalar_val();
+                    let (scalar_val, _) = val.scalar_val().unwrap();
                     self.write_const_arg(val.size(), scalar_val, 0, 0, 0, val.ty.bin_fmt());
                 }
                 ResValueKind::Ref { src } => {
@@ -204,7 +204,7 @@ impl ExecCtx<'_, '_> {
                     BinFmt::Native,
                 );
             }
-            ValueKind::Bytes(bs) => {
+            ValueKind::Bytes { val: bs, .. } => {
                 if bs.is_empty() {
                     return;
                 }

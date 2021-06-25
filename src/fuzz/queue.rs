@@ -6,7 +6,6 @@ use crate::{
 use std::{
     fmt::Write,
     fs::{create_dir_all, write},
-    mem,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -70,7 +69,7 @@ impl Queue {
     }
 
     pub fn new(id: usize, queue_dir: Option<PathBuf>) -> Self {
-        let avgs = fxhashmap! {
+        let avgs = hashmap! {
             AVG_SZ => 0,
             AVG_AGE => 0,
             AVG_EXEC_TM => 0,
@@ -203,10 +202,10 @@ impl Queue {
         self.score_sum += inp.score;
         self.scores.push(self.score_sum);
 
-        while inp.depth >= self.input_depth.len() {
-            self.input_depth.push(Vec::new());
-        }
-        self.input_depth[inp.depth].push(idx);
+        // while inp.depth >= self.input_depth.len() {
+        //     self.input_depth.push(Vec::new());
+        // }
+        // self.input_depth[inp.depth].push(idx);
 
         self.inputs.push(inp);
     }
@@ -237,7 +236,7 @@ impl Queue {
             self.culling_duration.as_secs() / 60
         );
 
-        let mut inputs_old = mem::replace(&mut self.inputs, Vec::new());
+        let mut inputs_old = std::mem::take(&mut self.inputs);
         inputs_old.sort_unstable_by(|i0, i1| {
             if i1.len != i0.len {
                 i1.len.cmp(&i0.len)
@@ -282,7 +281,7 @@ impl Queue {
 
         inputs.shuffle(&mut thread_rng());
 
-        let mut avgs = fxhashmap! {
+        let mut avgs = hashmap! {
             AVG_SZ => 0,
             AVG_AGE => 0,
             AVG_EXEC_TM => 0,
@@ -293,10 +292,10 @@ impl Queue {
         };
         for i in inputs.iter_mut() {
             *avgs.get_mut(&AVG_AGE).unwrap() += i.age;
-            *avgs.get_mut(&AVG_SZ).unwrap() += i.sz;
+            // *avgs.get_mut(&AVG_SZ).unwrap() += i.sz;
             *avgs.get_mut(&AVG_LEN).unwrap() += i.len;
             *avgs.get_mut(&AVG_EXEC_TM).unwrap() += i.exec_tm;
-            *avgs.get_mut(&AVG_RES_CNT).unwrap() += i.res_cnt;
+            // *avgs.get_mut(&AVG_RES_CNT).unwrap() += i.res_cnt;
             *avgs.get_mut(&AVG_NEW_COV).unwrap() += i.new_cov.len();
             *avgs.get_mut(&AVG_SCORE).unwrap() += i.score;
         }

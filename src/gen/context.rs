@@ -1,31 +1,31 @@
-use crate::fuzz::fuzzer::ValuePool;
-use crate::gen::{
-    call,
-    param::{
-        self,
-        alloc::{MemAlloc, VmaAlloc},
+use crate::{
+    gen::{
+        call,
+        param::{
+            self,
+            alloc::{MemAlloc, VmaAlloc},
+        },
     },
+    model::*,
+    targets::Target,
 };
-use crate::model::*;
-use crate::targets::Target;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 /// Generated resource during one generation.
 type ResPool = FxHashMap<TypeRef, Vec<*mut ResValue>>;
 
 /// Generation context.
 /// A context contains test target, generated resource and buffer value, global value pool.
-pub(crate) struct GenContext<'a, 'b> {
-    pub(crate) target: &'a Target,
-    pub(crate) res: ResPool,
-    pub(crate) res_cnt: usize,
-    pub(crate) strs: FxHashMap<TypeRef, FxHashSet<Box<[u8]>>>,
-    pub(crate) pool: &'b ValuePool,
+pub struct ProgContext<'a> {
+    pub target: &'a Target,
+    pub res: ResPool,
+    pub res_cnt: usize,
+    pub strs: FxHashMap<TypeRef, Vec<Vec<u8>>>,
     // id for resource value count.
-    pub(crate) id_count: usize,
-    pub(crate) mem_alloc: MemAlloc,
-    pub(crate) vma_alloc: VmaAlloc,
+    pub id_count: usize,
+    pub mem_alloc: MemAlloc,
+    pub vma_alloc: VmaAlloc,
     // handle recusive type or circle reference.
     pub(crate) rec_depth: FxHashMap<TypeRef, usize>,
 
@@ -33,14 +33,13 @@ pub(crate) struct GenContext<'a, 'b> {
     pub(crate) param_ctx: param::GenParamContext,
 }
 
-impl<'a, 'b> GenContext<'a, 'b> {
-    pub fn new(target: &'a Target, pool: &'b ValuePool) -> Self {
-        GenContext {
+impl<'a> ProgContext<'a> {
+    pub fn new(target: &'a Target) -> Self {
+        ProgContext {
             target,
             res: FxHashMap::default(),
             res_cnt: 0,
             strs: FxHashMap::default(),
-            pool,
             id_count: 0,
             mem_alloc: MemAlloc::with_mem_size(target.page_sz * target.page_num),
             vma_alloc: VmaAlloc::with_page_num(target.page_num),
@@ -50,8 +49,8 @@ impl<'a, 'b> GenContext<'a, 'b> {
         }
     }
 
-    pub fn restore(target: &'a Target, pool: &'b ValuePool, calls: &mut [Call]) -> Self {
-        let mut ctx = Self::new(target, pool);
+    pub fn restore(target: &'a Target, calls: &mut [Call]) -> Self {
+        let mut ctx = Self::new(target);
         for call in calls.iter_mut() {
             if let Some(ret) = call.ret.as_mut() {
                 ctx.update(ret);
@@ -76,7 +75,7 @@ impl<'a, 'b> GenContext<'a, 'b> {
                 self.vma_alloc
                     .do_alloc(*addr / self.target.page_sz, *size / self.target.page_sz);
             }
-            ValueKind::Bytes(inner_val) => match val.ty.buffer_kind().unwrap() {
+            ValueKind::Bytes { val: inner_val, .. } => match val.ty.buffer_kind().unwrap() {
                 BufferKind::Filename { .. } | BufferKind::String { .. } => {
                     self.add_str(val.ty, inner_val.clone());
                 }
@@ -113,9 +112,9 @@ impl<'a, 'b> GenContext<'a, 'b> {
         self.res_cnt += 1;
     }
 
-    pub fn add_str(&mut self, ty: TypeRef, new_str: Box<[u8]>) -> bool {
+    pub fn add_str(&mut self, ty: TypeRef, new_str: Vec<u8>) {
         let entry = self.strs.entry(ty).or_default();
-        entry.insert(new_str)
+        entry.push(new_str);
     }
 
     pub fn inc_rec_depth(&mut self, ty: TypeRef) -> usize {

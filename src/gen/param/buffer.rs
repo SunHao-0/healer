@@ -1,41 +1,33 @@
 use crate::gen::{param::scalar::*, *};
-use crate::model::{BufferKind, Dir, TextKind, Value};
 
 use std::collections::VecDeque;
 use std::iter::Iterator;
 
-use rustc_hash::FxHashSet;
-
-pub(super) fn gen(
-    ctx: &mut GenContext,
-    ty: TypeRef,
-    dir: Dir, /*For now, just ignore dir.*/
-) -> Value {
-    let val = match ty.buffer_kind().unwrap() {
-        BufferKind::BlobRand => gen_blob(ctx.pool.get(&ty), None),
-        BufferKind::BlobRange(min, max) => gen_blob(ctx.pool.get(&ty), Some((*min, *max))),
+pub(super) fn gen(ctx: &mut ProgContext, ty: TypeRef, dir: Dir) -> Value {
+    match ty.buffer_kind().unwrap() {
+        BufferKind::BlobRand => gen_blob(ty, dir, None),
+        BufferKind::BlobRange(min, max) => gen_blob(ty, dir, Some((*min, *max))),
         BufferKind::Filename { vals, noz } => {
-            let fname = gen_fname(ctx.pool.get(&ty), ctx.strs.get(&ty), &vals[..], *noz);
+            let fname = gen_fname(ctx.strs.get(&ty), &vals[..], *noz);
             ctx.add_str(ty, fname.clone());
-            fname
+            Value::new(dir, ty, ValueKind::new_in_bytes(fname))
         }
         BufferKind::String { vals, noz } => {
-            let new_str = gen_str(ctx.pool.get(&ty), ctx.strs.get(&ty), &vals[..], *noz);
+            let new_str = gen_str(ctx.strs.get(&ty), &vals[..], *noz);
             ctx.add_str(ty, new_str.clone());
-            new_str
+            Value::new(dir, ty, ValueKind::new_in_bytes(new_str))
         }
-        BufferKind::Text(kind) => gen_text(kind),
-    };
-    Value::new(dir, ty, ValueKind::new_bytes(val))
+        BufferKind::Text(kind) => gen_text(ty, dir, kind),
+        BufferKind::BufferGlob => {
+            let fname = gen_fname(ctx.strs.get(&ty), &Vec::new()[..], random());
+            ctx.add_str(ty, fname.clone());
+            Value::new(dir, ty, ValueKind::new_in_bytes(fname))
+        }
+    }
 }
 
-fn gen_fname(
-    pool: Option<&VecDeque<Arc<Value>>>,
-    generated: Option<&FxHashSet<Box<[u8]>>>,
-    vals: &[Box<[u8]>],
-    noz: bool,
-) -> Box<[u8]> {
-    gen_str_like(pool, generated, vals, noz, rand_fname, mutate_fname)
+fn gen_fname(generated: Option<&Vec<Vec<u8>>>, vals: &[Vec<u8>], noz: bool) -> Vec<u8> {
+    gen_str_like(generated, vals, noz, rand_fname, mutate_fname)
 }
 
 const SPECIAL_PATH: [&[u8]; 3] = [b".", b"..", b"~"];
@@ -51,7 +43,7 @@ fn rand_fname() -> Vec<u8> {
     f
 }
 
-fn rand_fname_one() -> Box<[u8]> {
+fn rand_fname_one() -> Vec<u8> {
     let mut new_file = rand_blob_range((4, 8));
     filter_noz(&mut new_file);
     new_file
@@ -74,13 +66,8 @@ pub fn mutate_fname(fname: &mut Vec<u8>) {
     fname.extend(rand_fname_one().iter());
 }
 
-fn gen_str(
-    pool: Option<&VecDeque<Arc<Value>>>,
-    generated: Option<&FxHashSet<Box<[u8]>>>,
-    vals: &[Box<[u8]>],
-    noz: bool,
-) -> Box<[u8]> {
-    gen_str_like(pool, generated, vals, noz, rand_str, mutate_str)
+fn gen_str(generated: Option<&Vec<Vec<u8>>>, vals: &[Vec<u8>], noz: bool) -> Vec<u8> {
+    gen_str_like(generated, vals, noz, rand_str, mutate_str)
 }
 
 const PUNCT: [u8; 23] = [
@@ -108,23 +95,24 @@ pub fn mutate_str(val: &mut Vec<u8>) {
 }
 
 fn gen_str_like<G, M>(
-    pool: Option<&VecDeque<Arc<Value>>>,
-    generated: Option<&FxHashSet<Box<[u8]>>>,
-    vals: &[Box<[u8]>],
+    generated: Option<&Vec<Vec<u8>>>,
+    vals: &[Vec<u8>],
     noz: bool,
     gen_new: G,
     mutate: M,
-) -> Box<[u8]>
+) -> Vec<u8>
 where
     G: FnOnce() -> Vec<u8>,
     M: FnOnce(&mut Vec<u8>),
 {
-    let mut val = try_reuse(pool, generated, vals);
+    let mut val = try_reuse(generated, vals);
+
     if val.is_none() || val.as_ref().unwrap().is_empty() {
         val = Some(gen_new());
     } else if thread_rng().gen_ratio(1, 100) {
         mutate(val.as_mut().unwrap());
     }
+
     let mut val = val.unwrap();
     for v in val.iter_mut() {
         if *v == b'\0' {
@@ -134,15 +122,12 @@ where
     if !noz {
         val.push(b'\0');
     }
-    val.into_boxed_slice()
+
+    val
 }
 
 #[allow(clippy::unnecessary_unwrap)]
-fn try_reuse(
-    pool: Option<&VecDeque<Arc<Value>>>,
-    generated: Option<&FxHashSet<Box<[u8]>>>,
-    vals: &[Box<[u8]>],
-) -> Option<Vec<u8>> {
+fn try_reuse(generated: Option<&Vec<Vec<u8>>>, vals: &[Vec<u8>]) -> Option<Vec<u8>> {
     let mut val = None;
     let mut rng = thread_rng();
     if !vals.is_empty() && rng.gen_ratio(8, 10) {
@@ -157,29 +142,46 @@ fn try_reuse(
             .iter()
             .choose(&mut rng)
             .map(|x| Vec::from(&**x))
-    } else if pool.is_some() && rng.gen_ratio(8, 10) {
-        val = pool
-            .unwrap()
-            .iter()
-            .choose(&mut rng)
-            .map(|x| Vec::from(x.bytes_val().unwrap()))
     };
     val
 }
 
-fn gen_text(_kind: &TextKind) -> Box<[u8]> {
-    rand_blob_range(gen_range())
+fn gen_text(ty: TypeRef, dir: Dir, _kind: &TextKind) -> Value {
+    if dir == Dir::Out {
+        let len = thread_rng().gen_range(8..100);
+        Value::new(dir, ty, ValueKind::new_out_bytes(len))
+    } else {
+        let v = rand_blob_range(gen_range());
+        Value::new(dir, ty, ValueKind::new_in_bytes(v))
+    }
 }
 
-fn gen_blob(pool: Option<&VecDeque<Arc<Value>>>, range: Option<(u64, u64)>) -> Box<[u8]> {
-    let range = range
-        .map(|(min, max)| (min as usize, max as usize))
-        .unwrap_or_else(gen_range);
-    let mut rng = thread_rng();
-    if rng.gen_ratio(8, 10) {
-        mutate_exist_blob(pool, range)
+fn gen_blob(ty: TypeRef, dir: Dir, range: Option<(u64, u64)>) -> Value {
+    let mut r = None;
+
+    if let Some((min, max)) = range {
+        if min <= max {
+            if min == max {
+                if min != 0 {
+                    r = Some((0, min as usize));
+                }
+            } else {
+                r = Some((min as usize, max as usize));
+            }
+        }
+    }
+
+    if r.is_none() {
+        r = Some(gen_range());
+    }
+
+    if dir == Dir::Out {
+        let range = r.unwrap();
+        let len = thread_rng().gen_range(range.0..range.1);
+        Value::new(dir, ty, ValueKind::new_out_bytes(len as u64))
     } else {
-        rand_blob_range(range)
+        let v = rand_blob_range(r.unwrap());
+        Value::new(dir, ty, ValueKind::new_in_bytes(v))
     }
 }
 
@@ -190,24 +192,6 @@ fn gen_range() -> (usize, usize) {
     let min = min_range.choose(&mut rng).unwrap();
     let max = max_range.choose(&mut rng).unwrap();
     (min, max)
-}
-
-fn mutate_exist_blob(pool: Option<&VecDeque<Arc<Value>>>, (min, max): (usize, usize)) -> Box<[u8]> {
-    match pool {
-        Some(ref pool) if !pool.is_empty() => {
-            let mut src = pool
-                .iter()
-                .choose(&mut thread_rng())
-                .map(|v| Vec::from(v.bytes_val().unwrap()))
-                .unwrap();
-            if src.is_empty() {
-                return rand_blob_range((min, max));
-            }
-            mutate_blob(&mut src, Some(pool), (min, max));
-            src.into_boxed_slice()
-        }
-        _ => rand_blob_range((min, max)),
-    }
 }
 
 pub fn mutate_blob(
@@ -296,25 +280,23 @@ fn rand_sub_slice(src: &mut [u8]) -> &mut [u8] {
     &mut src[sub_start..sub_start + len]
 }
 
-fn rand_blob_range((min, max): (usize, usize)) -> Box<[u8]> {
+fn rand_blob_range((min, max): (usize, usize)) -> Vec<u8> {
     let min64 = (min + 7) / 8;
     let max64 = (max + 7) / 8;
     let mut buf = (0..=min64)
         .map(|_| gen_integer(0, None, 1))
         .collect::<Vec<u64>>();
     dec_probability_iter(max64 - min64, || buf.push(gen_integer(64, None, 1)));
-    map_vec_64_8(buf).into_boxed_slice()
+    map_vec_64_8(buf)
 }
 
 fn dec_probability_iter<F: FnMut()>(t: usize, mut f: F) {
     let mut i = 0;
-    let mut delta = 0.8;
     let mut rng = thread_rng();
 
-    while i != t && rng.gen::<f32>() < delta {
+    while i != t && rng.gen_ratio(9, 10) {
         f();
         i += 1;
-        delta *= 0.5;
     }
 }
 

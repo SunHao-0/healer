@@ -2,7 +2,7 @@ use bv::*;
 use rand::prelude::*;
 use rustc_hash::FxHashSet;
 
-pub(crate) struct MemAlloc {
+pub struct MemAlloc {
     bitmap: BitVec,
     last_idx: u64,
 }
@@ -67,7 +67,7 @@ impl MemAlloc {
     }
 }
 
-pub(crate) struct VmaAlloc {
+pub struct VmaAlloc {
     page_num: u64,
     used: FxHashSet<u64>,
 }

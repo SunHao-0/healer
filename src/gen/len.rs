@@ -1,10 +1,11 @@
-use crate::gen::context::GenContext;
-use crate::model::{LenInfo, TypeKind, Value, ValueKind};
+use crate::model::*;
 use rustc_hash::FxHashMap;
+
+use super::context::ProgContext;
 
 /// Finish the calculation of 'len' type.
 /// Previous calculation may failed due to ungenerated syscall parameter, so we need calculate them here.
-pub(super) fn finish_cal(ctx: &mut GenContext) {
+pub(super) fn finish_cal(ctx: &mut ProgContext) {
     let left_len_ty = ctx.call_ctx.left_len_vals.split_off(0);
     for (scalar_val_ref, len_info) in left_len_ty {
         cal_syscall_param_len(ctx, unsafe { scalar_val_ref.as_mut().unwrap() }, &len_info)
@@ -13,7 +14,7 @@ pub(super) fn finish_cal(ctx: &mut GenContext) {
 
 /// Try to calculate value of len type of 'val'
 /// Insert ptr of value storage and leninfo to ctx if the calculation failed.
-pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
+pub(super) fn try_cal(ctx: &mut ProgContext, val: &mut Value) {
     let val = val.inner_val_mut().unwrap(); // Can't be null ptr.
     let mut parent_map: Option<FxHashMap<*const Value, &Value>> = None;
 
@@ -33,7 +34,7 @@ pub(super) fn try_cal(ctx: &mut GenContext, val: &mut Value) {
     }
 }
 
-fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*const Value, &Value>) {
+fn handle_struct(ctx: &mut ProgContext, val: &Value, parent_map: &FxHashMap<*const Value, &Value>) {
     let vals = val.group_val().unwrap();
     for v in vals {
         let v = if let Some(v) = v.inner_val() {
@@ -57,12 +58,12 @@ fn handle_struct(ctx: &mut GenContext, val: &Value, parent_map: &FxHashMap<*cons
     }
 }
 
-fn cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
+fn cal_syscall_param_len(ctx: &mut ProgContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
     *scalar_val_ref = try_cal_syscall_param_len_inner(ctx, &*len_info)
         .unwrap_or_else(|| panic!("Failed to calculate length of system param: {:?}", len_info));
 }
 
-fn try_cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
+fn try_cal_syscall_param_len(ctx: &mut ProgContext, scalar_val_ref: &mut u64, len_info: &LenInfo) {
     if let Some(val) = try_cal_syscall_param_len_inner(ctx, len_info) {
         *scalar_val_ref = val;
     } else {
@@ -70,8 +71,7 @@ fn try_cal_syscall_param_len(ctx: &mut GenContext, scalar_val_ref: &mut u64, len
     }
 }
 
-fn try_cal_syscall_param_len_inner(ctx: &mut GenContext, len_info: &LenInfo) -> Option<u64> {
-    assert!(len_info.path.len() >= 1);
+fn try_cal_syscall_param_len_inner(ctx: &mut ProgContext, len_info: &LenInfo) -> Option<u64> {
     assert!(ctx.generating_syscall().is_some());
 
     let generating_syscall = ctx.generating_syscall().unwrap(); // We're generating a syscall.
@@ -149,7 +149,7 @@ fn do_cal<T: std::borrow::Borrow<Value>>(parent: &[T], target: usize, len_info: 
 
 fn cal_struct_field_len(
     val: &Value,
-    mut path: &[Box<str>],
+    mut path: &[String],
     len_info: &LenInfo,
     parent_map: Option<&FxHashMap<*const Value, &Value>>,
 ) -> u64 {
@@ -183,7 +183,7 @@ fn cal_struct_field_len(
 fn position<'a>(
     val: &'a Value,
     parent_map: &'a FxHashMap<*const Value, &Value>,
-    path: &[Box<str>],
+    path: &[String],
 ) -> &'a Value {
     if val.ty.template_name() == &*path[0] {
         val
@@ -204,7 +204,7 @@ fn position<'a>(
     }
 }
 
-fn try_locate<'a>(val: &'a Value, path: &[Box<str>]) -> Option<(Option<&'a [Value]>, usize)> {
+fn try_locate<'a>(val: &'a Value, path: &[String]) -> Option<(Option<&'a [Value]>, usize)> {
     let vals = val.group_val().unwrap();
     let fields = val.ty.fields().unwrap();
     let elem = &*path[0];

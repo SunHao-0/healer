@@ -1,5 +1,5 @@
-use crate::gen::{context::GenContext, len, param};
-use crate::model::{Call, Dir, LenInfo, ResValue, SyscallRef, Value, ValueKind};
+use super::{context::ProgContext, param};
+use crate::model::*;
 
 #[allow(clippy::vec_box)]
 #[derive(Default)]
@@ -12,7 +12,7 @@ pub(crate) struct GenCallContext {
 }
 
 /// Generate particular syscall.
-pub(super) fn gen(ctx: &mut GenContext, syscall: SyscallRef) -> Call {
+pub(super) fn gen(ctx: &mut ProgContext, syscall: SyscallRef) -> Call {
     ctx.call_ctx.generating_syscall = Some(syscall);
     ctx.call_ctx.generated_params.clear();
     ctx.call_ctx.val_cnt = 0;
@@ -31,7 +31,7 @@ pub(super) fn gen(ctx: &mut GenContext, syscall: SyscallRef) -> Call {
 
     // calculate the left length parameters.
     if ctx.has_len_call_ctx() {
-        len::finish_cal(ctx);
+        super::len::finish_cal(ctx);
     }
 
     let args = ctx
@@ -46,7 +46,5 @@ pub(super) fn gen(ctx: &mut GenContext, syscall: SyscallRef) -> Call {
         meta: syscall,
         args,
         ret: ret_value,
-        val_cnt: ctx.call_ctx.val_cnt,
-        res_cnt: ctx.call_ctx.res_cnt,
     }
 }

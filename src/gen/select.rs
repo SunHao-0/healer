@@ -1,11 +1,11 @@
-use crate::gen::context::GenContext;
-use crate::model::{SyscallRef, TypeRef};
+use crate::model::*;
 use crate::targets::Target;
-
 use rand::prelude::*;
 
+use super::context::ProgContext;
+
 /// Select a syscall to fuzz based on resource usage.
-pub(super) fn select_syscall(ctx: &GenContext) -> SyscallRef {
+pub(super) fn select_syscall(ctx: &ProgContext) -> SyscallRef {
     loop {
         let call = if should_try_gen_res(ctx) {
             let res_ty = select_res(&ctx.target.res_tys);
@@ -23,11 +23,12 @@ pub(super) fn select_syscall(ctx: &GenContext) -> SyscallRef {
     }
 }
 
-fn should_try_gen_res(ctx: &GenContext) -> bool {
+fn should_try_gen_res(ctx: &ProgContext) -> bool {
     // Since the length of a test case is [4, 16), the number
     // of generated resource should be [2, 6)
     const MIN_RES_NUMBER: usize = 2;
     const MAX_RES_NUMBER: usize = 6;
+
     let res_count = ctx.res_cnt;
     let mut rng = thread_rng();
     if res_count == 0 {
@@ -46,7 +47,7 @@ fn should_try_gen_res(ctx: &GenContext) -> bool {
     }
 }
 
-fn select_syscall_rand(ctx: &GenContext) -> SyscallRef {
+fn select_syscall_rand(ctx: &ProgContext) -> SyscallRef {
     // Try to select a consumer first.
     if thread_rng().gen_ratio(70, 100) {
         if let Some(syscall) = ctx

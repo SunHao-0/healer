@@ -18,9 +18,10 @@ json = "0.12"           # for syz description parsing.
 thiserror = "1.0"       # for error hanlding.
 lazy_static = "1.4"
 log = "0.4"
-simplelog = "0.9"
+simplelog = "0.10"
 structopt = "0.3"
-ctrlc = "3.1"
+signal-hook = {version = "0.3", features = ["iterator", "extended-siginfo"]}
+nix = "0.20"
 
 [dev-dependencies]  
 criterion = "0.3"
@@ -29,6 +30,20 @@ criterion = "0.3"
 name = "gen"
 harness = false
 
+[profile.dev]
+debug = true
+debug-assertions = false
+overflow-checks = false
+incremental = true
+codegen-units = 256
+
 [profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
 lto = true
-panic = "abort"
+panic = 'unwind'
+incremental = false
+codegen-units = 1
+rpath = false

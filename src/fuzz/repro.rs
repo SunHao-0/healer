@@ -1,5 +1,5 @@
 use crate::{
-    exec::{ExecOpt, FLAG_INJECT_FAULT},
+    exec::syz::{ExecOpt, FLAG_INJECT_FAULT},
     fuzz::fuzzer::Fuzzer,
     model::Prog,
     Config,
@@ -145,16 +145,16 @@ fn syz_conf(conf: &Config) -> String {
         "target": conf.target.clone(),
         http: "127.0.0.1:65534",
         workdir: "./",
-        image: conf.qemu_conf.img_path.to_str().unwrap().to_string(),
-        sshkey: conf.ssh_conf.ssh_key.to_str().unwrap().to_string(),
+        image: conf.qemu_conf.disk_img.to_str().unwrap().to_string(),
+        sshkey: conf.qemu_conf.ssh_key.to_str().unwrap().to_string(),
         syzkaller: syz_dir.to_str().unwrap().to_string(),
         procs: 2,
         "type": "qemu",
         vm:{
             count: 1,
-            kernel: conf.qemu_conf.kernel_path.as_ref().map(|x| x.to_str().unwrap().to_string()).unwrap_or_default(),
-            cpu: conf.qemu_conf.smp,
-            mem: conf.qemu_conf.mem,
+            kernel: conf.qemu_conf.kernel_img.as_ref().map(|x| x.to_str().unwrap().to_string()).unwrap_or_default(),
+            cpu: conf.qemu_conf.qemu_smp,
+            mem: conf.qemu_conf.qemu_mem,
         }
     };
 

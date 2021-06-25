@@ -38,19 +38,19 @@ pub struct Target {
     pub syz_exec_bin: Option<Box<str>>,
 
     /// Enabled syscalls of target os.
-    pub syscalls: Box<[SyscallRef]>,
+    pub syscalls: Vec<SyscallRef>,
     /// All syscalls of target os.
-    pub all_syscalls: Box<[SyscallRef]>,
+    pub all_syscalls: Vec<SyscallRef>,
     /// Name to syscall ref map.
-    pub call_map: FxHashMap<Box<str>, SyscallRef>,
+    pub call_map: FxHashMap<String, SyscallRef>,
     /// All types of `syscalls`.
-    pub tys: Box<[TypeRef]>,
+    pub tys: Vec<TypeRef>,
     /// All resource types of `tys`.
-    pub res_tys: Box<[TypeRef]>,
+    pub res_tys: Vec<TypeRef>,
     /// Subtypes of each resource type.
-    pub subtype_map: FxHashMap<TypeRef, Box<[TypeRef]>>,
+    pub subtype_map: FxHashMap<TypeRef, Vec<TypeRef>>,
     /// Supertypes of each resource type.
-    pub supertype_map: FxHashMap<TypeRef, Box<[TypeRef]>>,
+    pub supertype_map: FxHashMap<TypeRef, Vec<TypeRef>>,
 }
 #[derive(Debug, Error)]
 pub enum Error {
@@ -88,8 +88,7 @@ impl Target {
             .iter()
             .copied()
             .filter(|call| !disabled_calls.contains(&*call.name))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+            .collect::<Vec<_>>();
 
         let call_map = syscalls
             .iter()
@@ -99,8 +98,7 @@ impl Target {
             .iter()
             .copied()
             .filter(|ty| ty.res_desc().is_some())
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+            .collect::<Vec<_>>();
         let target_json = &desc_json["Target"];
         let os = target_json["OS"].as_str().unwrap();
         let arch = target_json["Arch"].as_str().unwrap();
@@ -125,17 +123,8 @@ impl Target {
                     supertypes.insert(r1);
                 }
             }
-            subtype_map.insert(
-                r0,
-                subtypes.into_iter().collect::<Vec<_>>().into_boxed_slice(),
-            );
-            supertype_map.insert(
-                r0,
-                supertypes
-                    .into_iter()
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-            );
+            subtype_map.insert(r0, subtypes.into_iter().collect::<Vec<_>>());
+            supertype_map.insert(r0, supertypes.into_iter().collect::<Vec<_>>());
         }
 
         let target = Self {

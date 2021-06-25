@@ -3,7 +3,6 @@ use crate::model::{
     SyscallAttr, SyscallRef, TextKind, Type, TypeKind, TypeRef,
 };
 use crate::targets::sys_json::TARGETS;
-use crate::utils::to_boxed_str;
 
 use std::mem;
 use std::sync::Mutex;
@@ -16,10 +15,29 @@ lazy_static! {
         Mutex::new([None; 17]);
 }
 
-pub fn parse<T: AsRef<str>>(
-    target: T,
-    desc_json: &JsonValue,
-) -> (Box<[SyscallRef]>, Box<[TypeRef]>) {
+// pub fn parse<T: AsRef<str>>(
+//     target: T,
+//     desc_json: &JsonValue,
+// ) -> (Box<[SyscallRef]>, Box<[TypeRef]>) {
+//     let target = target.as_ref();
+//     let idx = TARGETS
+//         .iter()
+//         .copied()
+//         .position(|(t, _)| t == target)
+//         .unwrap();
+
+//     let mut desc = DESCS.lock().unwrap();
+//     if desc[idx].is_none() {
+//         do_parse(desc_json, &mut desc[idx]);
+//     }
+
+//     let (syscalls, tys) = &desc[idx].unwrap();
+//     let syscalls = syscalls.iter().collect::<Vec<_>>();
+//     let tys = tys.iter().map(|ty| TypeRef::Ref(ty)).collect::<Vec<_>>();
+//     (syscalls.into_boxed_slice(), tys.into_boxed_slice())
+// }
+
+pub fn parse<T: AsRef<str>>(target: T, desc_json: &JsonValue) -> (Vec<SyscallRef>, Vec<TypeRef>) {
     let target = target.as_ref();
     let idx = TARGETS
         .iter()
@@ -35,7 +53,7 @@ pub fn parse<T: AsRef<str>>(
     let (syscalls, tys) = &desc[idx].unwrap();
     let syscalls = syscalls.iter().collect::<Vec<_>>();
     let tys = tys.iter().map(|ty| TypeRef::Ref(ty)).collect::<Vec<_>>();
-    (syscalls.into_boxed_slice(), tys.into_boxed_slice())
+    (syscalls, tys)
 }
 
 fn do_parse(desc_json: &JsonValue, out: &mut Option<(&'static [Syscall], &'static [Type])>) {
@@ -49,7 +67,7 @@ fn do_parse(desc_json: &JsonValue, out: &mut Option<(&'static [Syscall], &'stati
         .members()
         .map(|val| {
             let res_desc = parse_res_desc(val);
-            (Box::clone(&res_desc.name), res_desc)
+            (res_desc.name.clone().into_boxed_str(), res_desc)
         })
         .collect();
     let mut tys: Box<[Type]> = desc_json["Types"]
@@ -91,10 +109,10 @@ fn parse_syscall(id: usize, val: &JsonValue) -> Syscall {
     Syscall {
         id,
         nr,
-        name: to_boxed_str(name),
-        call_name: to_boxed_str(call_name),
+        name: name.to_string(),
+        call_name: call_name.to_string(),
         missing_args,
-        params: params.into_boxed_slice(),
+        params,
         ret,
         attr,
         input_res: FxHashSet::default(), // fill latter.
@@ -110,7 +128,7 @@ fn parse_param(val: &JsonValue) -> Param {
     let dir = val["Direction"].as_u64().unwrap();
 
     Param {
-        name: to_boxed_str(name),
+        name: name.to_string(),
         ty: TypeRef::Id(ty),
         dir: if has_dir { Some(Dir::from(dir)) } else { None },
     }
@@ -162,7 +180,7 @@ fn parse_ty(id: usize, ty_val: &JsonValue, res: &FxHashMap<Box<str>, ResDesc>) -
 
     Type {
         id,
-        name: to_boxed_str(name),
+        name: name.to_string(),
         sz,
         align,
         optional,
@@ -230,7 +248,10 @@ fn parse_int(kind: &str, val: &JsonValue) -> TypeKind {
             // Path: [&str],
             let bit_sz = val["BitSize"].as_u64().unwrap();
             let offset = val["Offset"].as_bool().unwrap();
-            let path = val["Path"].members().map(|p| p.as_str().unwrap()).collect();
+            let path = val["Path"]
+                .members()
+                .map(|p| p.as_str().unwrap().to_string())
+                .collect();
             TypeKind::new_len(fmt, LenInfo::new(bit_sz, offset, path))
         }
         "CsumType" => {
@@ -240,7 +261,7 @@ fn parse_int(kind: &str, val: &JsonValue) -> TypeKind {
             let kind = CsumKind::from(val["Kind"].as_u64().unwrap());
             let buf = val["Buf"].as_str().unwrap();
             let proto = val["Protocol"].as_u64().unwrap();
-            TypeKind::new_csum(fmt, kind, buf, proto)
+            TypeKind::new_csum(fmt, kind, buf.to_string(), proto)
         }
         "ProcType" => {
             // ValuesStart   u64
@@ -321,6 +342,7 @@ fn parse_buffer(val: &JsonValue) -> TypeKind {
     const BUFFER_STRING: u64 = 2;
     const BUFFER_FILENAME: u64 = 3;
     const BUFFER_TEXT: u64 = 4;
+    const BUFFER_GLOB: u64 = 5;
     let buf_kind = match val["Kind"].as_u64().unwrap() {
         BUFFER_BLOB_RAND => BufferKind::new_blob(None),
         BUFFER_BLOB_RANGE => {
@@ -331,7 +353,7 @@ fn parse_buffer(val: &JsonValue) -> TypeKind {
         BUFFER_STRING => {
             let vals = val["Values"]
                 .members()
-                .map(|v| v.as_str().unwrap().as_bytes())
+                .map(|v| v.as_str().unwrap().as_bytes().to_vec())
                 .collect();
             let noz = val["NoZ"].as_bool().unwrap();
             BufferKind::new_str(vals, noz)
@@ -339,7 +361,7 @@ fn parse_buffer(val: &JsonValue) -> TypeKind {
         BUFFER_FILENAME => {
             let vals = val["Values"]
                 .members()
-                .map(|v| v.as_str().unwrap())
+                .map(|v| v.as_str().unwrap().as_bytes().to_vec())
                 .collect();
             let noz = val["NoZ"].as_bool().unwrap();
             BufferKind::new_fname(vals, noz)
@@ -348,11 +370,12 @@ fn parse_buffer(val: &JsonValue) -> TypeKind {
             let text_kind = TextKind::from(val["Text"].as_u64().unwrap());
             BufferKind::new_text(text_kind)
         }
+        BUFFER_GLOB => BufferKind::new_glob(),
         kind => unreachable!("unknown buffer kind: {}", kind),
     };
     let sub_kind = val["SubKind"].as_str().unwrap();
 
-    TypeKind::new_buffer(buf_kind, sub_kind)
+    TypeKind::new_buffer(buf_kind, sub_kind.to_string())
 }
 
 fn parse_array(val: &JsonValue) -> TypeKind {
@@ -401,7 +424,7 @@ fn parse_field(val: &JsonValue) -> Field {
     let dir = val["Direction"].as_u64().unwrap();
 
     Field {
-        name: to_boxed_str(name),
+        name: name.to_string(),
         ty: TypeRef::Id(ty),
         dir: if has_dir { Some(Dir::from(dir)) } else { None },
     }
@@ -413,13 +436,16 @@ fn parse_res_desc(val: &JsonValue) -> ResDesc {
     // Values: [u64],
 
     let name = val["Name"].as_str().unwrap();
-    let kinds = val["Kind"].members().map(|v| v.as_str().unwrap()).collect();
+    let kinds = val["Kind"]
+        .members()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
     let vals = val["Values"]
         .members()
         .map(|v| v.as_u64().unwrap())
         .collect();
 
-    ResDesc::new(name, kinds, vals)
+    ResDesc::new(name.to_string(), kinds, vals)
 }
 
 fn restore_tyref(tys: &mut [Type], calls: &mut [Syscall]) {

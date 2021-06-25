@@ -1,4 +1,4 @@
-use healer::exec::{ExecConf, QemuConf, SshConf};
+use healer::{exec::syz::SyzExecConfig, utils::set_debug, vm::qemu::QemuConfig};
 use simplelog::*;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -54,12 +54,25 @@ struct Settings {
     /// White list of crash title.
     #[structopt(long)]
     white_list: Option<PathBuf>,
+    /// Enable relation learning.
+    #[structopt(long)]
+    enable_relation_detect: bool,
+    /// Debug mode.
+    #[structopt(long)]
+    debug: bool,
 }
 
 pub fn main() {
     let settings = Settings::from_args();
     let log_conf = ConfigBuilder::new().set_time_format_str("%F %T").build();
-    TermLogger::init(LevelFilter::Info, log_conf, TerminalMode::Stdout).unwrap();
+
+    let mut level = LevelFilter::Info;
+    if settings.debug {
+        set_debug(true);
+        level = LevelFilter::Debug;
+    }
+
+    TermLogger::init(level, log_conf, TerminalMode::Stdout, ColorChoice::Auto).unwrap();
 
     let conf = healer::Config {
         target: settings.target.clone(),
@@ -72,24 +85,23 @@ pub fn main() {
         jobs: settings.jobs,
         relations: settings.relations,
         skip_repro: settings.skip_repro,
-        qemu_conf: QemuConf {
+        enable_relation_detect: settings.enable_relation_detect,
+        qemu_conf: QemuConfig {
             target: settings.target.clone(),
-            img_path: settings.img.into_boxed_path(),
-            kernel_path: settings.kernel_img.map(|img| img.into_boxed_path()),
-            smp: settings.qemu_smp,
-            mem: settings.qemu_mem,
-            ..Default::default()
+            kernel_img: settings.kernel_img,
+            disk_img: settings.img,
+            ssh_key: settings.ssh_key,
+            ssh_user: settings.ssh_user,
+            qemu_smp: settings.qemu_smp as u32,
+            qemu_mem: settings.qemu_mem,
+            shmids: Vec::new(),
         },
-        exec_conf: ExecConf {
-            executor: settings
+        exec_conf: SyzExecConfig {
+            syz_bin: settings
                 .syz_bin_dir
                 .join(settings.target.replace("/", "_"))
-                .join("syz-executor")
-                .into_boxed_path(),
-        },
-        ssh_conf: SshConf {
-            ssh_key: settings.ssh_key.into_boxed_path(),
-            ssh_user: Some(settings.ssh_user),
+                .join("syz-executor"),
+            force_setup: false,
         },
     };
 

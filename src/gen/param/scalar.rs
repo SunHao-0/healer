@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use crate::gen::*;
 
 const MAGIC32: [u64; 24] = [
@@ -43,20 +41,13 @@ pub const MAGIC64: [u64; 24 * 24] = {
     magic
 };
 
-pub(super) fn gen(ctx: &mut GenContext, ty: TypeRef, dir: Dir) -> Value {
+pub(super) fn gen(ctx: &mut ProgContext, ty: TypeRef, dir: Dir) -> Value {
     use TypeKind::*;
     let val = match &ty.kind {
-        Int {
-            int_fmt,
-            range,
-            align,
-        } => gen_integer(int_fmt.bitfield_len, *range, *align),
-        Flags { vals, bitmask, .. } => {
-            let pool = ctx.pool.get(&ty);
-            gen_flag(pool, vals, *bitmask)
-        }
+        Int { range, align, .. } => gen_integer(ty.bit_len().unwrap(), *range, *align),
+        Flags { vals, bitmask, .. } => gen_flag(vals, *bitmask),
         Proc { per_proc, .. } => thread_rng().gen_range(0..*per_proc),
-        Csum { .. } => 0, // Calculated by syz-executor
+        Csum { .. } => gen_integer(ty.bit_len().unwrap(), None, 0),
         Len { .. } => {
             ctx.record_len_to_param_ctx(); // Mark here, calculate later.
             0
@@ -109,15 +100,9 @@ pub fn filter_range((min, max): (u64, u64)) -> (u64, u64) {
 }
 
 /// Generate a random flag value.
-pub fn gen_flag(pool: Option<&VecDeque<Arc<Value>>>, vals: &[u64], bitmask: bool) -> u64 {
+pub fn gen_flag(vals: &[u64], bitmask: bool) -> u64 {
     let mut rng = thread_rng();
-    let empty_set = Default::default();
-    let extra_vals = || {
-        pool.unwrap_or(&empty_set)
-            .iter()
-            .map(|v| v.kind.scalar_val().unwrap())
-            .chain(MAGIC64.iter().copied())
-    };
+    let extra_vals = || MAGIC64.iter().copied();
 
     let mut val = 0;
     if !bitmask {

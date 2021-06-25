@@ -1,20 +1,22 @@
 use crate::{
-    exec::{
-        serialize, CallExecInfo, CrashInfo, ExecError, ExecHandle, ExecOpt, ExecResult,
-        CALL_FAULT_INJECTED, FLAG_INJECT_FAULT,
+    exec::syz::{
+        CallExecInfo, ExecOpt, SyzExecError, SyzExecHandle, SyzExecResult, CALL_FAULT_INJECTED,
+        FLAG_INJECT_FAULT,
     },
     fuzz::{
         features::*,
         input::Input,
-        mutation::{seq_reuse, MUTATE_OP},
+        mutation::MUTATE_OP,
         queue::Queue,
         relation::Relation,
         repro::{Repro, ReproResult},
         stats::*,
     },
     gen::gen,
-    model::{Prog, ProgWrapper, TypeRef, Value},
+    model::{Prog, ProgWrapper},
     targets::Target,
+    utils::stop_soon,
+    vm::{qemu::QemuHandle, ManageVm},
     Config,
 };
 
@@ -28,18 +30,11 @@ use std::{
     io::ErrorKind,
     process::{exit, Command},
     sync::RwLock,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use rand::{thread_rng, Rng};
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-
-/// Interesting values extracted inputs. not implemented yet.
-pub type ValuePool = FxHashMap<TypeRef, VecDeque<Arc<Value>>>;
 
 pub struct Fuzzer {
     // shared between different fuzzers.
@@ -60,25 +55,15 @@ pub struct Fuzzer {
     pub(crate) conf: Config,
     pub(crate) features: u64,
     pub(crate) target: Target,
-    pub(crate) local_vals: ValuePool,
     pub(crate) queue: Queue,
-    pub(crate) exec_handle: ExecHandle,
+    pub(crate) exec_handle: SyzExecHandle<<QemuHandle as ManageVm>::Error>,
     pub(crate) run_history: VecDeque<(ExecOpt, Prog)>,
 
-    pub(crate) mode: Mode,
     pub(crate) mut_gaining: u32,
     pub(crate) gen_gaining: u32,
     pub(crate) cycle_len: u32,
 
     pub(crate) last_reboot: Instant,
-    pub(crate) stop: Arc<AtomicBool>,
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Mode {
-    Sampling,
-    Explore,
-    Mutation,
 }
 
 impl Fuzzer {
@@ -86,25 +71,26 @@ impl Fuzzer {
         self.stats.inc(OVERALL_FUZZ_INSTANCE);
         self.sampling();
 
-        while !self.stop() {
-            if self.mode == Mode::Explore {
+        let mut i: u64 = 0;
+        while !stop_soon() {
+            if i % 60 == 0 {
                 self.gen();
             } else {
                 self.mutate();
             }
-            self.update_mode();
+            i += 1;
         }
     }
 
     fn sampling(&mut self) {
         let mut i = 0;
-        while self.queue.current_age < 1 && i < 128 && !self.stop() {
+        while self.queue.current_age < 1 && i < 128 && !stop_soon() {
             self.gen();
             self.mutate();
             i += 1;
         }
 
-        if self.stop() {
+        if stop_soon() {
             return;
         }
 
@@ -129,34 +115,34 @@ impl Fuzzer {
                 r1
             );
         }
-        self.update_mode();
+        //  self.update_mode();
     }
 
-    fn update_mode(&mut self) {
-        if self.stop() || self.queue.is_empty() || self.queue.current_age == 0 {
-            self.mode = Mode::Explore;
-            return;
-        }
+    // fn update_mode(&mut self) {
+    //     if stop_soon() || self.queue.is_empty() || self.queue.current_age == 0 {
+    //         self.mode = Mode::Explore;
+    //         return;
+    //     }
 
-        let mut rng = thread_rng();
-        let g0 = max(self.mut_gaining, 1);
-        let g1 = max(self.gen_gaining, 1);
-        if rng.gen_ratio(g0, g0 + g1) {
-            self.mode = Mode::Mutation;
-        } else {
-            self.mode = Mode::Explore;
-        }
-    }
+    //     let mut rng = thread_rng();
+    //     let g0 = max(self.mut_gaining, 1);
+    //     let g1 = max(self.gen_gaining, 1);
+    //     if rng.gen_ratio(g0, g0 + g1) {
+    //         self.mode = Mode::Mutation;
+    //     } else {
+    //         self.mode = Mode::Explore;
+    //     }
+    // }
 
     fn gen(&mut self) {
         self.gen_gaining = 0;
         for _ in 0..self.cycle_len {
             self.stats.inc_exec(EXEC_GEN);
-            let p = gen(&self.target, &self.local_vals);
+            let p = gen(&self.target);
             if self.evaluate(p) {
                 self.gen_gaining += 1;
             }
-            if self.stop() {
+            if stop_soon() {
                 break;
             }
         }
@@ -166,14 +152,14 @@ impl Fuzzer {
         use crate::fuzz::queue::AVG_SCORE;
 
         self.mut_gaining = 0;
-        if self.queue.is_empty() || self.stop() {
+        if self.queue.is_empty() || stop_soon() {
             return;
         }
 
         let avg_score = self.queue.avgs[&AVG_SCORE];
         let mut mut_n = 0;
 
-        while mut_n < self.cycle_len && !self.stop() {
+        while mut_n < self.cycle_len && !stop_soon() {
             let idx = self.queue.select_idx(true);
             let n = if self.queue.inputs[idx].score > avg_score {
                 4
@@ -183,7 +169,7 @@ impl Fuzzer {
 
             for mutation_op in MUTATE_OP.iter().copied() {
                 for _ in 0..n {
-                    if self.stop() {
+                    if stop_soon() {
                         break;
                     }
                     if idx >= self.queue.len() {
@@ -191,7 +177,7 @@ impl Fuzzer {
                         break;
                     }
                     mut_n += 1;
-                    let p = mutation_op(&self.target, &self.local_vals, &self.queue.inputs[idx].p);
+                    let p = mutation_op(&self.target, &self.queue.inputs[idx].p);
                     self.stats.inc_exec(EXEC_MUTATION);
                     if self.evaluate(p) {
                         self.mut_gaining += 1;
@@ -199,27 +185,26 @@ impl Fuzzer {
                 }
             }
 
-            for _ in 0..n {
-                if self.stop() {
-                    break;
-                }
-                if idx >= self.queue.len() {
-                    // queue was culled, reselect.
-                    break;
-                }
-                mut_n += 1;
+            // for _ in 0..n {
+            //     if stop_soon() {
+            //         break;
+            //     }
+            //     if idx >= self.queue.len() {
+            //         // queue was culled, reselect.
+            //         break;
+            //     }
+            //     mut_n += 1;
 
-                let p = seq_reuse(
-                    &self.target,
-                    &self.local_vals,
-                    &self.queue.inputs[idx].p,
-                    &self.relations,
-                );
-                self.stats.inc_exec(EXEC_MUTATION);
-                if self.evaluate(p) {
-                    self.mut_gaining += 1;
-                }
-            }
+            //     let p = seq_reuse(
+            //         &self.target,
+            //         &self.queue.inputs[idx].p,
+            //         &self.relations,
+            //     );
+            //     self.stats.inc_exec(EXEC_MUTATION);
+            //     if self.evaluate(p) {
+            //         self.mut_gaining += 1;
+            //     }
+            // }
 
             if self.features & FEATURE_FAULT != 0
                 && idx < self.queue.len()
@@ -252,19 +237,19 @@ impl Fuzzer {
     }
 
     fn evaluate(&mut self, p: Prog) -> bool {
-        if self.stop() {
+        if stop_soon() {
             return false;
         }
 
         let auto_restart = Duration::new(60 * 60, 0); // 60 minutes
         let no_restart = Instant::now() - self.last_reboot;
-        if no_restart > auto_restart {
+        if no_restart > auto_restart && !stop_soon() {
             log::info!(
                 "Fuzzer-{}: kernel running for {} minutes, restarting...",
                 self.id,
                 no_restart.as_secs() / 60,
             );
-            if let Err(e) = self.exec_handle.restart() {
+            if let Err(e) = self.exec_handle.spawn_syz(true) {
                 log::error!("Fuzzer-{}: failed to restart: {}", self.id, e);
                 exit(1);
             }
@@ -282,17 +267,16 @@ impl Fuzzer {
         };
 
         match exec_ret {
-            ExecResult::Normal(info) => self.handle_info(p, opt, info),
-            ExecResult::Failed { info, err } => self.handle_failed(p, opt, info, err, true),
-            ExecResult::Crash(crash) => {
+            SyzExecResult::Normal(info) => self.handle_info(p, opt, info),
+            SyzExecResult::Crash(crash) => {
                 self.handle_crash(p, opt, crash);
                 true
             }
         }
     }
 
-    fn exec(&mut self, opt: &ExecOpt, p: &Prog) -> Result<ExecResult, ExecError> {
-        let ret = self.exec_handle.exec(opt, p);
+    fn exec(&mut self, opt: &ExecOpt, p: &Prog) -> Result<SyzExecResult, SyzExecError> {
+        let ret = self.exec_handle.exec(&self.target, p, opt);
         if ret.is_ok() {
             if self.run_history.len() >= 256 {
                 self.run_history.pop_front();
@@ -302,54 +286,47 @@ impl Fuzzer {
         ret
     }
 
-    fn handle_err(&self, e: ExecError) {
+    fn handle_err(&self, e: SyzExecError) {
         match e {
-            ExecError::SyzInternal(e) => {
-                if e.downcast_ref::<serialize::SerializeError>().is_none() {
-                    log::warn!("Fuzzer-{}: failed to execute: {}", self.id, e);
-                }
-            }
-            ExecError::Spawn(e) => {
-                log::warn!("Fuzzer-{}: failed to execute: {}", self.id, e);
-                // TODO
-            }
+            SyzExecError::Serialize(_) | SyzExecError::Parse(_) => {}
+            _ => panic!("{}", e),
         }
     }
 
-    fn handle_failed(
-        &mut self,
-        mut p: Prog,
-        opt: ExecOpt,
-        mut info: Vec<CallExecInfo>,
-        e: Box<dyn std::error::Error + 'static>,
-        hanlde_info: bool,
-    ) -> bool {
-        log::info!("Fuzzer-{}: prog failed: {}", self.id, e);
+    // fn handle_failed(
+    //     &mut self,
+    //     mut p: Prog,
+    //     opt: ExecOpt,
+    //     mut info: Vec<CallExecInfo>,
+    //     e: Box<dyn std::error::Error + 'static>,
+    //     hanlde_info: bool,
+    // ) -> bool {
+    //     log::info!("Fuzzer-{}: prog failed: {}", self.id, e);
 
-        if !hanlde_info || self.stop() {
-            return false;
-        }
+    //     if !hanlde_info || stop_soon() {
+    //         return false;
+    //     }
 
-        let mut has_brs = false;
-        for i in (0..info.len()).rev() {
-            if info[i].branches.is_empty() {
-                info.remove(i);
-                p.calls.drain(i..p.calls.len());
-            } else {
-                has_brs = true;
-                break;
-            }
-        }
+    //     let mut has_brs = false;
+    //     for i in (0..info.len()).rev() {
+    //         if info[i].branches.is_empty() {
+    //             info.remove(i);
+    //             p.calls.drain(i..p.calls.len());
+    //         } else {
+    //             has_brs = true;
+    //             break;
+    //         }
+    //     }
 
-        if has_brs {
-            self.handle_info(p, opt, info)
-        } else {
-            false
-        }
-    }
+    //     if has_brs {
+    //         self.handle_info(p, opt, info)
+    //     } else {
+    //         false
+    //     }
+    // }
 
     fn handle_info(&mut self, p: Prog, opt: ExecOpt, info: Vec<CallExecInfo>) -> bool {
-        if self.stop() {
+        if stop_soon() {
             return false;
         }
 
@@ -367,7 +344,7 @@ impl Fuzzer {
         let mut new_input = false;
         // analyze in reverse order helps us find longger prog.
         for i in (0..info.len()).rev() {
-            if info[i].branches.is_empty() || analyzed.contains(&i) || self.stop() {
+            if info[i].branches.is_empty() || analyzed.contains(&i) || stop_soon() {
                 continue;
             }
 
@@ -387,7 +364,10 @@ impl Fuzzer {
                 continue;
             }
             new_input = true;
-            let new_re = self.detect_relations(&m_p, &m_p_brs);
+            let mut new_re = false;
+            if self.conf.enable_relation_detect {
+                new_re = self.detect_relations(&m_p, &m_p_brs);
+            }
 
             let mut input = Input::new(
                 m_p,
@@ -409,7 +389,7 @@ impl Fuzzer {
         old_call_infos: &[CallExecInfo],
         new_brs: &FxHashSet<u32>,
     ) -> Option<(Prog, Vec<usize>, Vec<CallExecInfo>)> {
-        if p.calls.len() <= 1 || self.stop() {
+        if p.calls.len() <= 1 || stop_soon() {
             return None;
         }
 
@@ -420,7 +400,7 @@ impl Fuzzer {
         let mut idx = p.calls.len() - 1;
 
         for i in (0..p.calls.len() - 1).rev() {
-            if self.stop() {
+            if stop_soon() {
                 return None;
             }
 
@@ -462,14 +442,14 @@ impl Fuzzer {
     }
 
     fn detect_relations(&mut self, p: &Prog, brs: &[FxHashSet<u32>]) -> bool {
-        if p.calls.len() == 1 || self.stop() {
+        if p.calls.len() == 1 || stop_soon() {
             return false;
         }
 
         let mut detected = false;
         let opt = ExecOpt::new_no_collide();
         for i in 0..p.calls.len() - 1 {
-            if self.stop() {
+            if stop_soon() {
                 return false;
             }
 
@@ -482,7 +462,7 @@ impl Fuzzer {
 
             let new_p = p.remove(i);
             self.stats.inc_exec(EXEC_RDETECT);
-            let ret = self.exec_handle.exec(&opt, &new_p);
+            let ret = self.exec_handle.exec(&self.target, &new_p, &opt);
             if let Some(info) = self.handle_ret_comm(&new_p, opt.clone(), ret) {
                 if !brs[i].iter().all(|br| info[i].branches.contains(br)) {
                     let s0 = p.calls[i].meta;
@@ -550,13 +530,13 @@ impl Fuzzer {
         let mut failed = false;
         let mut exec_tm = Duration::new(0, 0);
 
-        for _ in 0..3 {
-            if self.stop() {
+        for _ in 0..1 {
+            if stop_soon() {
                 return (false, Duration::default());
             }
 
             let now = Instant::now();
-            let ret = self.exec_handle.exec(&opt, p);
+            let ret = self.exec_handle.exec(&self.target, p, &opt);
             exec_tm += now.elapsed();
             self.stats.inc_exec(EXEC_CALIBRATE);
             if let Some(info) = self.handle_ret_comm(p, opt.clone(), ret) {
@@ -586,16 +566,18 @@ impl Fuzzer {
         &mut self,
         p: &Prog,
         opt: ExecOpt,
-        ret: Result<ExecResult, ExecError>,
+        ret: Result<SyzExecResult, SyzExecError>,
     ) -> Option<Vec<CallExecInfo>> {
         match ret {
             Ok(exec_ret) => match exec_ret {
-                ExecResult::Normal(info) => Some(info),
-                ExecResult::Failed { info, err } => {
-                    self.handle_failed(p.clone(), opt, info, err, false);
-                    None
+                SyzExecResult::Normal(info) => {
+                    if info.is_empty() {
+                        None
+                    } else {
+                        Some(info)
+                    }
                 }
-                ExecResult::Crash(c) => {
+                SyzExecResult::Crash(c) => {
                     self.handle_crash(p.clone(), opt, c);
                     None
                 }
@@ -607,8 +589,8 @@ impl Fuzzer {
         }
     }
 
-    fn handle_crash(&mut self, p: Prog, _opt: ExecOpt, info: CrashInfo) {
-        if self.stop() {
+    fn handle_crash(&mut self, p: Prog, _opt: ExecOpt, log: Vec<u8>) {
+        if stop_soon() {
             return; // killed by ctrlc
         }
 
@@ -623,7 +605,6 @@ impl Fuzzer {
         );
         log::info!("Fuzzer-{}: try to extract reports ...", self.id);
 
-        let log = info.qemu_stdout;
         let reports = self.extract_report(&p, &log);
         if !reports.is_empty() {
             let title = reports[0].title.clone();
@@ -802,7 +783,7 @@ impl Fuzzer {
     }
 
     fn try_repro(&mut self, title: &str, crash_log: Vec<u8>) {
-        if self.conf.skip_repro || !self.need_repro(title) || self.stop() {
+        if self.conf.skip_repro || !self.need_repro(title) || stop_soon() {
             self.run_history.clear();
             return;
         }
@@ -922,11 +903,6 @@ impl Fuzzer {
 
         let mut repros = self.repros.lock().unwrap();
         repros.insert(title.to_string(), repro);
-    }
-
-    #[inline(always)]
-    fn stop(&self) -> bool {
-        self.stop.load(Ordering::Relaxed)
     }
 }
 

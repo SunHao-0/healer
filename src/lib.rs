@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_else_if, clippy::missing_safety_doc)]
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -8,32 +10,35 @@ pub mod fuzz;
 pub mod gen;
 pub mod model;
 pub mod targets;
+pub mod vm;
 
-use crate::exec::{ExecConf, QemuConf, SshConf};
-use crate::fuzz::{
-    features,
-    fuzzer::{Fuzzer, Mode},
-    queue::Queue,
-    relation::Relation,
-    stats::{bench, Stats},
-};
 use crate::targets::Target;
+use crate::{
+    fuzz::{
+        features,
+        fuzzer::Fuzzer,
+        queue::Queue,
+        relation::Relation,
+        stats::{bench, Stats},
+    },
+    utils::notify_stop,
+};
 
 use std::{
     collections::VecDeque,
     fs::{create_dir, read_to_string},
     io::ErrorKind,
+    os::raw::c_int,
     path::PathBuf,
     process::exit,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Barrier, Mutex, RwLock,
-    },
-    thread,
+    sync::{Arc, Barrier, Mutex, RwLock},
+    thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
 
+use exec::syz::SyzExecConfig;
 use rustc_hash::{FxHashMap, FxHashSet};
+use vm::qemu::QemuConfig;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -47,10 +52,9 @@ pub struct Config {
     pub skip_repro: bool,
     pub disabled_calls: Option<PathBuf>,
     pub white_list: Option<PathBuf>,
-
-    pub qemu_conf: QemuConf,
-    pub exec_conf: ExecConf,
-    pub ssh_conf: SshConf,
+    pub enable_relation_detect: bool,
+    pub qemu_conf: QemuConfig,
+    pub exec_conf: SyzExecConfig,
 }
 
 impl Config {
@@ -116,10 +120,7 @@ impl Config {
         }
         self.qemu_conf
             .check()
-            .map_err(|e| format!("qemu config: {}", e))?;
-        self.ssh_conf
-            .check()
-            .map_err(|e| format!("ssh config: {}", e))
+            .map_err(|e| format!("qemu config: {}", e))
     }
 }
 
@@ -136,7 +137,6 @@ pub fn start(conf: Config) {
     let reproducing = Arc::new(Mutex::new(FxHashSet::default()));
     let raw_crashes = Arc::new(Mutex::new(VecDeque::with_capacity(1024)));
     let stats = Arc::new(Stats::new());
-    let stop = Arc::new(AtomicBool::new(false));
     let barrier = Arc::new(Barrier::new(conf.jobs as usize + 1));
     let mut fuzzers = Vec::new();
     let mut white_list = FxHashSet::default();
@@ -232,7 +232,6 @@ pub fn start(conf: Config) {
         let raw_crashes = Arc::clone(&raw_crashes);
         let stats = Arc::clone(&stats);
         let barrier = Arc::clone(&barrier);
-        let stop = Arc::clone(&stop);
         let conf = conf.clone();
         let disabled_calls = disabled_calls.clone();
 
@@ -251,18 +250,14 @@ pub fn start(conf: Config) {
                 queue.set_stats(Arc::clone(&stats));
             }
 
-            let mut exec_handle = match exec::spawn_in_qemu(
-                conf.exec_conf.clone(),
-                conf.qemu_conf.clone(),
-                conf.ssh_conf.clone(),
-                id,
-            ) {
-                Ok(handle) => handle,
-                Err(e) => {
-                    log::error!("failed to boot: {}", e);
-                    exit(1)
-                }
-            };
+            let mut exec_handle =
+                match exec::spawn_syz_in_qemu(conf.exec_conf.clone(), conf.qemu_conf.clone(), id) {
+                    Ok(handle) => handle,
+                    Err(e) => {
+                        log::error!("failed to boot: {}", e);
+                        exit(1)
+                    }
+                };
             let features = features::check(&mut exec_handle, id == 0);
             barrier.wait();
 
@@ -279,17 +274,14 @@ pub fn start(conf: Config) {
                 id,
                 target,
                 conf,
-                local_vals: FxHashMap::default(),
                 queue,
                 exec_handle,
                 run_history: VecDeque::with_capacity(128),
-                mode: Mode::Sampling,
                 mut_gaining: 0,
                 gen_gaining: 0,
                 features,
                 cycle_len: 128,
                 last_reboot: Instant::now(),
-                stop,
             };
             fuzzer.fuzz();
         });
@@ -298,21 +290,46 @@ pub fn start(conf: Config) {
 
     barrier.wait();
 
-    ctrlc::set_handler(move || {
-        stop.store(true, Ordering::Relaxed);
-        println!("Waiting fuzzers to exit...");
-        while !fuzzers.is_empty() {
-            let f = fuzzers.pop().unwrap();
-            f.join().unwrap();
-        }
-        println!("Ok, have a nice day. *-*");
-        exit(0)
-    })
-    .unwrap();
+    setup_signal_handler(fuzzers);
 
     log::info!("Boot finished, cost {}s", start.elapsed().as_secs());
     log::info!("Let the fuzz begin");
     bench(Duration::new(10, 0), conf.out_dir, stats);
+}
+
+fn setup_signal_handler(mut fuzzers: Vec<JoinHandle<()>>) {
+    use signal_hook::consts::*;
+    use signal_hook::iterator::exfiltrator::WithOrigin;
+    use signal_hook::iterator::SignalsInfo;
+
+    fn named_signal(sig: c_int) -> String {
+        signal_hook::low_level::signal_name(sig)
+            .map(|n| format!("{}({})", n, sig))
+            .unwrap_or_else(|| sig.to_string())
+    }
+
+    std::thread::spawn(move || {
+        let mut signals = SignalsInfo::<WithOrigin>::new(TERM_SIGNALS).unwrap();
+
+        let info = signals.into_iter().next().unwrap();
+        let from = if let Some(p) = info.process {
+            format!("(pid: {}, uid: {})", p.pid, p.uid)
+        } else {
+            "unknown".to_string()
+        };
+        log::info!(
+            "{} recved, from: {}, cause: {:?}",
+            named_signal(info.signal),
+            from,
+            info.cause
+        );
+        println!("Waiting fuzzers to exit...");
+        notify_stop();
+        while !fuzzers.is_empty() {
+            let f = fuzzers.pop().unwrap();
+            let _ = f.join();
+        }
+    });
 }
 
 const HEALER: &str = r"

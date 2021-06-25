@@ -1,5 +1,5 @@
 use crate::{
-    exec::{CallExecInfo, ExecOpt},
+    exec::syz::{CallExecInfo, ExecOpt},
     model::Prog,
 };
 
@@ -27,16 +27,16 @@ pub struct Input {
     pub(crate) score: usize,
     /// Number of queue culling since appended.
     pub(crate) age: usize,
-    /// Depth of mutation.
-    pub(crate) depth: usize,
-    /// Size of the whole prog.
-    pub(crate) sz: usize,
+    // /// Depth of mutation.
+    // pub(crate) depth: usize,
+    // /// Size of the whole prog.
+    //pub(crate) sz: usize,
     /// Length of the prog.
     pub(crate) len: usize,
     /// Execution time, in ms.
     pub(crate) exec_tm: usize,
-    /// Number of contained resources.
-    pub(crate) res_cnt: usize,
+    // /// Number of contained resources.
+    // pub(crate) res_cnt: usize,
     /// New coverage this prog found.
     pub(crate) new_cov: Vec<u32>,
     /// Fault injection count.
@@ -46,9 +46,9 @@ pub struct Input {
 impl Input {
     pub fn new(p: Prog, opt: ExecOpt, info: Vec<CallExecInfo>, new_cov: Vec<u32>) -> Self {
         let len = p.calls.len();
-        let sz = p.calls.iter().map(|c| c.val_cnt).sum();
-        let res_cnt = p.calls.iter().map(|c| c.res_cnt).sum();
-        let depth = p.depth;
+        // let sz = p.calls.iter().map(|c| c.val_cnt).sum();
+        // let res_cnt = p.calls.iter().map(|c| c.res_cnt).sum();
+        // let depth = p.depth;
         let mut inp = Self {
             p,
             opt,
@@ -58,11 +58,11 @@ impl Input {
             found_new_re: false,
             score: 0,
             age: 1,
-            depth,
-            sz,
+            // depth,
+            // sz,
             len,
             exec_tm: 0,
-            res_cnt,
+            // res_cnt,
             new_cov,
             fault_injected: false,
         };
@@ -87,10 +87,9 @@ impl Input {
 
     pub fn desciption(&self) -> String {
         let mut name = format!(
-            "len:{},score:{},dep:{},age:{},",
+            "len:{},score:{},age:{},",
             self.p.calls.len(),
             self.score,
-            self.depth,
             self.age
         );
         if !self.was_mutated {
