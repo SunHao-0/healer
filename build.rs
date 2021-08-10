@@ -14,7 +14,8 @@ fn main() {
     } else if let Ok(syz_dir) = env::var("SYZ_SYS_DIR") {
         PathBuf::from(syz_dir)
     } else {
-        PathBuf::from("target/syzkaller/sys/json")
+        let target = env::var("OUT_DIR").unwrap();
+        PathBuf::from(&format!("{}/syzkaller/sys/json", target))
     };
     copy_sys(sys_dir)
 }
@@ -48,12 +49,19 @@ fn check_env() {
 }
 
 fn download() -> PathBuf {
-    const SYZ_REVISION: &str = "0edbbe3140b553039d2ccaaf4d870cfb62f3864a";
+    const DEFAULT_SYZ_REVISION: &str = "6c236867ce33c0c16b102e02a08226d7eb9b2046";
+    let syz_revision = if let Ok(revision) = env::var("SYZ_REVISION") {
+        revision
+    } else {
+        DEFAULT_SYZ_REVISION.to_string()
+    };
+
     let repo_url = format!(
         "https://github.com/google/syzkaller/archive/{}.zip",
-        SYZ_REVISION
+        syz_revision
     );
-    let syz_zip = PathBuf::from("target/syzkaller.zip");
+    let target = env::var("OUT_DIR").unwrap();
+    let syz_zip = PathBuf::from(&format!("{}/syzkaller.zip", target));
     if syz_zip.exists() && !check_download(&syz_zip) {
         remove_file(&syz_zip).unwrap_or_else(|e| {
             eprintln!(
@@ -87,10 +95,10 @@ fn download() -> PathBuf {
             eprintln!("downloaded file {} was broken", syz_zip.display());
             exit(1)
         }
-        println!("cargo:rerun-if-changed=target/syzkaller.zip");
+        println!("cargo:rerun-if-changed={}/syzkaller.zip", target);
     }
 
-    let syz_dir = format!("target/syzkaller-{}", SYZ_REVISION);
+    let syz_dir = format!("{}/syzkaller-{}", target, syz_revision);
     let syz_dir = PathBuf::from(syz_dir);
     if syz_dir.exists() {
         return syz_dir;
@@ -98,7 +106,7 @@ fn download() -> PathBuf {
 
     println!("unziping ...");
     let unzip = Command::new("unzip")
-        .current_dir("target")
+        .current_dir(&target)
         .arg("syzkaller.zip")
         .output()
         .unwrap_or_else(|e| {
@@ -116,7 +124,13 @@ fn download() -> PathBuf {
 }
 
 fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
-    const CKSUM: &str = "7af2474b84e51eb443aea37b36391f94f4344ba427d2158c09d59010c29da4f69552bb44cce236d81e09f62ee87ada64";
+    const DEFAULT_CKSUM: &str = "20cc5b9e79b841edba702907b0d1f2646353abc1a3a9bc788640ca49dab42132fde62092480aba49ab236029f3d930e3";
+    let expected_csum = if let Ok(csum) = env::var("SYZ_CHECKSUM") {
+        csum
+    } else {
+        DEFAULT_CKSUM.to_string()
+    };
+
     let output = Command::new("sha384sum")
         .arg(syz_zip.as_ref())
         .output()
@@ -128,7 +142,7 @@ fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
     } else {
         let stdout = String::from_utf8(output.stdout).unwrap();
         let cksum = stdout.split(' ').next().unwrap();
-        cksum.trim() == CKSUM
+        cksum.trim() == expected_csum
     }
 }
 
@@ -191,16 +205,52 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
                 exit(1);
             }
         }
-
         println!("cargo:rerun-if-changed={}", syz_dir.join("bin").display());
     }
 
+    copy_patched_syz_bin(&syz_dir);
     let sys_dir = syz_dir.join("sys").join("json");
     if !sys_dir.exists() {
         panic!("build finished, no json representation generated");
     }
     println!("cargo:rerun-if-changed={}", sys_dir.display());
     sys_dir
+}
+
+fn copy_patched_syz_bin(syz_dir: &Path) {
+    use std::os::unix::fs::symlink;
+
+    let bin_dir = syz_dir.join("bin");
+    if !bin_dir.exists() {
+        eprintln!("executable files not exist: {}", syz_dir.display());
+        exit(1);
+    }
+    // target/[debug/release]/build/syz-wrapper/out/..
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_bin = out_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("syz-bin");
+    println!(
+        "copy bin from {} to {}...",
+        bin_dir.display(),
+        out_bin.display()
+    );
+    if let Err(e) = symlink(&bin_dir, &out_bin) {
+        if e.kind() != ErrorKind::AlreadyExists {
+            eprintln!(
+                "failed to hardlink bin dir from {} to {}: {}",
+                bin_dir.display(),
+                out_bin.display(),
+                e
+            );
+            exit(1);
+        }
+    }
 }
 
 fn copy_sys(sys_dir: PathBuf) {

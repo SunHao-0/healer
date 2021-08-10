@@ -56,7 +56,7 @@ struct Settings {
     white_list: Option<PathBuf>,
     /// Enable relation learning.
     #[structopt(long)]
-    enable_relation_detect: bool,
+    disable_relation_detect: bool,
     /// Debug mode.
     #[structopt(long)]
     debug: bool,
@@ -85,7 +85,7 @@ pub fn main() {
         jobs: settings.jobs,
         relations: settings.relations,
         skip_repro: settings.skip_repro,
-        enable_relation_detect: settings.enable_relation_detect,
+        disable_relation_detect: settings.disable_relation_detect,
         qemu_conf: QemuConfig {
             target: settings.target.clone(),
             kernel_img: settings.kernel_img,

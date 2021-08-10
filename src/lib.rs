@@ -52,7 +52,7 @@ pub struct Config {
     pub skip_repro: bool,
     pub disabled_calls: Option<PathBuf>,
     pub white_list: Option<PathBuf>,
-    pub enable_relation_detect: bool,
+    pub disable_relation_detect: bool,
     pub qemu_conf: QemuConfig,
     pub exec_conf: SyzExecConfig,
 }

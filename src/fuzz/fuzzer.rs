@@ -365,7 +365,7 @@ impl Fuzzer {
             }
             new_input = true;
             let mut new_re = false;
-            if self.conf.enable_relation_detect {
+            if !self.conf.disable_relation_detect {
                 new_re = self.detect_relations(&m_p, &m_p_brs);
             }
 
