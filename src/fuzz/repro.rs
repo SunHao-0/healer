@@ -58,6 +58,7 @@ impl Fuzzer {
     }
 }
 
+#[allow(clippy::while_let_on_iterator)]
 fn parse_repro_log(log: String, repro_log: String) -> ReproResult {
     const FAILED: &str = "reproduction failed:";
     let mut lines = repro_log.lines();
