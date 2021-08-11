@@ -1,6 +1,6 @@
 
 # Healer
-[![Build](https://github.com/SunHao-0/healer/workflows/Build/badge.svg?branch=master)](https://github.com/SunHao-0/healer/actions?query=workflow%3ABuild) 
+[![Build](https://github.com/SunHao-0/healer/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/SunHao-0/healer/actions/workflows/ci-linux.yml)
 
 Healer is a kernel fuzzer inspired by [Syzkaller](https://github.com/google/syzkaller).
 
