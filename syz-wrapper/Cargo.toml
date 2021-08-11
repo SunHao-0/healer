@@ -1,0 +1,22 @@
+[package]
+name = "syz-wrapper"
+description = "Wrappers for syzkaller components"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+ahash = "0.7"
+healer-core = {path = "../healer-core"}
+
+
+[dependencies.simd-json]
+version = "0.4"
+features = ["known-key", "swar-number-parsing", "allow-non-simd"]
+
+[dev-dependencies]
+rand = {version = "0.8", features = ["small_rng"]}
+criterion = {version = "0.3", features = ["html_reports"]}
+
+ [[bench]]
+ name = "gen"
+ harness = false

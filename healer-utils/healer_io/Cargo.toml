@@ -1,0 +1,8 @@
+[package]
+name = "healer_io"
+description = "Healer IO utility"
+authors = ["Hao Sun <sunhao.th@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]

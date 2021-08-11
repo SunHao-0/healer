@@ -1,49 +1,27 @@
-[package]
-name = "healer"
-version = "0.1.0"
-authors = ["Hao Sun <sunhao.th@gmail.com>"]
-edition = "2018"
-description = "Healer: kernel fuzzer inspired by Syzkaller."
-license = "Apache-2.0"
+[workspace]
+members = [
+    "healer-core",
+    "healer-fuzzer",
+    "syz-wrapper",
 
-[dependencies]
-tokio = {version = "1.0", features = ["rt", "fs", "io-util"]} # for background io.
-rustc-hash = "1.1"      # for quick hashmap and hashset, secure cryptographic hash is unnecessary here
-rand = "0.8"            # for generation and mutation. 
-bv = "0.11.1"           # for mem mark in pointer type generation.
-bytes = "1.0"           # for serialization of prog.
-iota = "0.2"            # for constant calculation.
-shared_memory = "0.12"  # for qemu ivshmem.
-json = "0.12"           # for syz description parsing.
-thiserror = "1.0"       # for error hanlding.
-lazy_static = "1.4"
-log = "0.4"
-simplelog = "0.10"
-structopt = "0.3"
-signal-hook = {version = "0.3", features = ["iterator", "extended-siginfo"]}
-nix = "0.20"
-
-[dev-dependencies]  
-criterion = "0.3"
-
-[[bench]]
-name = "gen"
-harness = false
-
-[profile.dev]
-debug = true
-debug-assertions = false
-overflow-checks = false
-incremental = true
-codegen-units = 256
+    # utils 
+    "healer-utils/healer_alloc",
+    "healer-utils/healer_vm",
+    "healer-utils/healer_io",
+    
+    # tools mainly for debug purpose 
+    "tools/inspect-target",
+    "tools/gen-prog"
+]
 
 [profile.release]
-opt-level = 3
 debug = false
 debug-assertions = false
 overflow-checks = false
 lto = true
 panic = 'unwind'
-incremental = false
 codegen-units = 1
-rpath = false
+opt-level = 3
+
+[profile.test]
+opt-level = 3    
