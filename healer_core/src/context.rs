@@ -52,6 +52,25 @@ impl<'a, 'b> Context<'a, 'b> {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn dummy() -> Self {
+        let dummy = &0;
+        let target: &'static Target = unsafe { std::mem::transmute(dummy) };
+        let relation: &'static Relation = unsafe { std::mem::transmute(dummy) };
+        Self {
+            target,
+            relation,
+            mem_allocator: Allocator::new(1024),
+            vma_allocator: VmaAllocator::new(1024),
+            next_res_id: 0,
+            res_kinds: Vec::new(),
+            res_ids: HashMap::new(),
+            strs: Vec::new(),
+            filenames: Vec::new(),
+            calls: Vec::new(),
+        }
+    }
+
     /// Get current target of context.
     #[inline(always)]
     pub fn target(&self) -> &'a Target {

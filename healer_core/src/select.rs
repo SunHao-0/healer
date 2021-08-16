@@ -1,7 +1,7 @@
 //! Call Selection.
 //!
-//! Select syscalls based on [Syscall], {Syscall: [input/output Resource]}, {Resource: [Syscall]},
-//! {Resource: [Sub/Super type]}, Relation.
+//! Select syscalls based on syscalls, syscall => input/output resources, resources => input/output syscalls,
+//! resource => sub/super types, relations.
 use crate::{
     context::Context, gen::choose_weighted, syscall::SyscallId, verbose, HashMap, RngType,
 };

@@ -16,6 +16,7 @@ pub mod syscall;
 pub mod target;
 pub mod ty;
 pub mod value;
+pub mod value_pool;
 
 pub type HashMap<K, V> = AHashMap<K, V>;
 pub type HashSet<V> = AHashSet<V>;
