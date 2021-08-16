@@ -1,3 +1,4 @@
+//! Generate value for `integer` like types.
 use crate::{
     context::Context,
     gen::choose_weighted,

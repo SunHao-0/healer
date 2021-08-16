@@ -1,3 +1,4 @@
+//! Mutate value of `blob`, `string`, `filename` type.
 use crate::ty::Dir;
 use crate::{context::Context, value::Value, RngType};
 use rand::prelude::*;

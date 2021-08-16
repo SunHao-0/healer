@@ -1,3 +1,4 @@
+//! Generate value for `blob`, `string`, `filename` type.
 use rand::prelude::*;
 use std::ops::RangeInclusive;
 

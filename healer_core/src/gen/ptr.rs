@@ -1,3 +1,4 @@
+//! Generate value for `ptr`, `vma` type.
 use crate::target::Target;
 use crate::value::VmaValue;
 use crate::HashMap;

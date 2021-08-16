@@ -144,7 +144,7 @@ impl CallBuilder {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prog {
-    calls: Vec<Call>,
+    pub(crate) calls: Vec<Call>,
 }
 
 impl Prog {

@@ -1,3 +1,4 @@
+//! Generate value for `array`, `struct`, `union` type.
 use crate::{
     context::Context,
     gen::gen_ty_value,

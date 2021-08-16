@@ -14,25 +14,25 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Context<'a, 'b> {
     /// Fuzzing target of current prog.
-    target: &'a Target,
+    pub(crate) target: &'a Target,
     /// Relations between syscalls.
-    relation: &'b Relation,
+    pub(crate) relation: &'b Relation,
     /// Dummy mem allocator.
-    mem_allocator: Allocator,
+    pub(crate) mem_allocator: Allocator,
     /// Dummy vma allocator.
-    vma_allocator: VmaAllocator,
+    pub(crate) vma_allocator: VmaAllocator,
     /// Next avaliable resource id.
-    next_res_id: usize,
+    pub(crate) next_res_id: usize,
     /// Generated res kind.
-    res_kinds: Vec<ResKind>,
+    pub(crate) res_kinds: Vec<ResKind>,
     /// Generated res kind&id mapping.
-    res_ids: HashMap<ResKind, Vec<ResValueId>>,
+    pub(crate) res_ids: HashMap<ResKind, Vec<ResValueId>>,
     /// Generated strings.
-    strs: Vec<Vec<u8>>,
+    pub(crate) strs: Vec<Vec<u8>>,
     /// Generated filenames.
-    filenames: Vec<Vec<u8>>,
+    pub(crate) filenames: Vec<Vec<u8>>,
     /// Calls of current context.
-    calls: Vec<Call>,
+    pub(crate) calls: Vec<Call>,
 }
 
 impl<'a, 'b> Context<'a, 'b> {

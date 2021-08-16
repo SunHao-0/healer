@@ -1,3 +1,4 @@
+//! Generate value for `resource` type.
 use crate::{
     context::Context,
     gen::{current_builder, gen_one_call},

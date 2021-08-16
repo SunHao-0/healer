@@ -38,6 +38,10 @@ impl Allocator {
         }
     }
 
+    pub fn restore(&mut self) {
+        *self = Self::new(self.size);
+    }
+
     pub fn alloc(&mut self, layout: Layout) -> u64 {
         let layout = layout
             .align_to(ALLOC_GRANULE as usize)

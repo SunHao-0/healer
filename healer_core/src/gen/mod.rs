@@ -1,4 +1,4 @@
-//! Prog Generation
+//! Prog generation.
 use self::{
     buffer::{gen_buffer_blob, gen_buffer_filename, gen_buffer_string},
     group::{gen_array, gen_struct, gen_union},
@@ -22,7 +22,10 @@ use crate::{
     verbose, RngType,
 };
 use rand::prelude::*;
-use std::cell::{Cell, RefCell};
+use std::{
+    cell::{Cell, RefCell},
+    ops::Range,
+};
 
 pub mod buffer;
 pub mod group;
@@ -31,19 +34,38 @@ pub mod ptr;
 pub mod res;
 
 const MIN_PROG_LEN: usize = 16;
-const MAX_PROG_LEN: usize = 24;
+const MAX_PROG_LEN: usize = 25;
 
 thread_local! {
     static NEXT_PROG_LEN: Cell<usize> = Cell::new(MIN_PROG_LEN);
+    static PROG_LEN_RANGE: Cell<(usize, usize)> = Cell::new((MIN_PROG_LEN, MAX_PROG_LEN));
+}
+
+/// Set prog length range
+#[inline]
+pub fn set_prog_len_range(r: Range<usize>) {
+    PROG_LEN_RANGE.with(|v| v.set((r.start, r.end)))
+}
+
+/// Get current prog length range
+#[inline]
+pub fn prog_len_range() -> Range<usize> {
+    PROG_LEN_RANGE.with(|r| {
+        let v = r.get();
+        Range {
+            start: v.0,
+            end: v.1,
+        }
+    })
 }
 
 fn next_prog_len() -> usize {
     NEXT_PROG_LEN.with(|next_len| {
         let len = next_len.get();
-        let new_len = if len != MAX_PROG_LEN {
-            len + 1
-        } else {
-            MIN_PROG_LEN
+        let r = prog_len_range();
+        let mut new_len = len + 1;
+        if new_len >= r.end {
+            new_len = MIN_PROG_LEN
         };
         next_len.set(new_len);
         len
@@ -184,7 +206,7 @@ mod tests {
     fn next_prog_len() {
         assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN);
         assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN + 1);
-        while super::next_prog_len() != super::MAX_PROG_LEN {}
+        while super::next_prog_len() != super::MAX_PROG_LEN - 1 {}
         assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN);
     }
 
