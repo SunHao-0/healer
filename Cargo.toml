@@ -1,17 +1,17 @@
 [workspace]
 members = [
-    "healer-core",
-    "healer-fuzzer",
-    "syz-wrapper",
+    "healer_core",
+    "healer_fuzzer",
+    "syz_wrapper",
 
     # utils 
-    "healer-utils/healer_alloc",
-    "healer-utils/healer_vm",
-    "healer-utils/healer_io",
+    "healer_utils/healer_alloc",
+    "healer_utils/healer_vm",
+    "healer_utils/healer_io",
     
     # tools mainly for debug purpose 
-    "tools/inspect-target",
-    "tools/gen-prog"
+    "tools/inspect_target",
+    "tools/gen_prog"
 ]
 
 [profile.release]

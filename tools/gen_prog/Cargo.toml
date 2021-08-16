@@ -1,14 +1,14 @@
 [package]
-name = "gen-prog"
+name = "gen_prog"
 description = "Generate syscall prog"
 authors = ["Hao Sun <sunhao.th@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-healer-core = {path = "../../healer-core"}
-syz-wrapper = {path = "../../syz-wrapper"}
-healer_alloc = {path = "../../healer-utils/healer_alloc"}
+healer_core = {path = "../../healer_core"}
+syz_wrapper = {path = "../../syz_wrapper"}
+healer_alloc = {path = "../../healer_utils/healer_alloc"}
 rand = {version = "0.8", features = ["small_rng"]}
 env_logger = "0.9"
 log = "0.4"

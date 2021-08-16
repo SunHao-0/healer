@@ -294,16 +294,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "gen-prog"
+name = "gen_prog"
 version = "0.1.0"
 dependencies = [
  "clap 3.0.0-beta.2",
  "env_logger",
- "healer-core",
  "healer_alloc",
+ "healer_core",
  "log",
  "rand",
- "syz-wrapper",
+ "syz_wrapper",
 ]
 
 [[package]]
@@ -351,23 +351,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
-name = "healer-core"
-version = "0.1.0"
-dependencies = [
- "ahash 0.7.4",
- "log",
- "rand",
-]
-
-[[package]]
-name = "healer-fuzzer"
-version = "0.1.0"
-dependencies = [
- "healer-core",
- "healer_alloc",
-]
-
-[[package]]
 name = "healer_alloc"
 version = "0.1.0"
 dependencies = [
@@ -377,6 +360,23 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tikv-jemallocator",
+]
+
+[[package]]
+name = "healer_core"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.7.4",
+ "log",
+ "rand",
+]
+
+[[package]]
+name = "healer_fuzzer"
+version = "0.1.0"
+dependencies = [
+ "healer_alloc",
+ "healer_core",
 ]
 
 [[package]]
@@ -422,14 +422,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "inspect-target"
+name = "inspect_target"
 version = "0.1.0"
 dependencies = [
  "clap 3.0.0-beta.2",
- "healer-core",
  "healer_alloc",
+ "healer_core",
  "rand",
- "syz-wrapper",
+ "syz_wrapper",
 ]
 
 [[package]]
@@ -849,12 +849,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "syz-wrapper"
+name = "syz_wrapper"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "criterion",
- "healer-core",
+ "healer_core",
  "rand",
  "simd-json",
 ]

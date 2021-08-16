@@ -6,7 +6,8 @@ use crate::{
     verbose, HashMap, HashSet,
 };
 
-#[derive(Debug, Clone)]
+// #[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     sid: SyscallId,
     args: Box<[Value]>,
@@ -141,7 +142,7 @@ impl CallBuilder {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prog {
     calls: Vec<Call>,
 }

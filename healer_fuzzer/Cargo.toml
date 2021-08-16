@@ -1,0 +1,8 @@
+[package]
+name = "healer_fuzzer"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+healer_core = {path = "../healer_core"}
+healer_alloc = {path = "../healer_utils/healer_alloc"}

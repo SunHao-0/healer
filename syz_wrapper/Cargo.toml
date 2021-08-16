@@ -1,12 +1,12 @@
 [package]
-name = "syz-wrapper"
+name = "syz_wrapper"
 description = "Wrappers for syzkaller components"
 version = "0.1.0"
 edition = "2018"
 
 [dependencies]
 ahash = "0.7"
-healer-core = {path = "../healer-core"}
+healer_core = {path = "../healer_core"}
 
 
 [dependencies.simd-json]

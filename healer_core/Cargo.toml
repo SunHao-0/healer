@@ -1,5 +1,5 @@
 [package]
-name = "healer-core"
+name = "healer_core"
 description = "core algorithm and data structure of healer"
 authors = ["Hao Sun <sunhao.th@gmail.com>"]
 version = "0.1.0"

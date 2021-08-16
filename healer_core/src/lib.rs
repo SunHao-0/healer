@@ -5,6 +5,7 @@ use std::cell::Cell;
 
 pub mod alloc;
 pub mod context;
+pub mod corpus;
 pub mod gen;
 pub mod len;
 pub mod mutation;
