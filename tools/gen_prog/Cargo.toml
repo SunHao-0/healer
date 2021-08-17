@@ -5,6 +5,10 @@ authors = ["Hao Sun <sunhao.th@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
 
+[[bin]]
+name = "gen-prog"
+path = "src/main.rs"
+
 [dependencies]
 healer_core = {path = "../../healer_core"}
 syz_wrapper = {path = "../../syz_wrapper"}

@@ -33,12 +33,12 @@ pub mod int;
 pub mod ptr;
 pub mod res;
 
-const MIN_PROG_LEN: usize = 16;
-const MAX_PROG_LEN: usize = 25;
+pub const FAVORED_MIN_PROG_LEN: usize = 16;
+pub const FAVORED_MAX_PROG_LEN: usize = 25;
 
 thread_local! {
-    static NEXT_PROG_LEN: Cell<usize> = Cell::new(MIN_PROG_LEN);
-    static PROG_LEN_RANGE: Cell<(usize, usize)> = Cell::new((MIN_PROG_LEN, MAX_PROG_LEN));
+    static NEXT_PROG_LEN: Cell<usize> = Cell::new(FAVORED_MIN_PROG_LEN);
+    static PROG_LEN_RANGE: Cell<(usize, usize)> = Cell::new((FAVORED_MIN_PROG_LEN, FAVORED_MAX_PROG_LEN));
 }
 
 /// Set prog length range
@@ -65,7 +65,7 @@ fn next_prog_len() -> usize {
         let r = prog_len_range();
         let mut new_len = len + 1;
         if new_len >= r.end {
-            new_len = MIN_PROG_LEN
+            new_len = FAVORED_MIN_PROG_LEN
         };
         next_len.set(new_len);
         len
@@ -204,10 +204,10 @@ mod tests {
 
     #[test]
     fn next_prog_len() {
-        assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN);
-        assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN + 1);
-        while super::next_prog_len() != super::MAX_PROG_LEN - 1 {}
-        assert_eq!(super::next_prog_len(), super::MIN_PROG_LEN);
+        assert_eq!(super::next_prog_len(), super::FAVORED_MIN_PROG_LEN);
+        assert_eq!(super::next_prog_len(), super::FAVORED_MIN_PROG_LEN + 1);
+        while super::next_prog_len() != super::FAVORED_MAX_PROG_LEN - 1 {}
+        assert_eq!(super::next_prog_len(), super::FAVORED_MIN_PROG_LEN);
     }
 
     #[test]

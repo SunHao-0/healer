@@ -3,6 +3,10 @@ name = "healer_fuzzer"
 version = "0.1.0"
 edition = "2018"
 
+[[bin]]
+name = "healer"
+path = "src/main.rs"
+
 [dependencies]
 healer_core = {path = "../healer_core"}
 healer_alloc = {path = "../healer_utils/healer_alloc"}

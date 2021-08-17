@@ -511,6 +511,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mutate_prog"
+version = "0.1.0"
+dependencies = [
+ "clap 3.0.0-beta.2",
+ "env_logger",
+ "healer_alloc",
+ "healer_core",
+ "log",
+ "rand",
+ "syz_wrapper",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

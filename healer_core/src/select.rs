@@ -26,8 +26,9 @@ pub fn select_with_no_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
             select_random_syscall
         };
         if let Some(sid) = selector(ctx, rng) {
-            log::info!("select with no calls: {}", ctx.target().syscall_of(sid));
-
+            if verbose() {
+                log::info!("select with no calls: {}", ctx.target().syscall_of(sid));
+            }
             return sid;
         }
     }
