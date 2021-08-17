@@ -9,6 +9,7 @@ pub mod corpus;
 pub mod gen;
 pub mod len;
 pub mod mutation;
+pub mod parse;
 pub mod prog;
 pub mod relation;
 pub mod select;

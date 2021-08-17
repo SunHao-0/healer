@@ -82,7 +82,7 @@ pub fn gen_flags(_ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> 
 }
 
 #[inline]
-pub(super) fn gen_flags_bitmask(rng: &mut RngType, vals: &[u64], base: u64) -> u64 {
+pub fn gen_flags_bitmask(rng: &mut RngType, vals: &[u64], base: u64) -> u64 {
     if rng.gen_ratio(1, 100) {
         flag_rand_val(rng)
     } else {
@@ -91,7 +91,7 @@ pub(super) fn gen_flags_bitmask(rng: &mut RngType, vals: &[u64], base: u64) -> u
 }
 
 #[inline]
-pub(super) fn gen_flags_non_bitmask(rng: &mut RngType, vals: &[u64], base: u64) -> u64 {
+pub fn gen_flags_non_bitmask(rng: &mut RngType, vals: &[u64], base: u64) -> u64 {
     match rng.gen_range(0..100) {
         0 => flag_rand_val(rng),
         1..=2 if base != 0 => rand_inc(rng, base),

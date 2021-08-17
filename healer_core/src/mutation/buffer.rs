@@ -1,4 +1,5 @@
 //! Mutate value of `blob`, `string`, `filename` type.
+use crate::gen::buffer::{gen_buffer_filename, gen_buffer_string};
 use crate::ty::Dir;
 use crate::{context::Context, value::Value, RngType};
 use rand::prelude::*;
@@ -10,16 +11,51 @@ use std::ops::{Range, RangeInclusive};
 pub const MAX_BLOB_LEN: u64 = 100 << 10;
 
 /// Mutate a buffer value
-pub fn mutate_blob(ctx: &mut Context, rng: &mut RngType, val: &mut Value) {
+pub fn mutate_buffer_blob(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target()).checked_as_buffer_blob();
-    let r = ty.range().unwrap_or(RangeInclusive::new(0, MAX_BLOB_LEN));
+    let r = ty.range().unwrap_or(0..=MAX_BLOB_LEN);
     let val = val.checked_as_data_mut();
 
     if val.dir() == Dir::Out {
         val.size = mutate_blob_len(rng, val.size, r);
+        true
     } else {
         do_mutate_blob(ctx, rng, &mut val.data, r)
     }
+}
+
+pub fn mutate_buffer_string(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
+    let ty = val.ty(ctx.target()).checked_as_buffer_string();
+    let r = if ty.size() != 0 {
+        ty.size()..=ty.size()
+    } else {
+        0..=MAX_BLOB_LEN
+    };
+
+    if ty.is_glob() {
+        let new_val = if !ty.vals().is_empty() {
+            gen_buffer_string(ctx, rng, val.ty(ctx.target), val.dir())
+        } else {
+            gen_buffer_filename(ctx, rng, val.ty(ctx.target), val.dir())
+        };
+        *val = new_val;
+        return true;
+    }
+
+    let val = val.checked_as_data_mut();
+    if val.dir() == Dir::Out {
+        val.size = mutate_blob_len(rng, val.size, r);
+        true
+    } else {
+        do_mutate_blob(ctx, rng, &mut val.data, r)
+    }
+}
+
+pub fn mutate_buffer_filename(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
+    let ty = val.ty(ctx.target);
+    let new_val = gen_buffer_filename(ctx, rng, ty, val.dir());
+    *val = new_val;
+    true
 }
 
 /// Inc or dec the size `old` with little step.
@@ -78,7 +114,12 @@ pub const BLOB_MUTATE_OPERATIONS: [BlobMutateOperation; 27] = [
 ];
 
 #[inline]
-fn do_mutate_blob(ctx: &mut Context, rng: &mut RngType, buf: &mut Vec<u8>, r: RangeInclusive<u64>) {
+fn do_mutate_blob(
+    ctx: &mut Context,
+    rng: &mut RngType,
+    buf: &mut Vec<u8>,
+    r: RangeInclusive<u64>,
+) -> bool {
     let mut mutated = false;
     let mut tries = 0;
 
@@ -89,8 +130,11 @@ fn do_mutate_blob(ctx: &mut Context, rng: &mut RngType, buf: &mut Vec<u8>, r: Ra
     }
 
     if !r.contains(&(buf.len() as u64)) && rng.gen_ratio(99, 100) {
-        fixup_blob_length(rng, buf, r)
+        fixup_blob_length(rng, buf, r);
+        mutated = true;
     }
+
+    mutated
 }
 
 #[inline]

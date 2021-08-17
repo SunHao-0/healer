@@ -190,6 +190,11 @@ impl Value {
     }
 
     #[inline(always)]
+    pub fn ty_id(&self) -> TypeId {
+        self.comm.ty_id()
+    }
+
+    #[inline(always)]
     pub fn dir(&self) -> Dir {
         self.comm.dir
     }
