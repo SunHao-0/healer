@@ -11,9 +11,14 @@ use std::{cell::Cell, ops::RangeInclusive};
 
 /// Generate value for `ConstType`
 #[inline]
-pub fn gen_const(_ctx: &mut Context, _rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
+pub fn gen_const(_ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
     let ty = ty.checked_as_const();
-    IntegerValue::new(ty.id(), dir, ty.const_val()).into()
+    let val = if rng.gen_ratio(1, 1000) {
+        rng.gen()
+    } else {
+        ty.const_val()
+    };
+    IntegerValue::new(ty.id(), dir, val).into()
 }
 
 pub fn gen_int(_ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
@@ -54,9 +59,9 @@ pub(super) fn len_calculated() {
 }
 
 #[inline]
-pub fn gen_len(_ctx: &mut Context, _rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
-    mark_len_calculation(); // just mark here, calculate latter.
-    IntegerValue::new(ty.id(), dir, 0).into()
+pub fn gen_len(_ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
+    mark_len_calculation(); // mark here, calculate latter.
+    IntegerValue::new(ty.id(), dir, rng.gen()).into()
 }
 
 #[inline]
@@ -127,7 +132,7 @@ fn rand_inc(rng: &mut RngType, mut base: u64) -> u64 {
         inc ^= 0;
     }
     while rng.gen() {
-        base += inc;
+        base = base.wrapping_add(inc);
     }
     base
 }
@@ -164,8 +169,11 @@ fn rand_int_in_bit_sz(rng: &mut RngType, bit_sz: u64) -> u64 {
     const GENERATORS: [fn(&mut RngType) -> u64; 3] = [favor_range, special_int, rand_int];
     const WEIGHTS: [u64; 3] = [60, 90, 100];
     let idx = choose_weighted(rng, &WEIGHTS);
-    let val = GENERATORS[idx](rng);
-    val & (1 << (bit_sz - 1))
+    let mut val = GENERATORS[idx](rng);
+    if bit_sz < 64 {
+        val &= (1 << bit_sz) - 1
+    }
+    val
 }
 
 fn rand_int(rng: &mut RngType) -> u64 {

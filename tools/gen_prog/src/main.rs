@@ -1,6 +1,7 @@
 use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::gen;
 use healer_core::relation::Relation;
+use healer_core::verbose::set_verbose;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::process::exit;
@@ -24,7 +25,7 @@ struct Settings {
 fn main() {
     let settings = Settings::parse();
     env_logger::init();
-    healer_core::set_verbose(settings.verbose);
+    set_verbose(settings.verbose);
     let target = load_target(&settings.target).unwrap_or_else(|e| {
         eprintln!("failed to load target: {}", e);
         exit(1)
@@ -35,4 +36,5 @@ fn main() {
         let p = gen::gen_prog(&target, &relation, &mut rng);
         println!("{}\n", p.display(&target));
     }
+    exit(0);
 }

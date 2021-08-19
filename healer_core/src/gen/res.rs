@@ -5,7 +5,7 @@ use crate::{
     target::Target,
     ty::{Dir, ResKind, ResType, Type},
     value::{ResValue, ResValueId, Value},
-    verbose, RngType,
+    RngType,
 };
 use rand::{prelude::SliceRandom, Rng};
 use std::cell::Cell;
@@ -80,9 +80,7 @@ fn generate_res_output_call(
     }
 
     mark_generating();
-    if verbose() {
-        log::info!("generating resource: {}", ty.res_name());
-    }
+    verbose!("generating resource: {}", ty.res_name());
     let mut ret = None;
     let target = ctx.target();
     let mut tries = 0;

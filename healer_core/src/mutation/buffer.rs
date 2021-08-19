@@ -1,6 +1,9 @@
 //! Mutate value of `blob`, `string`, `filename` type.
-use crate::gen::buffer::{gen_buffer_filename, gen_buffer_string};
+use crate::gen::buffer::{gen_buffer_filename, gen_buffer_string, rand_filename, UNIX_PATH_MAX};
+#[cfg(debug_assertions)]
+use crate::mutation::call::display_value_diff;
 use crate::ty::Dir;
+use crate::value::DataValue;
 use crate::{context::Context, value::Value, RngType};
 use rand::prelude::*;
 use rand::Rng;
@@ -10,23 +13,35 @@ use std::ops::{Range, RangeInclusive};
 
 pub const MAX_BLOB_LEN: u64 = 100 << 10;
 
-/// Mutate a buffer value
+/// Mutate a buffer blob value.
 pub fn mutate_buffer_blob(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target()).checked_as_buffer_blob();
     let r = ty.range().unwrap_or(0..=MAX_BLOB_LEN);
     let val = val.checked_as_data_mut();
 
-    if val.dir() == Dir::Out {
-        val.size = mutate_blob_len(rng, val.size, r);
-        true
+    if *r.start() == 0 && *r.end() == 0 {
+        verbose!("mutate_buffer_blob: zero size buffer");
+        return false;
+    }
+
+    #[allow(clippy::let_and_return)] // ignore warning in release build mode
+    let mutated = if val.dir() == Dir::Out {
+        let new_size = mutate_blob_len(rng, val.size, r);
+        verbose!("mutate_buffer_blob(size): {} -> {}", val.size, new_size);
+        let mutated = new_size != val.size;
+        val.size = new_size;
+        mutated
     } else {
         do_mutate_blob(ctx, rng, &mut val.data, r)
-    }
+    };
+
+    mutated
 }
 
+/// Mutate a buffer string value.
 pub fn mutate_buffer_string(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target()).checked_as_buffer_string();
-    let r = if ty.size() != 0 {
+    let r = if !ty.varlen() && ty.size() != 0 {
         ty.size()..=ty.size()
     } else {
         0..=MAX_BLOB_LEN
@@ -36,25 +51,56 @@ pub fn mutate_buffer_string(ctx: &mut Context, rng: &mut RngType, val: &mut Valu
         let new_val = if !ty.vals().is_empty() {
             gen_buffer_string(ctx, rng, val.ty(ctx.target), val.dir())
         } else {
-            gen_buffer_filename(ctx, rng, val.ty(ctx.target), val.dir())
+            let filename = rand_filename(ctx, rng, val.ty(ctx.target), ty.noz());
+            DataValue::new(val.ty_id(), val.dir(), filename).into()
         };
+        verbose!(
+            "mutate_buffer_string(glob): {}",
+            display_value_diff(val, &new_val, ctx.target)
+        );
         *val = new_val;
         return true;
     }
 
     let val = val.checked_as_data_mut();
     if val.dir() == Dir::Out {
-        val.size = mutate_blob_len(rng, val.size, r);
-        true
+        let new_size = mutate_blob_len(rng, val.size, r);
+        let mutated = new_size != val.size;
+        verbose!("mutate_buffer_string(size): {} -> {}", val.size, new_size);
+        val.size = new_size;
+        mutated
+    } else if !ty.vals().is_empty() {
+        let new_val = ty.vals().choose(rng).unwrap().to_vec();
+        let mutated = new_val != val.data;
+        verbose!(
+            "mutate_buffer_string(vals): {} -> {}",
+            new_val.len(),
+            val.data.len()
+        );
+        val.data = new_val;
+        mutated
     } else {
         do_mutate_blob(ctx, rng, &mut val.data, r)
     }
 }
 
+/// Mutate a buffer filename value.
 pub fn mutate_buffer_filename(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target);
-    let new_val = gen_buffer_filename(ctx, rng, ty, val.dir());
-    *val = new_val;
+    let _old_size = val.size(ctx.target);
+
+    if rng.gen_ratio(99, 100) {
+        *val = gen_buffer_filename(ctx, rng, ty, val.dir());
+    } else {
+        let inner_val = val.checked_as_data_mut();
+        do_mutate_blob(ctx, rng, &mut inner_val.data, 0..=UNIX_PATH_MAX);
+    }
+    verbose!(
+        "mutate_buffer_filename: {} -> {}",
+        _old_size,
+        val.size(ctx.target)
+    );
+
     true
 }
 
@@ -112,6 +158,37 @@ pub const BLOB_MUTATE_OPERATIONS: [BlobMutateOperation; 27] = [
     modify_special8,
     modify_ascii_int,
 ];
+#[cfg(debug_assertions)]
+const BLOB_MUTATE_OPERATION_NAMES: [&str; 27] = [
+    // block level operations
+    "shuffle",
+    "erase",
+    "overwrite_within",
+    "overwrite_random",
+    "insert_within",
+    "insert_0x00",
+    "insert_0xff",
+    "insert_one_special",
+    "insert_one_random",
+    "insert_random",
+    "set_length8",
+    "perturb8",
+    "replace_magic8",
+    "set_length16",
+    "perturb16",
+    "replace_magic16",
+    "set_length32",
+    "perturb32",
+    "replace_magic32",
+    "set_length64",
+    "perturb64",
+    "insert8",
+    "insert_special8",
+    "modify1",
+    "modify8",
+    "modify_special8",
+    "modify_ascii_int",
+];
 
 #[inline]
 fn do_mutate_blob(
@@ -122,10 +199,12 @@ fn do_mutate_blob(
 ) -> bool {
     let mut mutated = false;
     let mut tries = 0;
+    let _old_size = buf.len();
 
-    while tries < 128 && (!mutated || rng.gen_ratio(1, 3)) {
-        let op = BLOB_MUTATE_OPERATIONS.choose(rng).unwrap();
-        mutated = op(ctx, rng, buf, r.clone());
+    while tries < 128 && (!mutated || rng.gen_ratio(1, 2)) {
+        let op_idx = rng.gen_range(0..BLOB_MUTATE_OPERATIONS.len());
+        verbose!("do_mutate_blob: {}", BLOB_MUTATE_OPERATION_NAMES[op_idx]);
+        mutated = BLOB_MUTATE_OPERATIONS[op_idx](ctx, rng, buf, r.clone());
         tries += 1;
     }
 
@@ -134,6 +213,7 @@ fn do_mutate_blob(
         mutated = true;
     }
 
+    verbose!("do_mutate_blob: {} -> {}", _old_size, buf.len());
     mutated
 }
 
@@ -504,6 +584,10 @@ fn modify1(
     buf: &mut Vec<u8>,
     _r: RangeInclusive<u64>,
 ) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+
     let pos = rng.gen_range(0..buf.len());
     buf[pos] ^= 1 << rng.gen_range(0..8);
     true
@@ -516,6 +600,10 @@ fn modify8(
     buf: &mut Vec<u8>,
     _r: RangeInclusive<u64>,
 ) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+
     let pos = rng.gen_range(0..buf.len());
     buf[pos] ^= 1 + rng.gen_range(0..255);
     true
@@ -528,6 +616,10 @@ fn modify_special8(
     buf: &mut Vec<u8>,
     _r: RangeInclusive<u64>,
 ) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+
     let pos = rng.gen_range(0..buf.len());
     buf[pos] = *SPECIAL_BYTE.choose(rng).unwrap();
     true
@@ -567,6 +659,10 @@ fn modify_ascii_int(
     buf: &mut Vec<u8>,
     _r: RangeInclusive<u64>,
 ) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+
     fn find_first_digit(buf: &[u8], start: usize) -> Result<usize, ()> {
         let offset = buf[start..]
             .iter()

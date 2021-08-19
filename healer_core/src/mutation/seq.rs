@@ -4,11 +4,11 @@ use crate::{
     context::Context,
     corpus::CorpusWrapper,
     gen::{gen_one_call, prog_len_range},
-    prog::Call,
+    prog::{Call, Prog},
     select::select_with_calls,
     syscall::SyscallId,
     value::ResValueKind,
-    verbose, HashMap, RngType,
+    HashMap, RngType,
 };
 use rand::prelude::*;
 
@@ -19,24 +19,16 @@ pub fn splice(ctx: &mut Context, corpus: &CorpusWrapper, rng: &mut RngType) -> b
     }
 
     let p = corpus.select_one(rng).unwrap();
-    if verbose() {
-        log::info!(
-            "splice: splicing following prog:\n{}",
-            p.display(ctx.target)
-        );
-    }
     let mut calls = p.calls;
     // mapping resource id of `calls`, continue with current `ctx.next_res_id`
     mapping_res_id(ctx, &mut calls);
     restore_partial_ctx(ctx, &calls);
     let idx = rng.gen_range(0..=ctx.calls.len());
-    if verbose() {
-        log::info!(
-            "splice: splicing {} call(s) to location {}",
-            calls.len(),
-            idx
-        );
-    }
+    verbose!(
+        "splice: splicing {} call(s) to location {}",
+        calls.len(),
+        idx
+    );
     ctx.calls.splice(idx..idx, calls);
     true
 }
@@ -50,21 +42,31 @@ pub fn insert_calls(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngTyp
     let idx = rng.gen_range(0..=ctx.calls.len());
     restore_res_ctx(ctx, idx); // restore the resource information before call `idx`
     let sid = select_call_to(ctx, rng, idx);
-    if verbose() {
-        log::info!(
-            "insert_calls: inserting {} to location {}",
-            ctx.target.syscall_of(sid),
-            idx
-        );
-    }
+    verbose!(
+        "insert_calls: inserting {} to location {}",
+        ctx.target.syscall_of(sid).name(),
+        idx
+    );
     let mut calls_backup = std::mem::take(&mut ctx.calls);
     gen_one_call(ctx, rng, sid);
     let new_calls = std::mem::take(&mut ctx.calls);
-    if verbose() {
-        log::info!("insert_calls: {} call(s) inserted", new_calls.len());
-    }
+    verbose!("insert_calls: {} call(s) inserted", new_calls.len());
     calls_backup.splice(idx..idx, new_calls);
     ctx.calls = calls_backup;
+    true
+}
+
+pub fn remove_call(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngType) -> bool {
+    if ctx.calls.is_empty() {
+        return false;
+    }
+
+    let idx = rng.gen_range(0..ctx.calls.len());
+    let calls = std::mem::take(&mut ctx.calls);
+    let mut p = Prog::new(calls);
+    verbose!("remove_call: removing call-{}", idx);
+    p.remove_call_inplace(idx);
+    ctx.calls = p.calls;
     true
 }
 
@@ -111,6 +113,16 @@ fn mapping_res_id(ctx: &mut Context, calls: &mut [Call]) {
                     ResValueKind::Null => (),
                 }
             }
-        })
+        });
+        for ids in call.generated_res.values_mut() {
+            for id in ids {
+                *id += ctx.next_res_id;
+            }
+        }
+        for ids in call.used_res.values_mut() {
+            for id in ids {
+                *id += ctx.next_res_id;
+            }
+        }
     }
 }

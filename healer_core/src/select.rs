@@ -2,9 +2,7 @@
 //!
 //! Select syscalls based on syscalls, syscall => input/output resources, resources => input/output syscalls,
 //! resource => sub/super types, relations.
-use crate::{
-    context::Context, gen::choose_weighted, syscall::SyscallId, verbose, HashMap, RngType,
-};
+use crate::{context::Context, gen::choose_weighted, syscall::SyscallId, HashMap, RngType};
 use rand::prelude::*;
 
 /// Select a syscall based on current calls context.
@@ -26,9 +24,7 @@ pub fn select_with_no_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
             select_random_syscall
         };
         if let Some(sid) = selector(ctx, rng) {
-            if verbose() {
-                log::info!("select with no calls: {}", ctx.target().syscall_of(sid));
-            }
+            verbose!("select with no calls: {}", ctx.target().syscall_of(sid));
             return sid;
         }
     }
@@ -52,9 +48,7 @@ pub fn select_with_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
     loop {
         let idx = choose_weighted(rng, &WEIGHTS);
         if let Some(sid) = SELECTORS[idx](ctx, rng) {
-            if verbose() {
-                log::info!("select strategy-{}: {}", idx, ctx.target().syscall_of(sid));
-            }
+            verbose!("select strategy-{}: {}", idx, ctx.target().syscall_of(sid));
             return sid;
         }
     }

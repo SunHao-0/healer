@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use crate::{
     context::Context,
     gen::choose_weighted,
-    ty::{BufferFilenameType, BufferStringType, Dir, Type},
+    ty::{BufferStringType, Dir, Type},
     value::{DataValue, Value},
     RngType,
 };
@@ -100,7 +100,7 @@ fn gen_rand_string(rng: &mut RngType) -> Vec<u8> {
 }
 
 pub fn gen_buffer_filename(ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
-    let ty = ty.checked_as_buffer_filename();
+    // let ty = ty.checked_as_buffer_filename();
     if dir == Dir::Out {
         let len = if !ty.varlen() {
             ty.size()
@@ -109,21 +109,29 @@ pub fn gen_buffer_filename(ctx: &mut Context, rng: &mut RngType, ty: &Type, dir:
         };
         DataValue::new_out_data(ty.id(), dir, len).into()
     } else {
-        let val = rand_filename(ctx, rng, ty);
+        let noz = if let Some(ty) = ty.as_buffer_string() {
+            ty.noz()
+        } else {
+            let ty = ty.checked_as_buffer_filename();
+            ty.noz()
+        };
+        let val = rand_filename(ctx, rng, ty, noz);
         DataValue::new(ty.id(), dir, val).into()
     }
 }
+pub const UNIX_PATH_MAX: u64 = 108;
+pub const PATH_MAX: u64 = 4096;
 
 #[inline]
 fn rand_filename_len(rng: &mut RngType) -> u64 {
     match rng.gen_range(0..=2) {
         0 => rng.gen_range(0..100),
-        1 => 108,
-        _ => 4096,
+        1 => UNIX_PATH_MAX,
+        _ => PATH_MAX,
     }
 }
 
-fn rand_filename(ctx: &mut Context, rng: &mut RngType, ty: &BufferFilenameType) -> Vec<u8> {
+pub(crate) fn rand_filename(ctx: &mut Context, rng: &mut RngType, ty: &Type, noz: bool) -> Vec<u8> {
     const GENERATORS: [fn(&mut Context, &mut RngType) -> Vec<u8>; 3] =
         [rand_reusing, gen_rand_filename, rand_speical_files];
     const WEIGHTS: [u64; 3] = [80, 99, 100];
@@ -136,7 +144,7 @@ fn rand_filename(ctx: &mut Context, rng: &mut RngType, ty: &BufferFilenameType) 
         if val.len() != sz {
             val.resize(sz, 0);
         }
-    } else if !ty.noz() {
+    } else if !noz {
         val.push(0);
     }
     val.shrink_to_fit();

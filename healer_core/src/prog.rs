@@ -3,7 +3,8 @@ use crate::{
     target::Target,
     ty::ResKind,
     value::{ResValue, ResValueId, Value, ValueKind},
-    verbose, HashMap, HashSet,
+    verbose::verbose_mode,
+    HashMap, HashSet,
 };
 
 // #[derive(Debug, Clone)]
@@ -45,7 +46,7 @@ pub struct CallDisplay<'a, 'b> {
 
 impl<'a, 'b> std::fmt::Display for CallDisplay<'a, 'b> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if verbose() {
+        if verbose_mode() {
             writeln!(
                 f,
                 "[generated res: {:?}, used res: {:?}]",
@@ -70,11 +71,11 @@ impl<'a, 'b> std::fmt::Display for CallDisplay<'a, 'b> {
 
 #[derive(Debug, Clone)]
 pub struct CallBuilder {
-    sid: SyscallId,
-    args: Vec<Value>,
-    ret: Option<Value>,
-    generated_res: HashMap<ResKind, HashSet<ResValueId>>,
-    used_res: HashMap<ResKind, HashSet<ResValueId>>,
+    pub(crate) sid: SyscallId,
+    pub(crate) args: Vec<Value>,
+    pub(crate) ret: Option<Value>,
+    pub(crate) generated_res: HashMap<ResKind, HashSet<ResValueId>>,
+    pub(crate) used_res: HashMap<ResKind, HashSet<ResValueId>>,
 }
 
 impl CallBuilder {
@@ -207,7 +208,7 @@ impl Prog {
                 let val = val.checked_as_res_mut();
                 if let Some(id) = val.res_val_id() {
                     if ids.contains(&id) {
-                        assert!(val.is_ref());
+                        assert!(val.ref_res());
                         *val = ResValue::new_null(val.ty_id(), val.dir(), 0);
                     }
                 }

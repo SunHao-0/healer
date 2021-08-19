@@ -19,7 +19,7 @@ use crate::{
     target::Target,
     ty::{Dir, Type, TypeKind},
     value::{ResValue, Value},
-    verbose, RngType,
+    RngType,
 };
 use rand::prelude::*;
 use std::{
@@ -76,15 +76,11 @@ fn next_prog_len() -> usize {
 pub fn gen_prog(target: &Target, relation: &Relation, rng: &mut RngType) -> Prog {
     let mut ctx = Context::new(target, relation);
     let len = next_prog_len();
-    if verbose() {
-        log::info!("prog len: {}", len);
-    }
+    verbose!("prog len: {}", len);
     while ctx.calls().len() < len {
         gen_call(&mut ctx, rng);
     }
-    if verbose() {
-        log::info!("Context:\n{}", ctx);
-    }
+    verbose!("Context:\n{}", ctx);
     ctx.to_prog()
 }
 
@@ -100,12 +96,12 @@ thread_local! {
 }
 
 #[inline]
-fn push_builder(sid: SyscallId) {
+pub(crate) fn push_builder(sid: SyscallId) {
     CALLS_STACK.with(|calls| calls.borrow_mut().push(CallBuilder::new(sid)))
 }
 
 #[inline]
-fn current_builder<F>(mut f: F)
+pub(crate) fn current_builder<F>(mut f: F)
 where
     F: FnMut(&mut CallBuilder),
 {
@@ -113,19 +109,14 @@ where
 }
 
 #[inline]
-fn pop_builder() -> CallBuilder {
+pub(crate) fn pop_builder() -> CallBuilder {
     CALLS_STACK.with(|calls| calls.borrow_mut().pop().unwrap())
 }
 
 /// Generate syscall `sid` to `context`.
 pub fn gen_one_call(ctx: &mut Context, rng: &mut RngType, sid: SyscallId) {
     push_builder(sid);
-    if verbose() {
-        log::info!("generating: {}", ctx.target().syscall_of(sid));
-        CALLS_STACK.with(|stack| {
-            log::info!("current stack: {:?}", stack);
-        })
-    }
+    verbose!("generating: {}", ctx.target().syscall_of(sid));
     let syscall = ctx.target().syscall_of(sid);
     let mut args = Vec::with_capacity(syscall.params().len());
     for param in syscall.params() {

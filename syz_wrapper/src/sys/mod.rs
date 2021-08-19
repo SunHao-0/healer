@@ -241,12 +241,14 @@ pub fn load_description_json(sys: SysTarget) -> Result<JsonValue, LoadError> {
 
 #[cfg(test)]
 mod tests {
-    use healer_core::{gen, relation::Relation};
-    use rand::{prelude::SmallRng, SeedableRng};
-
-    use crate::HashMap;
-
     use super::{load_sys_target, load_target, SysTarget, TARGETS};
+    use crate::HashMap;
+    use healer_core::corpus::CorpusWrapper;
+    use healer_core::gen::{set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_MIN_PROG_LEN};
+    use healer_core::target::Target;
+    use healer_core::{gen, mutation::mutate, relation::Relation};
+    use rand::prelude::*;
+    use rand::{prelude::SmallRng, SeedableRng};
 
     #[test]
     fn sys_target_name_parse() {
@@ -265,13 +267,38 @@ mod tests {
 
     /// Generate 1000 sys prog
     #[test]
-    fn sys_prog_gen_100() {
+    fn sys_prog_gen() {
         let mut rng = SmallRng::from_entropy();
-        for target in &TARGETS {
-            let target = load_target(target.0).unwrap();
-            let relation = Relation::new(&target);
-            for _ in 0..100 {
-                gen::gen_prog(&target, &relation, &mut rng);
+        let target = load_target("linux/amd64").unwrap();
+        let relation = Relation::new(&target);
+        for _ in 0..4096 {
+            gen::gen_prog(&target, &relation, &mut rng);
+        }
+    }
+
+    fn dummy_corpus(target: &Target, relation: &Relation, rng: &mut SmallRng) -> CorpusWrapper {
+        let corpus = CorpusWrapper::new();
+        let n = rng.gen_range(8..=32);
+        set_prog_len_range(3..8); // progs in corpus are always shorter
+        for _ in 0..n {
+            let prio = rng.gen_range(64..=1024);
+            corpus.add_prog(gen::gen_prog(target, relation, rng), prio);
+        }
+        set_prog_len_range(FAVORED_MIN_PROG_LEN..FAVORED_MAX_PROG_LEN); // restore
+        corpus
+    }
+
+    /// Generate 1000 sys prog
+    #[test]
+    fn sys_prog_mutate() {
+        let mut rng = SmallRng::from_entropy();
+        let target = load_target("linux/amd64").unwrap();
+        let relation = Relation::new(&target);
+        let corpus = dummy_corpus(&target, &relation, &mut rng);
+        for _ in 0..1024 {
+            let mut p = corpus.select_one(&mut rng).unwrap();
+            for _ in 0..32 {
+                mutate(&target, &relation, &corpus, &mut rng, &mut p);
             }
         }
     }

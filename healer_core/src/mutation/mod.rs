@@ -5,14 +5,14 @@ use crate::{
     gen::{choose_weighted, prog_len_range},
     mutation::{
         call::mutate_call_args,
-        seq::{insert_calls, splice},
+        seq::{insert_calls, remove_call, splice},
     },
     prog::{Call, Prog},
     relation::Relation,
     target::Target,
-    ty::{Dir, TypeKind},
+    ty::{Dir, ResKind, TypeKind},
     value::{ResValueId, ResValueKind, Value, ValueKind},
-    verbose, HashMap, RngType,
+    HashMap, HashSet, RngType,
 };
 use rand::prelude::*;
 
@@ -31,10 +31,10 @@ pub fn mutate(
     corpus: &CorpusWrapper,
     rng: &mut RngType,
     p: &mut Prog,
-) {
+) -> bool {
     type MutateOperation = fn(&mut Context, &CorpusWrapper, &mut RngType) -> bool;
-    const OPERATIONS: [MutateOperation; 3] = [insert_calls, mutate_call_args, splice];
-    const WEIGHTS: [u64; 3] = [40, 98, 100];
+    const OPERATIONS: [MutateOperation; 4] = [insert_calls, mutate_call_args, splice, remove_call];
+    const WEIGHTS: [u64; 4] = [400, 980, 999, 1000];
 
     let calls = std::mem::take(&mut p.calls);
     let mut ctx = Context::new(target, relation);
@@ -43,29 +43,46 @@ pub fn mutate(
 
     let mut mutated = false;
     let mut tries = 0;
-    while tries < 128
-        && ctx.calls.len() < prog_len_range().end
-        && (!mutated || ctx.calls.is_empty() || rng.gen_ratio(1, 2))
-    {
+    while tries < 128 && (!mutated || ctx.calls.is_empty() || rng.gen_ratio(1, 2)) {
         let idx = choose_weighted(rng, &WEIGHTS);
-        if verbose() {
-            log::info!("using strategy-{}", idx);
-        }
+        verbose!("using strategy-{}", idx);
         mutated = OPERATIONS[idx](&mut ctx, corpus, rng);
-        tries += 1;
+
+        if ctx.calls.len() >= prog_len_range().end {
+            remove_extra_calls(&mut ctx);
+        }
 
         // clear mem usage, fixup later
         ctx.mem_allocator.restore();
         // clear newly added res
         ctx.res_ids.clear();
         ctx.res_kinds.clear();
+
+        tries += 1;
     }
 
-    fixup(&mut ctx); // fixup ptr address, make res id continuous, calculate size
+    if mutated {
+        fixup(&mut ctx); // fixup ptr address, make res id continuous, calculate size
+    }
     *p = ctx.to_prog();
+
+    mutated
 }
 
-/// Fixup the addr of ptr value.
+#[inline]
+fn remove_extra_calls(ctx: &mut Context) {
+    let r = ctx.calls.len() - prog_len_range().end + 1;
+    verbose!("remove_extra_calls: remove {} calls", r);
+    let calls = std::mem::take(&mut ctx.calls);
+    let mut p = Prog::new(calls);
+    for _ in 0..r {
+        let idx = p.calls.len() - 1;
+        p.remove_call_inplace(idx);
+    }
+    ctx.calls = p.calls;
+}
+
+/// Fixup the addr of ptr value, re-order res id and re-collect generated res and used res of calls.
 pub fn fixup(ctx: &mut Context) {
     let mut calls_backup = std::mem::take(&mut ctx.calls);
 
@@ -85,6 +102,9 @@ pub fn fixup(ctx: &mut Context) {
     let mut cnt = 0;
     let mut res_map: HashMap<ResValueId, ResValueId> = HashMap::default();
     for call in &mut calls_backup {
+        let mut ges: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
+        let mut ues: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
+
         foreach_call_arg_mut(call, |val| {
             use ResValueKind::*;
             if val.kind() != ValueKind::Res {
@@ -99,18 +119,31 @@ pub fn fixup(ctx: &mut Context) {
                 });
                 *id = *entry;
             }
+            let ty = val.ty(ctx.target).checked_as_res();
+            if let Some(id) = val.res_val_id() {
+                if val.own_res() {
+                    if !ges.contains_key(ty.res_name()) {
+                        ges.insert(ty.res_name().clone(), HashSet::new());
+                    }
+                    ges.get_mut(ty.res_name()).unwrap().insert(id);
+                } else {
+                    if !ues.contains_key(ty.res_name()) {
+                        ues.insert(ty.res_name().clone(), HashSet::new());
+                    }
+                    ues.get_mut(ty.res_name()).unwrap().insert(id);
+                }
+            }
         });
-        for ids in call.generated_res.values_mut() {
-            for id in ids {
-                *id = res_map[id];
-            }
-        }
-        for ids in call.used_res.values_mut() {
-            for id in ids {
-                *id = res_map[id];
-            }
-        }
+        call.generated_res = ges
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect();
+        call.used_res = ues
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect();
     }
+
     ctx.calls = calls_backup;
 }
 
@@ -153,7 +186,7 @@ fn restore_res_ctx(ctx: &mut Context, to: usize) {
             if let Some(val) = val.as_res() {
                 let ty = val.ty(ctx.target()).checked_as_res();
                 let kind = ty.res_name();
-                if val.dir() != Dir::In && val.is_res() {
+                if val.dir() != Dir::In && val.own_res() {
                     ctx.record_res(kind, val.res_val_id().unwrap());
                 }
             }
@@ -164,14 +197,19 @@ fn restore_res_ctx(ctx: &mut Context, to: usize) {
 
 fn foreach_call_arg(call: &Call, mut f: impl FnMut(&Value)) {
     for arg in call.args() {
-        foreach_value(arg, &mut f)
+        foreach_value_inner(arg, &mut f)
     }
     if let Some(ret) = call.ret.as_ref() {
-        foreach_value(ret, &mut f);
+        foreach_value_inner(ret, &mut f);
     }
 }
 
-fn foreach_value(val: &Value, f: &mut dyn FnMut(&Value)) {
+#[inline]
+fn foreach_value(val: &Value, mut f: impl FnMut(&Value)) {
+    foreach_value_inner(val, &mut f)
+}
+
+fn foreach_value_inner(val: &Value, f: &mut dyn FnMut(&Value)) {
     use ValueKind::*;
 
     match val.kind() {
@@ -180,34 +218,34 @@ fn foreach_value(val: &Value, f: &mut dyn FnMut(&Value)) {
             f(val);
             let val = val.checked_as_ptr();
             if let Some(pointee) = &val.pointee {
-                foreach_value(pointee, f);
+                foreach_value_inner(pointee, f);
             }
         }
         Group => {
             f(val);
             let val = val.checked_as_group();
             for v in &val.inner {
-                foreach_value(v, f);
+                foreach_value_inner(v, f);
             }
         }
         ValueKind::Union => {
             f(val);
             let val = val.checked_as_union();
-            foreach_value(&val.option, f);
+            foreach_value_inner(&val.option, f);
         }
     }
 }
 
 fn foreach_call_arg_mut(call: &mut Call, mut f: impl FnMut(&mut Value)) {
     for arg in call.args_mut() {
-        foreach_value_mut(arg, &mut f)
+        foreach_value_mut_inner(arg, &mut f)
     }
     if let Some(ret) = call.ret.as_mut() {
-        foreach_value_mut(ret, &mut f);
+        foreach_value_mut_inner(ret, &mut f);
     }
 }
 
-fn foreach_value_mut(val: &mut Value, f: &mut dyn FnMut(&mut Value)) {
+fn foreach_value_mut_inner(val: &mut Value, f: &mut dyn FnMut(&mut Value)) {
     use ValueKind::*;
 
     match val.kind() {
@@ -216,20 +254,20 @@ fn foreach_value_mut(val: &mut Value, f: &mut dyn FnMut(&mut Value)) {
             f(val);
             let val = val.checked_as_ptr_mut();
             if let Some(pointee) = val.pointee.as_mut() {
-                foreach_value_mut(pointee, f);
+                foreach_value_mut_inner(pointee, f);
             }
         }
         Group => {
             f(val);
             let val = val.checked_as_group_mut();
             for v in &mut val.inner {
-                foreach_value_mut(v, f);
+                foreach_value_mut_inner(v, f);
             }
         }
         ValueKind::Union => {
             f(val);
             let val = val.checked_as_union_mut();
-            foreach_value_mut(&mut val.option, f);
+            foreach_value_mut_inner(&mut val.option, f);
         }
     }
 }

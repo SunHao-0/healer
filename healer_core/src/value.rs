@@ -775,11 +775,11 @@ impl ResValue {
         }
     }
 
-    pub fn is_ref(&self) -> bool {
+    pub fn ref_res(&self) -> bool {
         matches!(self.kind, ResValueKind::Ref(..))
     }
 
-    pub fn is_res(&self) -> bool {
+    pub fn own_res(&self) -> bool {
         matches!(self.kind, ResValueKind::Own(..))
     }
 

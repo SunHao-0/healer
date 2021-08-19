@@ -4,6 +4,7 @@ use healer_core::gen::{self, set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_M
 use healer_core::mutation::mutate;
 use healer_core::relation::Relation;
 use healer_core::target::Target;
+use healer_core::verbose::set_verbose;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::process::exit;
@@ -19,11 +20,14 @@ struct Settings {
     /// Verbose.
     #[clap(long)]
     verbose: bool,
+    /// Mutate `n` time
+    #[clap(long, default_value = "1")]
+    n: usize,
 }
 
 fn main() {
     let settings = Settings::parse();
-    env_logger::init();
+    env_logger::builder().format_timestamp_secs().init();
     let target = load_target(&settings.target).unwrap_or_else(|e| {
         eprintln!("failed to load target: {}", e);
         exit(1)
@@ -34,9 +38,14 @@ fn main() {
     println!("corpus len: {}", corpus.len());
     let mut p = corpus.select_one(&mut rng).unwrap();
     println!("mutating following prog:\n{}", p.display(&target));
-    healer_core::set_verbose(dbg!(settings.verbose));
-    mutate(&target, &relation, &corpus, &mut &mut rng, &mut p);
-    println!("mutated prog:\n{}", p.display(&target));
+    set_verbose(settings.verbose);
+    for _ in 0..settings.n {
+        let mutated = mutate(&target, &relation, &corpus, &mut &mut rng, &mut p);
+        if mutated {
+            println!("mutated prog:\n{}", p.display(&target));
+        }
+    }
+    exit(0); // no need to drop mem
 }
 
 fn dummy_corpus(target: &Target, relation: &Relation, rng: &mut SmallRng) -> CorpusWrapper {

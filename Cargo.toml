@@ -15,6 +15,10 @@ members = [
     "tools/mutate_prog"
 ]
 
+[profile.dev]
+debug-assertions = true # enable verbose mode
+opt-level = 3
+
 [profile.release]
 debug = false
 debug-assertions = false
