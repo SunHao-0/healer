@@ -1,3 +1,11 @@
+//! Syz-wrapper build script.
+//!
+//! This build script downloads, patches and builds Syzkaller.
+//! The Syzlang description will be dump to json files in `OUT_DIR/sys/json`.
+//! All the json format syscall descriptions will be included to source code
+//! with `include_str!` macro (see `sys/mod.rs`), so that Healer can load them
+//! without further manual efforts.
+//! One can also skip this process and provide their own build via some extra env vars.
 use std::{
     env,
     fs::{copy, create_dir, read_dir, remove_file, File},
@@ -6,26 +14,43 @@ use std::{
     process::{exit, Command},
 };
 
+const LATEST_REVISION: &str = "master";
+/// Revision that the patches can be applied stably.
+const STABLE_REVISION: &str = "b599f2fcc734e2183016a340d4f6fc2891d8e41f";
+const STABLE_CSUM: &str = "335e91539a18f4c53867986d34bb32c50ba4eb381c6d842eae38bb7da0a30ad63906ab9777e1dd40fa22323479a22512";
+
 fn main() {
-    let sys_dir = if env::var("SKIP_SYZ_BUILD").is_err() {
+    if env::var("SKIP_SYZ_BUILD").is_err() {
         check_env();
-        let syz_dir = download();
-        build_syz(syz_dir)
-    } else if let Ok(syz_dir) = env::var("SYZ_SYS_DIR") {
-        PathBuf::from(syz_dir)
+        // Try to patch the latest revision first
+        let syz_dir = download(LATEST_REVISION, None);
+        if let Some(sys_dir) = build_syz(syz_dir) {
+            copy_sys(sys_dir);
+        } else {
+            eprintln!("failed to patch and build latest revision, failback...");
+            let syz_dir = download(STABLE_REVISION, Some(STABLE_CSUM));
+            if let Some(sys_dir) = build_syz(syz_dir) {
+                copy_sys(sys_dir);
+                return;
+            }
+            eprintln!(
+                "failed to build and patch Syzkaller with stable revision ({})",
+                STABLE_REVISION
+            );
+            exit(1)
+        }
+    } else if let Ok(sys_dir) = env::var("SYZ_SYS_DIR") {
+        let sys_dir = PathBuf::from(sys_dir);
+        copy_sys(sys_dir)
     } else {
-        let target = env::var("OUT_DIR").unwrap();
-        PathBuf::from(&format!("{}/syzkaller/sys/json", target))
+        eprintln!("Directory that contains json format Syzlang description should be provided via `SYZ_SYS_DIR` env var, 
+        when `SKIP_SYZ_BUILD` env var is set");
+        exit(1)
     };
-    copy_sys(sys_dir)
 }
 
+/// Check required tool to build Syzkaller
 fn check_env() {
-    if cfg!(target_os = "windows") {
-        eprintln!("Sorry, Healer does not support the Windows platform yet");
-        exit(1);
-    }
-
     const TOOLS: [(&str, &str); 6] = [
         ("wget", "download syzkaller"),
         ("sha384sum", "check download"),
@@ -48,30 +73,43 @@ fn check_env() {
     }
 }
 
-fn download() -> PathBuf {
-    const DEFAULT_SYZ_REVISION: &str = "6c236867ce33c0c16b102e02a08226d7eb9b2046";
-    let syz_revision = if let Ok(revision) = env::var("SYZ_REVISION") {
-        revision
-    } else {
-        DEFAULT_SYZ_REVISION.to_string()
-    };
-
+fn download(syz_revision: &str, csum: Option<&str>) -> PathBuf {
     let repo_url = format!(
         "https://github.com/google/syzkaller/archive/{}.zip",
         syz_revision
     );
     let target = env::var("OUT_DIR").unwrap();
-    let syz_zip = PathBuf::from(&format!("{}/syzkaller.zip", target));
-    if syz_zip.exists() && !check_download(&syz_zip) {
-        remove_file(&syz_zip).unwrap_or_else(|e| {
-            eprintln!(
-                "failed to removed broken file({}): {}",
-                syz_zip.display(),
-                e
-            );
-            exit(1);
-        })
+    let syz_zip = PathBuf::from(&format!("{}/syzkaller-{}.zip", target, syz_revision));
+    let syz_dir = format!("{}/syzkaller-{}", target, syz_revision);
+    let syz_dir = PathBuf::from(syz_dir);
+    let mut need_unzip = true;
+
+    if syz_dir.exists() {
+        return syz_dir;
     }
+
+    if syz_zip.exists() {
+        let mut need_remove = false;
+        if let Some(expected_csum) = csum {
+            need_remove = !check_download_csum(&syz_zip, expected_csum);
+        } else if try_unzip(&target, &syz_zip) {
+            need_unzip = false;
+        } else {
+            need_remove = true;
+        };
+
+        if need_remove {
+            remove_file(&syz_zip).unwrap_or_else(|e| {
+                eprintln!(
+                    "failed to removed broken file({}): {}",
+                    syz_zip.display(),
+                    e
+                );
+                exit(1);
+            })
+        }
+    }
+
     if !syz_zip.exists() {
         println!("downloading syzkaller...");
         let wget = Command::new("wget")
@@ -91,46 +129,38 @@ fn download() -> PathBuf {
             );
             exit(1);
         }
-        if !check_download(&syz_zip) {
-            eprintln!("downloaded file {} was broken", syz_zip.display());
-            exit(1)
+        if let Some(csum) = csum {
+            if !check_download_csum(&syz_zip, csum) {
+                eprintln!("downloaded file {} was broken", syz_zip.display());
+                exit(1);
+            }
         }
-        println!("cargo:rerun-if-changed={}/syzkaller.zip", target);
+        println!("cargo:rerun-if-changed={}", syz_zip.display());
     }
 
-    let syz_dir = format!("{}/syzkaller-{}", target, syz_revision);
-    let syz_dir = PathBuf::from(syz_dir);
-    if syz_dir.exists() {
-        return syz_dir;
+    if need_unzip && !try_unzip(&target, &syz_zip) {
+        eprintln!("failed to unzip the downloaded file: {}", syz_zip.display());
+        exit(1);
     }
 
-    println!("unziping ...");
+    assert!(syz_dir.exists());
+    println!("cargo:rerun-if-changed={}", syz_dir.display());
+    syz_dir
+}
+
+fn try_unzip<P: AsRef<Path>>(current_dir: &str, syz_zip: P) -> bool {
     let unzip = Command::new("unzip")
-        .current_dir(&target)
-        .arg("syzkaller.zip")
+        .current_dir(current_dir)
+        .arg(syz_zip.as_ref())
         .output()
         .unwrap_or_else(|e| {
             eprintln!("failed to spawn unzip: {}", e);
             exit(1)
         });
-
-    if !unzip.status.success() {
-        let stderr = String::from_utf8(unzip.stderr).unwrap_or_default();
-        eprintln!("failed to unzip {}: error: {}", syz_zip.display(), stderr);
-        exit(1);
-    }
-    println!("cargo:rerun-if-changed={}", syz_dir.display());
-    syz_dir
+    unzip.status.success()
 }
 
-fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
-    const DEFAULT_CKSUM: &str = "20cc5b9e79b841edba702907b0d1f2646353abc1a3a9bc788640ca49dab42132fde62092480aba49ab236029f3d930e3";
-    let expected_csum = if let Ok(csum) = env::var("SYZ_CHECKSUM") {
-        csum
-    } else {
-        DEFAULT_CKSUM.to_string()
-    };
-
+fn check_download_csum<P: AsRef<Path>>(syz_zip: P, expected_csum: &str) -> bool {
     let output = Command::new("sha384sum")
         .arg(syz_zip.as_ref())
         .output()
@@ -146,7 +176,7 @@ fn check_download<P: AsRef<Path>>(syz_zip: P) -> bool {
     }
 }
 
-fn build_syz(syz_dir: PathBuf) -> PathBuf {
+fn build_syz(syz_dir: PathBuf) -> Option<PathBuf> {
     if !syz_dir.join("bin").exists() {
         let patch_dir = PathBuf::from("./patches");
         let headers = vec!["ivshm_setup.h", "features.h"];
@@ -183,7 +213,7 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
                     if !patch.status.success() {
                         let stderr = String::from_utf8(patch.stderr).unwrap_or_default();
                         eprintln!("failde to patch {}: {}", patch_file.display(), stderr);
-                        exit(1);
+                        return None;
                     }
                 }
             }
@@ -202,7 +232,7 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
             if !make.status.success() {
                 let stderr = String::from_utf8(make.stderr).unwrap_or_default();
                 eprintln!("failed to make {}: {}", target, stderr);
-                exit(1);
+                return None;
             }
         }
         println!("cargo:rerun-if-changed={}", syz_dir.join("bin").display());
@@ -210,11 +240,9 @@ fn build_syz(syz_dir: PathBuf) -> PathBuf {
 
     copy_patched_syz_bin(&syz_dir);
     let sys_dir = syz_dir.join("sys").join("json");
-    if !sys_dir.exists() {
-        panic!("build finished, no json representation generated");
-    }
+    assert!(sys_dir.exists());
     println!("cargo:rerun-if-changed={}", sys_dir.display());
-    sys_dir
+    Some(sys_dir)
 }
 
 fn copy_patched_syz_bin(syz_dir: &Path) {
