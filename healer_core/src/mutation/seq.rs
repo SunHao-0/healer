@@ -24,7 +24,7 @@ pub fn splice(ctx: &mut Context, corpus: &CorpusWrapper, rng: &mut RngType) -> b
     mapping_res_id(ctx, &mut calls);
     restore_partial_ctx(ctx, &calls);
     let idx = rng.gen_range(0..=ctx.calls.len());
-    verbose!(
+    debug_info!(
         "splice: splicing {} call(s) to location {}",
         calls.len(),
         idx
@@ -42,7 +42,7 @@ pub fn insert_calls(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngTyp
     let idx = rng.gen_range(0..=ctx.calls.len());
     restore_res_ctx(ctx, idx); // restore the resource information before call `idx`
     let sid = select_call_to(ctx, rng, idx);
-    verbose!(
+    debug_info!(
         "insert_calls: inserting {} to location {}",
         ctx.target.syscall_of(sid).name(),
         idx
@@ -50,7 +50,7 @@ pub fn insert_calls(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngTyp
     let mut calls_backup = std::mem::take(&mut ctx.calls);
     gen_one_call(ctx, rng, sid);
     let new_calls = std::mem::take(&mut ctx.calls);
-    verbose!("insert_calls: {} call(s) inserted", new_calls.len());
+    debug_info!("insert_calls: {} call(s) inserted", new_calls.len());
     calls_backup.splice(idx..idx, new_calls);
     ctx.calls = calls_backup;
     true
@@ -64,7 +64,7 @@ pub fn remove_call(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngType
     let idx = rng.gen_range(0..ctx.calls.len());
     let calls = std::mem::take(&mut ctx.calls);
     let mut p = Prog::new(calls);
-    verbose!("remove_call: removing call-{}", idx);
+    debug_info!("remove_call: removing call-{}", idx);
     p.remove_call_inplace(idx);
     ctx.calls = p.calls;
     true

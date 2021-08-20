@@ -13,7 +13,7 @@ pub fn set_verbose(verbose: bool) {
 
 #[cfg(debug_assertions)]
 #[macro_export]
-macro_rules! verbose {
+macro_rules! debug_info {
     (target: $target:expr, $($arg:tt)+) => (
         if crate::verbose::verbose_mode(){
             log::info!(target: $target, $crate::Level::Error, $($arg)+)
@@ -22,6 +22,21 @@ macro_rules! verbose {
     ($($arg:tt)+) => (
         if crate::verbose::verbose_mode(){
             log::info!($($arg)+)
+        }
+    )
+}
+
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! debug_warn {
+    (target: $target:expr, $($arg:tt)+) => (
+        if crate::verbose::verbose_mode(){
+            log::warn!(target: $target, $crate::Level::Error, $($arg)+)
+        }
+    );
+    ($($arg:tt)+) => (
+        if crate::verbose::verbose_mode(){
+            log::warn!($($arg)+)
         }
     )
 }
@@ -38,7 +53,14 @@ pub fn set_verbose(_verbose: bool) {}
 
 #[cfg(not(debug_assertions))]
 #[macro_export]
-macro_rules! verbose {
+macro_rules! debug_info {
+    (target: $target:expr, $($arg:tt)+) => {};
+    ($($arg:tt)+) => {};
+}
+
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! debug_warn {
     (target: $target:expr, $($arg:tt)+) => {};
     ($($arg:tt)+) => {};
 }

@@ -593,9 +593,9 @@ impl GroupValue {
 
     pub fn size(&self, target: &Target) -> u64 {
         let ty = self.ty(target);
-        if !ty.varlen() {
-            return ty.size();
-        }
+        // if !ty.varlen() {
+        // return ty.size();
+        // }
         let mut size = 0;
         for f in self.inner.iter() {
             size += f.size(target);
@@ -616,7 +616,7 @@ impl GroupValue {
             TypeKind::Array => {
                 let ty = ty.checked_as_array();
                 if let Some(range) = ty.range() {
-                    range.start() == range.end()
+                    *range.start() == *range.end()
                 } else {
                     false
                 }

@@ -24,7 +24,7 @@ pub fn select_with_no_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
             select_random_syscall
         };
         if let Some(sid) = selector(ctx, rng) {
-            verbose!("select with no calls: {}", ctx.target().syscall_of(sid));
+            debug_info!("select with no calls: {}", ctx.target().syscall_of(sid));
             return sid;
         }
     }
@@ -48,7 +48,7 @@ pub fn select_with_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
     loop {
         let idx = choose_weighted(rng, &WEIGHTS);
         if let Some(sid) = SELECTORS[idx](ctx, rng) {
-            verbose!("select strategy-{}: {}", idx, ctx.target().syscall_of(sid));
+            debug_info!("select strategy-{}: {}", idx, ctx.target().syscall_of(sid));
             return sid;
         }
     }

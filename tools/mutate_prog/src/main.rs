@@ -21,7 +21,7 @@ struct Settings {
     #[clap(long)]
     verbose: bool,
     /// Mutate `n` time
-    #[clap(long, default_value = "1")]
+    #[clap(long, short, default_value = "1")]
     n: usize,
 }
 

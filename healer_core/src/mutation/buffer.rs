@@ -20,14 +20,14 @@ pub fn mutate_buffer_blob(ctx: &mut Context, rng: &mut RngType, val: &mut Value)
     let val = val.checked_as_data_mut();
 
     if *r.start() == 0 && *r.end() == 0 {
-        verbose!("mutate_buffer_blob: zero size buffer");
+        debug_info!("mutate_buffer_blob: zero size buffer");
         return false;
     }
 
     #[allow(clippy::let_and_return)] // ignore warning in release build mode
     let mutated = if val.dir() == Dir::Out {
         let new_size = mutate_blob_len(rng, val.size, r);
-        verbose!("mutate_buffer_blob(size): {} -> {}", val.size, new_size);
+        debug_info!("mutate_buffer_blob(size): {} -> {}", val.size, new_size);
         let mutated = new_size != val.size;
         val.size = new_size;
         mutated
@@ -54,7 +54,7 @@ pub fn mutate_buffer_string(ctx: &mut Context, rng: &mut RngType, val: &mut Valu
             let filename = rand_filename(ctx, rng, val.ty(ctx.target), ty.noz());
             DataValue::new(val.ty_id(), val.dir(), filename).into()
         };
-        verbose!(
+        debug_info!(
             "mutate_buffer_string(glob): {}",
             display_value_diff(val, &new_val, ctx.target)
         );
@@ -66,13 +66,13 @@ pub fn mutate_buffer_string(ctx: &mut Context, rng: &mut RngType, val: &mut Valu
     if val.dir() == Dir::Out {
         let new_size = mutate_blob_len(rng, val.size, r);
         let mutated = new_size != val.size;
-        verbose!("mutate_buffer_string(size): {} -> {}", val.size, new_size);
+        debug_info!("mutate_buffer_string(size): {} -> {}", val.size, new_size);
         val.size = new_size;
         mutated
     } else if !ty.vals().is_empty() {
         let new_val = ty.vals().choose(rng).unwrap().to_vec();
         let mutated = new_val != val.data;
-        verbose!(
+        debug_info!(
             "mutate_buffer_string(vals): {} -> {}",
             new_val.len(),
             val.data.len()
@@ -95,7 +95,7 @@ pub fn mutate_buffer_filename(ctx: &mut Context, rng: &mut RngType, val: &mut Va
         let inner_val = val.checked_as_data_mut();
         do_mutate_blob(ctx, rng, &mut inner_val.data, 0..=UNIX_PATH_MAX);
     }
-    verbose!(
+    debug_info!(
         "mutate_buffer_filename: {} -> {}",
         _old_size,
         val.size(ctx.target)
@@ -203,7 +203,7 @@ fn do_mutate_blob(
 
     while tries < 128 && (!mutated || rng.gen_ratio(1, 2)) {
         let op_idx = rng.gen_range(0..BLOB_MUTATE_OPERATIONS.len());
-        verbose!("do_mutate_blob: {}", BLOB_MUTATE_OPERATION_NAMES[op_idx]);
+        debug_info!("do_mutate_blob: {}", BLOB_MUTATE_OPERATION_NAMES[op_idx]);
         mutated = BLOB_MUTATE_OPERATIONS[op_idx](ctx, rng, buf, r.clone());
         tries += 1;
     }
@@ -213,7 +213,7 @@ fn do_mutate_blob(
         mutated = true;
     }
 
-    verbose!("do_mutate_blob: {} -> {}", _old_size, buf.len());
+    debug_info!("do_mutate_blob: {} -> {}", _old_size, buf.len());
     mutated
 }
 

@@ -76,11 +76,11 @@ fn next_prog_len() -> usize {
 pub fn gen_prog(target: &Target, relation: &Relation, rng: &mut RngType) -> Prog {
     let mut ctx = Context::new(target, relation);
     let len = next_prog_len();
-    verbose!("prog len: {}", len);
+    debug_info!("prog len: {}", len);
     while ctx.calls().len() < len {
         gen_call(&mut ctx, rng);
     }
-    verbose!("Context:\n{}", ctx);
+    debug_info!("Context:\n{}", ctx);
     ctx.to_prog()
 }
 
@@ -116,7 +116,7 @@ pub(crate) fn pop_builder() -> CallBuilder {
 /// Generate syscall `sid` to `context`.
 pub fn gen_one_call(ctx: &mut Context, rng: &mut RngType, sid: SyscallId) {
     push_builder(sid);
-    verbose!("generating: {}", ctx.target().syscall_of(sid));
+    debug_info!("generating: {}", ctx.target().syscall_of(sid));
     let syscall = ctx.target().syscall_of(sid);
     let mut args = Vec::with_capacity(syscall.params().len());
     for param in syscall.params() {
@@ -167,8 +167,8 @@ pub fn gen_ty_value(ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -
         ty.default_value(dir)
     } else if ty.optional() && rng.gen_ratio(1, 5) {
         if let Some(ty) = ty.as_res() {
-            let v = ty.special_vals().choose(rng).unwrap();
-            return ResValue::new_null(ty.id(), dir, *v).into();
+            let v = ty.special_vals().choose(rng).copied().unwrap_or(0);
+            return ResValue::new_null(ty.id(), dir, v).into();
         }
         ty.default_value(dir)
     } else {

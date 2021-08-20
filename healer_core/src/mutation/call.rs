@@ -17,7 +17,7 @@ use crate::{
     target::Target,
     ty::{Dir, ResKind, Type},
     value::{ResValueId, Value, ValueKind},
-    HashMap, RngType,
+    HashMap, HashSet, RngType,
 };
 use rand::Rng;
 
@@ -29,7 +29,7 @@ pub fn mutate_call_args(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut Rn
     if let Some(idx) = select_call(ctx, rng) {
         do_mutate_call_args(ctx, rng, idx)
     } else {
-        verbose!("mutate_call_args: all calls do not have mutable parameters");
+        debug_info!("mutate_call_args: all calls do not have mutable parameters");
         false
     }
 }
@@ -38,6 +38,7 @@ pub fn mutate_call_args(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut Rn
 fn do_mutate_call_args(ctx: &mut Context, rng: &mut RngType, mut idx: usize) -> bool {
     let mut tries = 0;
     let mut mutated = false;
+    let mut visited = HashSet::new();
 
     while tries < 128 && (!mutated || rng.gen_ratio(1, 2)) {
         // restore
@@ -50,6 +51,10 @@ fn do_mutate_call_args(ctx: &mut Context, rng: &mut RngType, mut idx: usize) -> 
         } else {
             return false;
         };
+        if !visited.insert(arg as *const _) && rng.gen_ratio(9, 10) {
+            continue;
+        }
+
         restore_res_ctx(ctx, idx);
         record_call_res(&ctx.calls[idx]);
         let mut calls_backup = std::mem::take(&mut ctx.calls);
@@ -103,14 +108,14 @@ fn restore_call_res(call: &mut Call) {
 fn select_arg(ctx: &mut Context, rng: &mut RngType, idx: usize) -> Option<&'static mut Value> {
     let (args, prios) = collect_args(ctx.target, &mut ctx.calls[idx]);
     if args.is_empty() {
-        verbose!("do_mutate_call_args: no mutable args");
+        debug_info!("do_mutate_call_args: no mutable args");
         return None;
     }
 
     let arg_idx = choose_weighted(rng, &prios);
     // SAFETY: the address of each value is stable before mutation
     let arg = unsafe { args[arg_idx].as_mut().unwrap() };
-    verbose!(
+    debug_info!(
         "do_mutate_call_args: mutating {} of {} args, ty: {}, prio: {}",
         arg_idx,
         args.len(),
@@ -132,24 +137,9 @@ fn collect_args(target: &Target, call: &mut Call) -> (Vec<*mut Value>, Vec<u64>)
 
     foreach_call_arg_mut(call, |val| {
         let prio = val_prio(target, val);
-        if prio == NEVER_MUTATE {
+        if prio == NEVER_MUTATE || !val_mutable(target, val) {
             return;
         }
-
-        let ty = val.ty(target);
-        let is_buffer_like = ty.as_buffer_blob().is_some()
-            || ty.as_buffer_filename().is_some()
-            || ty.as_buffer_string().is_some();
-        let is_array = ty.as_array().is_some();
-
-        if !is_buffer_like && !is_array && val.dir() == Dir::Out || !ty.varlen() && ty.size() == 0 {
-            return;
-        }
-
-        if !is_array && contains_out_res(val) {
-            return;
-        }
-
         prio_sum += prio;
         arg_addrs.push(val as *mut _);
         prios.push(prio_sum);
@@ -203,7 +193,11 @@ pub fn select_call(ctx: &mut Context, rng: &mut RngType) -> Option<usize> {
     if prio_sum != 0 {
         let idx = choose_weighted(rng, &prios);
         let _syscall = ctx.target.syscall_of(ctx.calls[idx].sid());
-        verbose!(
+        debug_info!(
+            "select_call: prios: {:?}",
+            prios.iter().enumerate().collect::<Vec<_>>()
+        );
+        debug_info!(
             "select_call: call-{} {} selected, prio: {}",
             idx,
             _syscall.name(),
@@ -242,10 +236,45 @@ const TYPE_PRIOS: [fn(&Type, Dir) -> u64; 15] = [
     union_prio,
 ];
 
+/// Derive if a value is mutable based on type information and value direction.
+fn val_mutable(target: &Target, val: &Value) -> bool {
+    use super::TypeKind::*;
+    let ty = val.ty(target);
+
+    // ignore zero-sized type
+    if !ty.varlen() && ty.size() == 0 {
+        return false;
+    }
+
+    // only buffer&array type with varlen is mutable, when dir equals to `Out`
+    if val.dir() == Dir::Out {
+        match ty.kind() {
+            BufferString | BufferBlob | BufferFilename => ty.varlen(),
+            Array => {
+                let ty = ty.checked_as_array();
+                let mut ret = true;
+                if let Some(r) = ty.range() {
+                    ret = *r.start() != *r.end()
+                }
+                ret
+            }
+            _ => false,
+        }
+    } else {
+        // Do not mutate const, len, csum
+        // For struct. mutate inner fields instead of strutc itself
+        !matches!(ty.kind(), Const | Len | Csum | Struct)
+    }
+}
+
 #[inline]
 fn val_prio(target: &Target, val: &Value) -> u64 {
     let ty = target.ty_of(val.ty_id());
-    TYPE_PRIOS[ty.kind() as usize](ty, val.dir())
+    if !val_mutable(target, val) {
+        NEVER_MUTATE
+    } else {
+        TYPE_PRIOS[ty.kind() as usize](ty, val.dir())
+    }
 }
 
 fn int_prio(ty: &Type, _dir: Dir) -> u64 {

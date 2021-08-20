@@ -45,7 +45,7 @@ pub fn mutate(
     let mut tries = 0;
     while tries < 128 && (!mutated || ctx.calls.is_empty() || rng.gen_ratio(1, 2)) {
         let idx = choose_weighted(rng, &WEIGHTS);
-        verbose!("using strategy-{}", idx);
+        debug_info!("using strategy-{}", idx);
         mutated = OPERATIONS[idx](&mut ctx, corpus, rng);
 
         if ctx.calls.len() >= prog_len_range().end {
@@ -72,78 +72,83 @@ pub fn mutate(
 #[inline]
 fn remove_extra_calls(ctx: &mut Context) {
     let r = ctx.calls.len() - prog_len_range().end + 1;
-    verbose!("remove_extra_calls: remove {} calls", r);
-    let calls = std::mem::take(&mut ctx.calls);
-    let mut p = Prog::new(calls);
-    for _ in 0..r {
-        let idx = p.calls.len() - 1;
-        p.remove_call_inplace(idx);
-    }
-    ctx.calls = p.calls;
+    debug_info!("remove_extra_calls: remove {} calls", r);
+    let mut calls = std::mem::take(&mut ctx.calls);
+    calls.drain(calls.len() - r..);
+    ctx.calls = calls;
 }
 
 /// Fixup the addr of ptr value, re-order res id and re-collect generated res and used res of calls.
 pub fn fixup(ctx: &mut Context) {
     let mut calls_backup = std::mem::take(&mut ctx.calls);
-
-    // fixup ptr address
+    let mut cnt = 0;
+    let mut res_map: HashMap<ResValueId, ResValueId> = HashMap::default();
     for call in &mut calls_backup {
+        let mut grs: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
+        let mut urs: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
+
         foreach_call_arg_mut(call, |val| {
+            use ResValueKind::*;
+
+            // fixup ptr address
             if let Some(val) = val.as_ptr_mut() {
                 if let Some(pointee) = val.pointee.as_mut() {
                     let addr = ctx.mem_allocator.alloc(pointee.layout(ctx.target()));
                     val.addr = addr;
                 }
             }
-        })
-    }
 
-    // remap res id
-    let mut cnt = 0;
-    let mut res_map: HashMap<ResValueId, ResValueId> = HashMap::default();
-    for call in &mut calls_backup {
-        let mut ges: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
-        let mut ues: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
-
-        foreach_call_arg_mut(call, |val| {
-            use ResValueKind::*;
             if val.kind() != ValueKind::Res {
                 return;
             }
+
+            // remap res id
             let val = val.checked_as_res_mut();
-            if let Own(id) | Ref(id) = &mut val.kind {
-                let entry = res_map.entry(*id).or_insert_with(|| {
-                    let new_id = cnt;
-                    cnt += 1;
-                    new_id
-                });
-                *id = *entry;
+            match &mut val.kind {
+                Own(id) => {
+                    let entry = res_map.entry(*id).or_insert_with(|| {
+                        let new_id = cnt;
+                        cnt += 1;
+                        new_id
+                    });
+                    *id = *entry;
+                }
+                Ref(id) => {
+                    if let Some(new_id) = res_map.get(id) {
+                        *id = *new_id;
+                    } else {
+                        debug_warn!("fixup: res-{} missing", id);
+                    }
+                }
+                _ => (),
             }
+
             let ty = val.ty(ctx.target).checked_as_res();
             if let Some(id) = val.res_val_id() {
                 if val.own_res() {
-                    if !ges.contains_key(ty.res_name()) {
-                        ges.insert(ty.res_name().clone(), HashSet::new());
+                    if !grs.contains_key(ty.res_name()) {
+                        grs.insert(ty.res_name().clone(), HashSet::new());
                     }
-                    ges.get_mut(ty.res_name()).unwrap().insert(id);
+                    grs.get_mut(ty.res_name()).unwrap().insert(id);
                 } else {
-                    if !ues.contains_key(ty.res_name()) {
-                        ues.insert(ty.res_name().clone(), HashSet::new());
+                    if !urs.contains_key(ty.res_name()) {
+                        urs.insert(ty.res_name().clone(), HashSet::new());
                     }
-                    ues.get_mut(ty.res_name()).unwrap().insert(id);
+                    urs.get_mut(ty.res_name()).unwrap().insert(id);
                 }
             }
         });
-        call.generated_res = ges
+        call.generated_res = grs
             .into_iter()
             .map(|(k, v)| (k, v.into_iter().collect()))
             .collect();
-        call.used_res = ues
+        call.used_res = urs
             .into_iter()
             .map(|(k, v)| (k, v.into_iter().collect()))
             .collect();
     }
 
+    calls_backup.shrink_to_fit();
     ctx.calls = calls_backup;
 }
 

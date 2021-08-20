@@ -15,7 +15,7 @@ pub fn mutate_int(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool
 
     if rng.gen() {
         let new_val = gen_int(ctx, rng, ty, val.dir());
-        verbose!(
+        debug_info!(
             "mutate_int(gen): {}",
             display_value_diff(val, &new_val, ctx.target)
         );
@@ -36,7 +36,7 @@ pub fn mutate_int(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool
         new_val &= (1 << bit_sz) - 1;
     }
 
-    verbose!("mutate_int: {:#x} -> {:#x}", val.val, new_val);
+    debug_info!("mutate_int: {:#x} -> {:#x}", val.val, new_val);
     let mutated = val.val != new_val;
     val.val = new_val;
 
@@ -72,7 +72,7 @@ fn do_mutate_aligned_int(rng: &mut RngType, old_val: u64, ty: &IntType) -> u64 {
 }
 
 pub fn mutate_const(_ctx: &mut Context, _rng: &mut RngType, _val: &mut Value) -> bool {
-    verbose!("mutate_const: doing nothing");
+    debug_info!("mutate_const: doing nothing");
     false
 }
 
@@ -93,7 +93,7 @@ pub fn mutate_flags(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bo
         tries += 1;
     }
 
-    verbose!("mutate_flags: {:#b} -> {:#b}", new_val, val.val);
+    debug_info!("mutate_flags: {:#b} -> {:#b}", new_val, val.val);
     val.val = new_val;
     mutated
 }
@@ -101,7 +101,7 @@ pub fn mutate_flags(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bo
 pub fn mutate_len(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target);
     let new_val = gen_int(ctx, rng, ty, val.dir());
-    verbose!(
+    debug_info!(
         "mutate_len: {}",
         display_value_diff(val, &new_val, ctx.target)
     );
@@ -113,7 +113,7 @@ pub fn mutate_len(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool
 pub fn mutate_proc(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target);
     let new_val = gen_proc(ctx, rng, ty, val.dir());
-    verbose!(
+    debug_info!(
         "mutate_proc: {}",
         display_value_diff(val, &new_val, ctx.target)
     );
@@ -126,7 +126,7 @@ pub fn mutate_proc(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> boo
 pub fn mutate_csum(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target);
     let new_val = gen_int(ctx, rng, ty, val.dir());
-    verbose!(
+    debug_info!(
         "mutate_csum: {}",
         display_value_diff(val, &new_val, ctx.target)
     );

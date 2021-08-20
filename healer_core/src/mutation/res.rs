@@ -24,7 +24,7 @@ pub fn mutate_res(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool
             ent.insert(id);
         })
     }
-    verbose!(
+    debug_info!(
         "mutate_res: {}",
         display_value_diff(val, &new_val, ctx.target)
     );

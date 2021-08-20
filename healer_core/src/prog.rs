@@ -241,7 +241,10 @@ pub struct ProgDisplay<'a, 'b> {
 
 impl<'a, 'b> std::fmt::Display for ProgDisplay<'a, 'b> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for call in &self.prog.calls {
+        for (_idx, call) in self.prog.calls.iter().enumerate() {
+            if verbose_mode() {
+                write!(f, "({}) ", _idx)?;
+            }
             writeln!(f, "{}", call.display(self.target))?;
         }
         Ok(())

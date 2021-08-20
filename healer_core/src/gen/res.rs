@@ -16,7 +16,7 @@ const RES_GENERATORS: [ResGenerator; 2] = [res_reusing, generate_res_output_call
 pub fn gen_res(ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Value {
     let ty = ty.checked_as_res();
 
-    if dir == Dir::Out {
+    if dir == Dir::Out || dir == Dir::InOut && rng.gen() {
         return generate_res(ctx, ty);
     }
 
@@ -80,7 +80,7 @@ fn generate_res_output_call(
     }
 
     mark_generating();
-    verbose!("generating resource: {}", ty.res_name());
+    debug_info!("generating resource: {}", ty.res_name());
     let mut ret = None;
     let target = ctx.target();
     let mut tries = 0;

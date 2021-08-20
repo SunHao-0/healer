@@ -18,7 +18,7 @@ pub fn mutate_ptr(_ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> boo
     if rng.gen_ratio(1, 1000) {
         // set null
         let new_val = PtrValue::new_special(val.ty_id(), val.dir(), 0).into();
-        verbose!(
+        debug_info!(
             "mutate_ptr: {}",
             display_value_diff(val, &new_val, _ctx.target)
         );
@@ -32,7 +32,7 @@ pub fn mutate_ptr(_ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> boo
 pub fn mutate_vma(ctx: &mut Context, rng: &mut RngType, val: &mut Value) -> bool {
     let ty = val.ty(ctx.target);
     let new_val = gen_vma(ctx, rng, ty, val.dir());
-    verbose!(
+    debug_info!(
         "mutate_vma: {}",
         display_value_diff(val, &new_val, ctx.target)
     );
