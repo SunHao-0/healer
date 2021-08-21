@@ -1,5 +1,8 @@
 //! Core algorithms and data structures of healer
 
+#[macro_use]
+extern crate pest_derive;
+
 use ahash::{AHashMap, AHashSet};
 
 #[macro_use]

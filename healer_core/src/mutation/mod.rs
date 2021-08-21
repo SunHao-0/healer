@@ -1,5 +1,6 @@
 //! Prog mutation.
 use crate::{
+    alloc::Allocator,
     context::Context,
     corpus::CorpusWrapper,
     gen::{choose_weighted, prog_len_range},
@@ -62,7 +63,7 @@ pub fn mutate(
     }
 
     if mutated {
-        fixup(&mut ctx); // fixup ptr address, make res id continuous, calculate size
+        fixup(ctx.target, &mut ctx.calls);
     }
     *p = ctx.to_prog();
 
@@ -79,11 +80,12 @@ fn remove_extra_calls(ctx: &mut Context) {
 }
 
 /// Fixup the addr of ptr value, re-order res id and re-collect generated res and used res of calls.
-pub fn fixup(ctx: &mut Context) {
-    let mut calls_backup = std::mem::take(&mut ctx.calls);
+pub fn fixup(target: &Target, calls: &mut [Call]) {
     let mut cnt = 0;
     let mut res_map: HashMap<ResValueId, ResValueId> = HashMap::default();
-    for call in &mut calls_backup {
+    let mut allocator = Allocator::new(target.page_sz() * target.page_num());
+
+    for call in calls {
         let mut grs: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
         let mut urs: HashMap<ResKind, HashSet<ResValueId>> = HashMap::new();
 
@@ -93,7 +95,7 @@ pub fn fixup(ctx: &mut Context) {
             // fixup ptr address
             if let Some(val) = val.as_ptr_mut() {
                 if let Some(pointee) = val.pointee.as_mut() {
-                    let addr = ctx.mem_allocator.alloc(pointee.layout(ctx.target()));
+                    let addr = allocator.alloc(pointee.layout(target));
                     val.addr = addr;
                 }
             }
@@ -123,7 +125,7 @@ pub fn fixup(ctx: &mut Context) {
                 _ => (),
             }
 
-            let ty = val.ty(ctx.target).checked_as_res();
+            let ty = val.ty(target).checked_as_res();
             if let Some(id) = val.res_val_id() {
                 if val.own_res() {
                     if !grs.contains_key(ty.res_name()) {
@@ -147,9 +149,6 @@ pub fn fixup(ctx: &mut Context) {
             .map(|(k, v)| (k, v.into_iter().collect()))
             .collect();
     }
-
-    calls_backup.shrink_to_fit();
-    ctx.calls = calls_backup;
 }
 
 /// Restore used vma, generated filenames, generated strs, next res id.  

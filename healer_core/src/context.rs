@@ -22,7 +22,7 @@ pub struct Context<'a, 'b> {
     /// Dummy vma allocator.
     pub(crate) vma_allocator: VmaAllocator,
     /// Next avaliable resource id.
-    pub(crate) next_res_id: usize,
+    pub(crate) next_res_id: u64,
     /// Generated res kind.
     pub(crate) res_kinds: Vec<ResKind>,
     /// Generated res kind&id mapping.
@@ -131,7 +131,7 @@ impl<'a, 'b> Context<'a, 'b> {
 
     /// Next avaliable resource id.
     #[inline]
-    pub fn next_res_id(&mut self) -> usize {
+    pub fn next_res_id(&mut self) -> u64 {
         let id = self.next_res_id;
         self.next_res_id += 1;
         id

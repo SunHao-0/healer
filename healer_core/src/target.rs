@@ -33,6 +33,8 @@ pub struct Target {
     syscall_id_mapping: HashMap<SyscallId, Syscall>,
     /// Type id to type mapping.
     ty_id_mapping: HashMap<TypeId, Type>,
+    /// Syscall name to syscall id mapping.
+    syscall_name_mapping: HashMap<Box<str>, SyscallId>,
     /// All resource type, sorted by `TypeId`.
     res_tys: Vec<ResType>,
     /// All resource kind.
@@ -178,6 +180,12 @@ impl Target {
         &self.syscall_id_mapping[&sid]
     }
 
+    #[inline]
+    pub fn syscall_of_name(&self, name: &str) -> Option<&Syscall> {
+        let sid = self.syscall_name_mapping.get(name)?;
+        Some(&self.syscall_id_mapping[sid])
+    }
+
     pub fn disable_syscall(&mut self, sid: SyscallId) -> Option<Syscall> {
         match self.enabled_syscalls.binary_search_by(|s| s.id().cmp(&sid)) {
             Ok(idx) => Some(self.do_remove(idx)),
@@ -287,6 +295,10 @@ impl TargetBuilder {
         let syscall_id_mapping = syscalls
             .iter()
             .map(|s| (s.id(), s.clone()))
+            .collect::<HashMap<_, _>>();
+        let syscall_name_mapping = syscalls
+            .iter()
+            .map(|s| (s.name().to_string().into_boxed_str(), s.id()))
             .collect::<HashMap<_, _>>();
         // all tys
         let tys = self.tys;
@@ -432,6 +444,7 @@ impl TargetBuilder {
             tys,
             syscall_id_mapping,
             ty_id_mapping,
+            syscall_name_mapping,
             res_tys,
             res_name_mapping,
             res_kinds: self

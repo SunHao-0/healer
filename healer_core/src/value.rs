@@ -726,7 +726,7 @@ impl<'a, 'b> Display for UnionValueDisplay<'a, 'b> {
     }
 }
 
-pub type ResValueId = usize;
+pub type ResValueId = u64;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ResValue {
