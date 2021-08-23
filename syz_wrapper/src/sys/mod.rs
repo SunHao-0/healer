@@ -245,6 +245,7 @@ mod tests {
     use crate::HashMap;
     use healer_core::corpus::CorpusWrapper;
     use healer_core::gen::{set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_MIN_PROG_LEN};
+    use healer_core::parse::parse_prog;
     use healer_core::target::Target;
     use healer_core::{gen, mutation::mutate, relation::Relation};
     use rand::prelude::*;
@@ -299,6 +300,22 @@ mod tests {
             let mut p = corpus.select_one(&mut rng).unwrap();
             for _ in 0..32 {
                 mutate(&target, &relation, &corpus, &mut rng, &mut p);
+            }
+        }
+    }
+
+    #[test]
+    fn sys_prog_parse() {
+        let mut rng = SmallRng::from_entropy();
+        let target = load_target("linux/amd64").unwrap();
+        let relation = Relation::new(&target);
+        for _ in 0..1024 {
+            let p = gen::gen_prog(&target, &relation, &mut rng);
+            let p_str = p.display(&target).to_string();
+            if let Err(e) = parse_prog(&target, &p_str) {
+                println!("{}", p_str);
+                println!("{}", e);
+                panic!("{}", e)
             }
         }
     }

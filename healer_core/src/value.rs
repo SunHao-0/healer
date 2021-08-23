@@ -523,7 +523,7 @@ impl<'a, 'b> Display for DataValueDisplay<'a, 'b> {
 
         // mark size for output data
         if val.dir() == Dir::Out {
-            return write!(f, "\"\"/{:#x}", val.size);
+            return write!(f, "\"\"/{}", val.size);
         }
         // try to shrink
         while data.len() >= 2 && data[data.len() - 1] == 0 && data[data.len() - 2] == 0 {
@@ -536,7 +536,7 @@ impl<'a, 'b> Display for DataValueDisplay<'a, 'b> {
         if !matches!(ty.kind(), TypeKind::BufferString | TypeKind::BufferFilename)
             && (data.is_empty() || !is_readable(data))
         {
-            write!(f, "\"{}\"", encode_hex(data))?;
+            write!(f, "\"{}\"", hex::encode(data))?;
         } else {
             let val = data
                 .iter()
@@ -552,18 +552,6 @@ impl<'a, 'b> Display for DataValueDisplay<'a, 'b> {
         }
         Ok(())
     }
-}
-
-fn encode_hex(val: &[u8]) -> String {
-    const HEX: [char; 16] = [
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-    ];
-    let mut ret = String::with_capacity(val.len() * 2);
-    for v in val.iter().copied() {
-        ret.push(HEX[(v >> 4) as usize]);
-        ret.push(HEX[((v & 0x0f) as usize)]);
-    }
-    ret
 }
 
 #[allow(clippy::match_like_matches_macro)]
@@ -664,10 +652,10 @@ impl<'a, 'b> Display for GroupValueDisplay<'a, 'b> {
             if inner_ty.kind() == TypeKind::Const && inner_ty.checked_as_const().pad() {
                 continue;
             }
-            write!(f, "{}", inner_val.display(self.target))?;
-            if i != last_non_default - 1 {
+            if i != 0 {
                 write!(f, ", ")?;
             }
+            write!(f, "{}", inner_val.display(self.target))?;
         }
         write!(f, "{}", delims[1])
     }
