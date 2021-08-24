@@ -12,7 +12,7 @@ use crate::{
     context::Context,
     corpus::CorpusWrapper,
     gen::{choose_weighted, current_builder, pop_builder, push_builder},
-    len::calculate_len_call,
+    len::calculate_len,
     prog::Call,
     target::Target,
     ty::{Dir, ResKind, Type},
@@ -73,7 +73,7 @@ fn do_mutate_call_args(ctx: &mut Context, rng: &mut RngType, mut idx: usize) -> 
     }
 
     if mutated {
-        calculate_len_call(ctx.target, &mut ctx.calls[idx]);
+        calculate_len(ctx.target, &mut ctx.calls[idx]);
     }
 
     mutated

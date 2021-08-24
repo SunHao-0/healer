@@ -209,7 +209,7 @@ fn foreach_call_arg(call: &Call, mut f: impl FnMut(&Value)) {
 }
 
 #[inline]
-fn foreach_value(val: &Value, mut f: impl FnMut(&Value)) {
+pub(crate) fn foreach_value(val: &Value, mut f: impl FnMut(&Value)) {
     foreach_value_inner(val, &mut f)
 }
 
@@ -247,6 +247,10 @@ fn foreach_call_arg_mut(call: &mut Call, mut f: impl FnMut(&mut Value)) {
     if let Some(ret) = call.ret.as_mut() {
         foreach_value_mut_inner(ret, &mut f);
     }
+}
+
+pub(crate) fn foreach_value_mut(val: &mut Value, mut f: impl FnMut(&mut Value)) {
+    foreach_value_mut_inner(val, &mut f)
 }
 
 fn foreach_value_mut_inner(val: &mut Value, f: &mut dyn FnMut(&mut Value)) {

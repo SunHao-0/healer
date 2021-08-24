@@ -279,11 +279,11 @@ fn convert_data<'a>(
     };
 
     let mut size = data.len();
-    if let Some(num_node) = nodes.next() {
-        size = convert_num(num_node)? as usize;
-    }
     if !ty.varlen() {
         size = ty.size() as usize;
+    }
+    if let Some(num_node) = nodes.next() {
+        size = convert_num(num_node)? as usize;
     }
     if dir == Dir::Out {
         return Ok(DataValue::new_out_data(ty.id(), dir, size as u64).into());
@@ -291,7 +291,10 @@ fn convert_data<'a>(
     while data.len() < size {
         data.push(0);
     }
-    unsafe { data.set_len(size) };
+    // if size != 0 {
+    //     // keep input prog, even though the size is 0.
+    //     unsafe { data.set_len(size) };
+    // }
 
     Ok(DataValue::new(ty.id(), dir, data).into())
 }

@@ -11,7 +11,7 @@ use self::{
 };
 use crate::{
     context::Context,
-    len::calculate_len,
+    len::calculate_len_args,
     prog::{CallBuilder, Prog},
     relation::Relation,
     select::select,
@@ -128,7 +128,7 @@ pub fn gen_one_call(ctx: &mut Context, rng: &mut RngType, sid: SyscallId) {
         ));
     }
     if need_calculate_len() {
-        calculate_len(ctx.target(), syscall, &mut args);
+        calculate_len_args(ctx.target(), syscall.params(), &mut args);
         len_calculated();
     }
     let ret = syscall.ret().map(|ty| {

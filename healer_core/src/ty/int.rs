@@ -405,6 +405,11 @@ impl LenType {
     }
 
     #[inline(always)]
+    pub fn len_bit_size(&self) -> u64 {
+        self.bit_size
+    }
+
+    #[inline(always)]
     pub fn offset(&self) -> bool {
         self.offset
     }

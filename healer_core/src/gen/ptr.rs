@@ -86,7 +86,13 @@ pub fn gen_vma(ctx: &mut Context, rng: &mut RngType, ty: &Type, dir: Dir) -> Val
         .unwrap_or_else(|| rand_page_range(ctx.target(), rng));
     let page_num = rng.gen_range(page_range);
     let page = ctx.vma_allocator().alloc(rng, page_num);
-    VmaValue::new(ty.id(), dir, page * ctx.target().page_sz(), page_num).into()
+    VmaValue::new(
+        ty.id(),
+        dir,
+        page * ctx.target().page_sz(),
+        page_num * ctx.target().page_sz(),
+    )
+    .into()
 }
 
 fn rand_page_range(target: &Target, rng: &mut RngType) -> RangeInclusive<u64> {

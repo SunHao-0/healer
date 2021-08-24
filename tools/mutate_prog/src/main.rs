@@ -34,6 +34,7 @@ struct Settings {
 fn main() {
     let settings = Settings::parse();
     env_logger::builder().format_timestamp_secs().init();
+
     let target = load_target(&settings.target).unwrap_or_else(|e| {
         eprintln!("failed to load target: {}", e);
         exit(1)
@@ -45,10 +46,13 @@ fn main() {
             eprintln!("faile to read '{}': {}", prog_file.display(), e);
             exit(1)
         });
-        parse_prog(&target, &p_str).unwrap_or_else(|e| {
+        set_verbose(true);
+        let p = parse_prog(&target, &p_str).unwrap_or_else(|e| {
             eprintln!("failed to parse: {} {}", prog_file.display(), e);
             exit(1)
-        })
+        });
+        set_verbose(false);
+        p
     } else {
         gen::gen_prog(&target, &relation, &mut rng)
     };

@@ -320,6 +320,21 @@ mod tests {
         }
     }
 
+    // #[test]
+    // fn sys_prog_serialize_parse() {
+    //     let mut rng = SmallRng::from_entropy();
+    //     let target = load_target("linux/amd64").unwrap();
+    //     let relation = Relation::new(&target);
+    //     for _ in 0..4096 {
+    //         let mut p = gen::gen_prog(&target, &relation, &mut rng);
+    //         fixup(&target, p.calls_mut());
+    //         let p_str = p.display(&target).to_string();
+    //         let parsed_p = parse_prog(&target, &p_str).unwrap();
+    //         let p_str_2 = parsed_p.display(&target).to_string();
+    //         assert_eq!(p_str, p_str_2);
+    //     }
+    // }
+
     #[test]
     fn static_relation_basic_attr() {
         let target = load_sys_target(SysTarget::LinuxAmd64).unwrap();
