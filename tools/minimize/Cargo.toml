@@ -1,0 +1,16 @@
+[package]
+name = "minimize"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+healer_core = {path = "../../healer_core"}
+syz_wrapper = {path = "../../syz_wrapper"}
+healer_alloc = {path = "../../healer_utils/healer_alloc"}
+rand = {version = "0.8", features = ["small_rng"]}
+env_logger = "0.9"
+log = "0.4"
+
+[dependencies.clap]
+version = "3.0.0-beta.2"
+features = [ "suggestions", "color" ]

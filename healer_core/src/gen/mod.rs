@@ -12,6 +12,7 @@ use self::{
 use crate::{
     context::Context,
     len::calculate_len_args,
+    mutation::fixup,
     prog::{CallBuilder, Prog},
     relation::Relation,
     select::select,
@@ -187,6 +188,38 @@ pub(crate) fn choose_weighted(rng: &mut RngType, weights: &[u64]) -> usize {
         Ok(idx) => idx + 1,
         Err(idx) => idx,
     }
+}
+
+pub fn minimize(
+    target: &Target,
+    p: &mut Prog,
+    mut idx: usize,
+    mut pred: impl FnMut(&Prog, usize) -> bool,
+) -> usize {
+    debug_assert!(!p.calls.is_empty());
+    debug_assert!(idx < p.calls.len());
+
+    for i in (0..p.calls.len()).rev() {
+        if i == idx {
+            continue;
+        }
+        let mut new_idx = idx;
+        if i < idx {
+            new_idx -= 1;
+        }
+        let new_p = p.remove_call(i);
+        if !pred(&new_p, new_idx) {
+            continue;
+        }
+        *p = new_p;
+        idx = new_idx;
+    }
+
+    fixup(target, p.calls_mut());
+
+    // TODO Add args minimization
+
+    idx
 }
 
 #[cfg(test)]

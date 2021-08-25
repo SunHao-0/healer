@@ -12,7 +12,8 @@ members = [
     # tools mainly for debug purpose 
     "tools/inspect_target",
     "tools/gen_prog",
-    "tools/mutate_prog"
+    "tools/mutate_prog",
+    "tools/minimize"
 ]
 
 [profile.dev]
