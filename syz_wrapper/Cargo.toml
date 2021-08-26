@@ -7,7 +7,14 @@ edition = "2018"
 [dependencies]
 ahash = "0.7"
 healer_core = {path = "../healer_core"}
-
+healer_io = {path = "../healer_utils/healer_io"}
+iota = "0.2"
+bytes = "1.1"
+thiserror = "1.0"
+shared_memory = "0.12"
+timer = "0.2"
+nix = "0.22"
+chrono = "0.4"
 
 [dependencies.simd-json]
 version = "0.4"
@@ -17,10 +24,10 @@ features = ["known-key", "swar-number-parsing", "allow-non-simd"]
 rand = {version = "0.8", features = ["small_rng"]}
 criterion = {version = "0.3", features = ["html_reports"]}
 
- [[bench]]
- name = "gen"
- harness = false
+[[bench]]
+name = "gen"
+harness = false
 
-  [[bench]]
- name = "mutate"
- harness = false
+[[bench]]
+name = "mutate"
+harness = false

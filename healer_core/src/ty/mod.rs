@@ -137,6 +137,8 @@ impl Type {
 
     dispatch!(is_default(val: &Value) -> bool);
 
+    dispatch!(format() -> BinaryFormat);
+
     #[inline]
     pub fn kind(&self) -> TypeKind {
         self.inner.kind()

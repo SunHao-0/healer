@@ -68,7 +68,7 @@ impl Relation {
     /// the index of `read` in the new `prog` and the callback `changed` should judge the feedback
     /// changes of the `index` call after the execution of `new_prog`. Finally, `try_update` returns
     /// the number of detected new relations.
-    pub fn try_update<T>(&mut self, p: &Prog, mut changed: T) -> usize
+    pub fn try_update<T>(&mut self, p: &Prog, mut pred: T) -> usize
     where
         T: FnMut(&Prog, usize) -> bool, // fn(new_prog: &Prog, index: usize) -> bool
     {
@@ -78,7 +78,7 @@ impl Relation {
             let b = &adjacent_calls[1];
             if !self.influence(a.sid(), b.sid()) {
                 let new_p = p.remove_call(i);
-                if changed(&new_p, i) {
+                if pred(&new_p, i) {
                     self.push_ordered(a.sid(), b.sid());
                     n += 1;
                 }

@@ -19,6 +19,11 @@ impl ArrayType {
     extra_attr_getter! {}
 
     #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
+
+    #[inline(always)]
     pub fn elem(&self) -> &Type {
         &self.elem
     }
@@ -167,6 +172,11 @@ impl StructType {
     extra_attr_getter! {}
 
     #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
+
+    #[inline(always)]
     pub fn fields(&self) -> &[Field] {
         &self.fields
     }
@@ -260,6 +270,11 @@ impl UnionType {
     default_int_format_attr_getter! {}
 
     extra_attr_getter! {}
+
+    #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
 
     #[inline(always)]
     pub fn fields(&self) -> &[Field] {

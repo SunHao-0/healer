@@ -1,7 +1,5 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod qemu;
+pub mod ssh;
+
+pub type HashMap<K, V> = ahash::AHashMap<K, V>;
+pub type HashSet<K> = ahash::AHashSet<K>;

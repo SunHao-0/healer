@@ -25,7 +25,7 @@ impl ResType {
     default_int_format_attr_getter! {}
 
     #[inline(always)]
-    pub fn bin_fmt(&self) -> BinaryFormat {
+    pub fn format(&self) -> BinaryFormat {
         self.bin_fmt
     }
 

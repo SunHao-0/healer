@@ -17,7 +17,7 @@ pub struct IntFormat {
 macro_rules! int_format_attr_getter {
     () => {
         #[inline(always)]
-        pub fn bin_fmt(&self) -> crate::ty::BinaryFormat {
+        pub fn format(&self) -> crate::ty::BinaryFormat {
             self.int_fmt.fmt
         }
 
@@ -33,16 +33,22 @@ macro_rules! int_format_attr_getter {
 
         #[inline(always)]
         pub fn bitfield_unit(&self) -> u64 {
-            self.int_fmt.bitfield_unit
-        }
-
-        pub fn unit_size(&self) -> u64 {
+            // self.int_fmt.bitfield_unit
             if self.bitfield_len() != 0 {
-                self.bitfield_unit()
+                // self.bitfield_unit()
+                self.int_fmt.bitfield_unit
             } else {
                 self.size()
             }
         }
+
+        // pub fn unit_size(&self) -> u64 {
+        //     if self.bitfield_len() != 0 {
+        //         self.bitfield_unit()
+        //     } else {
+        //         self.size()
+        //     }
+        // }
 
         #[inline(always)]
         pub fn bitfield_unit_off(&self) -> u64 {
@@ -51,7 +57,7 @@ macro_rules! int_format_attr_getter {
 
         pub fn bit_size(&self) -> u64 {
             if let crate::ty::BinaryFormat::Native | crate::ty::BinaryFormat::BigEndian =
-                self.bin_fmt()
+                self.format()
             {
                 if self.bitfield_len() != 0 {
                     self.bitfield_len()

@@ -20,6 +20,10 @@ pub struct Target {
     le_endian: bool,
     /// Special pointer values.
     special_ptrs: Box<[u64]>,
+    // TODO This really should not be here, it's highly related to syz-executor
+    // move it to syz-wrappers
+    /// executor data offset
+    data_offset: u64,
 
     /// Syzlang description revision.
     revision: Box<str>,
@@ -89,6 +93,11 @@ impl Target {
     #[inline(always)]
     pub fn special_ptrs(&self) -> &[u64] {
         &self.special_ptrs
+    }
+
+    #[inline(always)]
+    pub fn data_offset(&self) -> u64 {
+        self.data_offset
     }
 
     #[inline(always)]
@@ -220,6 +229,7 @@ pub struct TargetBuilder {
     ptr_sz: Option<u64>,
     page_sz: Option<u64>,
     page_num: Option<u64>,
+    data_offset: Option<u64>,
     le_endian: bool,
     special_ptrs: Vec<u64>,
     revision: Option<String>,
@@ -271,6 +281,11 @@ impl TargetBuilder {
 
     pub fn special_ptrs(&mut self, ptrs: Vec<u64>) -> &mut Self {
         self.special_ptrs = ptrs;
+        self
+    }
+
+    pub fn data_offset(&mut self, data_offset: u64) -> &mut Self {
+        self.data_offset = Some(data_offset);
         self
     }
 
@@ -437,6 +452,7 @@ impl TargetBuilder {
             page_num: self.page_num.unwrap(),
             le_endian: self.le_endian,
             special_ptrs: self.special_ptrs.into_boxed_slice(),
+            data_offset: self.data_offset.unwrap_or_default(),
 
             revision: self.revision.unwrap().into_boxed_str(),
             all_syscalls: syscalls.clone(),

@@ -175,6 +175,20 @@ pub fn load_sys_target(sys: SysTarget) -> Result<Target, LoadError> {
     Ok(target)
 }
 
+/// Check if current syz-executor build uses shm on `target`
+pub fn target_exec_use_shm(target: SysTarget) -> bool {
+    let sys_js = load_description_json(target).unwrap();
+    let target_json = get(&sys_js, "Target").unwrap();
+    target_json["ExecutorUsesShmem"].as_bool().unwrap()
+}
+
+/// Check if current syz-executor build uses forksrv on `target`
+pub fn target_exec_use_forksrv(target: SysTarget) -> bool {
+    let sys_js = load_description_json(target).unwrap();
+    let target_json = get(&sys_js, "Target").unwrap();
+    target_json["ExecutorUsesForkServer"].as_bool().unwrap()
+}
+
 fn build_target(
     descrption_json: &JsonValue,
     syscalls: Vec<Syscall>,
@@ -204,6 +218,7 @@ fn build_target(
         .page_num(get(target_json, "NumPages")?.as_u64().unwrap())
         .le_endian(get(target_json, "LittleEndian")?.as_bool().unwrap())
         .special_ptrs(ptrs)
+        .data_offset(get(descrption_json, "DataOffset")?.as_u64().unwrap())
         .syscalls(syscalls)
         .tys(tys)
         .res_kinds(res_kinds);

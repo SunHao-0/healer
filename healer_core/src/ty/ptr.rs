@@ -20,6 +20,11 @@ impl VmaType {
     extra_attr_getter! {}
 
     #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
+
+    #[inline(always)]
     pub fn range(&self) -> Option<RangeInclusive<u64>> {
         self.range.clone()
     }
@@ -94,6 +99,11 @@ impl PtrType {
     default_int_format_attr_getter! {}
 
     extra_attr_getter! {}
+
+    #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
 
     #[inline(always)]
     pub fn elem(&self) -> TypeId {

@@ -84,6 +84,11 @@ impl BufferBlobType {
     buffer_type_default! {}
 
     #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
+
+    #[inline(always)]
     pub fn range(&self) -> Option<RangeInclusive<u64>> {
         self.range.clone()
     }
@@ -199,6 +204,11 @@ impl BufferStringType {
     buffer_type_default! {}
 
     #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
+
+    #[inline(always)]
     pub fn sub_kind(&self) -> Option<&str> {
         self.sub_kind.as_deref()
     }
@@ -311,6 +321,11 @@ impl BufferFilenameType {
     extra_attr_getter! {}
 
     buffer_type_default! {}
+
+    #[inline(always)]
+    pub fn format(&self) -> crate::ty::BinaryFormat {
+        crate::ty::BinaryFormat::Native
+    }
 
     #[inline(always)]
     pub fn vals(&self) -> &[Box<[u8]>] {
