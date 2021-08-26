@@ -12,7 +12,7 @@ use crate::{
     relation::Relation,
     target::Target,
     ty::{Dir, ResKind, TypeKind},
-    value::{ResValueId, ResValueKind, Value, ValueKind},
+    value::{ResValue, ResValueId, ResValueKind, Value, ValueKind},
     HashMap, HashSet, RngType,
 };
 use rand::prelude::*;
@@ -120,6 +120,8 @@ pub fn fixup(target: &Target, calls: &mut [Call]) {
                         *id = *new_id;
                     } else {
                         debug_warn!("fixup: res-{} missing", id);
+                        let dir = val.dir();
+                        *val = ResValue::new_null(val.ty_id(), dir, 0);
                     }
                 }
                 _ => (),

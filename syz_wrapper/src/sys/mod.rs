@@ -218,7 +218,7 @@ fn build_target(
         .page_num(get(target_json, "NumPages")?.as_u64().unwrap())
         .le_endian(get(target_json, "LittleEndian")?.as_bool().unwrap())
         .special_ptrs(ptrs)
-        .data_offset(get(descrption_json, "DataOffset")?.as_u64().unwrap())
+        .data_offset(get(target_json, "DataOffset")?.as_u64().unwrap())
         .syscalls(syscalls)
         .tys(tys)
         .res_kinds(res_kinds);
@@ -257,6 +257,8 @@ pub fn load_description_json(sys: SysTarget) -> Result<JsonValue, LoadError> {
 #[cfg(test)]
 mod tests {
     use super::{load_sys_target, load_target, SysTarget, TARGETS};
+    use crate::exec::serialization::serialize;
+    use crate::exec::IN_SHM_SZ;
     use crate::HashMap;
     use healer_core::corpus::CorpusWrapper;
     use healer_core::gen::{set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_MIN_PROG_LEN};
@@ -289,6 +291,18 @@ mod tests {
         let relation = Relation::new(&target);
         for _ in 0..4096 {
             gen::gen_prog(&target, &relation, &mut rng);
+        }
+    }
+
+    #[test]
+    fn sys_prog_serialization() {
+        let mut buf = vec![0; IN_SHM_SZ];
+        let mut rng = SmallRng::from_entropy();
+        let target = load_target("linux/amd64").unwrap();
+        let relation = Relation::new(&target);
+        for _ in 0..4096 {
+            let p = gen::gen_prog(&target, &relation, &mut rng);
+            let _ = serialize(&target, &p, &mut buf);
         }
     }
 
@@ -334,21 +348,6 @@ mod tests {
             }
         }
     }
-
-    // #[test]
-    // fn sys_prog_serialize_parse() {
-    //     let mut rng = SmallRng::from_entropy();
-    //     let target = load_target("linux/amd64").unwrap();
-    //     let relation = Relation::new(&target);
-    //     for _ in 0..4096 {
-    //         let mut p = gen::gen_prog(&target, &relation, &mut rng);
-    //         fixup(&target, p.calls_mut());
-    //         let p_str = p.display(&target).to_string();
-    //         let parsed_p = parse_prog(&target, &p_str).unwrap();
-    //         let p_str_2 = parsed_p.display(&target).to_string();
-    //         assert_eq!(p_str, p_str_2);
-    //     }
-    // }
 
     #[test]
     fn static_relation_basic_attr() {

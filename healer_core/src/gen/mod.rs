@@ -82,6 +82,7 @@ pub fn gen_prog(target: &Target, relation: &Relation, rng: &mut RngType) -> Prog
         gen_call(&mut ctx, rng);
     }
     debug_info!("Context:\n{}", ctx);
+    fixup(target, &mut ctx.calls);
     ctx.to_prog()
 }
 

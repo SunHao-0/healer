@@ -20,6 +20,7 @@ iota! {
         , EXEC_ARG_RESULT
         , EXEC_ARG_DATA
         , EXEC_ARG_CSUM
+
     const EXEC_ARG_DATA_READABLE : u64 = 1<<63;
 }
 
@@ -203,10 +204,12 @@ impl ExecCtx<'_, '_> {
                     }
                     ResValueKind::Ref(idx) => {
                         self.write_u64(EXEC_ARG_RESULT);
+                        let info = &self.res_args[idx];
+                        let idx = info.idx;
                         let ty = val.ty(self.target);
                         let meta = val.size(self.target) | (ty.format() as u64) << 8;
                         self.write_u64(meta);
-                        self.write_u64(*idx);
+                        self.write_u64(idx);
                         self.write_u64(val.op_div);
                         self.write_u64(val.op_add);
                         self.write_u64(val.val);

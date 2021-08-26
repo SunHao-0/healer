@@ -10,3 +10,4 @@ nix = "0.22"
 ahash = "0.7"
 thiserror = "1.0"
 log = "0.4"
+healer_io = {path = "../healer_io"}
