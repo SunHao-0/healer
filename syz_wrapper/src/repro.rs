@@ -33,7 +33,7 @@ pub enum ReproError {
 
 #[derive(Debug, Clone)]
 pub struct ReproConfig {
-    pub id: usize,
+    pub id: u64,
     pub target: String,
     pub syz_dir: String,
     pub work_dir: String,
@@ -43,6 +43,35 @@ pub struct ReproConfig {
     pub qemu_count: usize,
     pub qemu_smp: usize,
     pub qemu_mem: usize,
+}
+
+impl Default for ReproConfig {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            target: "linux/amd64".to_string(),
+            syz_dir: "./".to_string(),
+            work_dir: "./".to_string(),
+            kernel_img: "./bzImage".to_string(),
+            disk_img: "./stretch.img".to_string(),
+            ssh_key: "./stretch.id_rsa".to_string(),
+            qemu_count: 1,
+            qemu_smp: 2,
+            qemu_mem: 4096,
+        }
+    }
+}
+
+impl ReproConfig {
+    pub fn check(&mut self) -> Result<(), String> {
+        let syz_dir = PathBuf::from(&self.syz_dir);
+        let syz_repro = syz_dir.join("bin").join("syz-repro");
+        if !syz_repro.exists() {
+            Err(format!("{} not exists", syz_repro.display()))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 pub fn repro(

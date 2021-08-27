@@ -171,6 +171,12 @@ impl Relation {
         self.n
     }
 
+    pub fn insert(&mut self, a: SyscallId, b: SyscallId) -> bool {
+        let old = self.num();
+        self.push_ordered(a, b);
+        old != self.num()
+    }
+
     fn push_ordered(&mut self, a: SyscallId, b: SyscallId) {
         let rs_a = self.influence.get_mut(&a).unwrap();
         if let Err(idx) = rs_a.binary_search(&b) {

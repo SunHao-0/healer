@@ -50,7 +50,7 @@ pub enum DetectFeaturesError {
     Detect(String),
 }
 
-pub fn detect_features(cmd: &mut Command) -> Result<Features, DetectFeaturesError> {
+pub fn detect_features(mut cmd: Command) -> Result<Features, DetectFeaturesError> {
     cmd.arg("check");
     let output = cmd.output()?;
     if output.status.success() {
@@ -76,7 +76,7 @@ pub enum SetupFeaturesError {
     Setup(String),
 }
 
-pub fn setup_features(cmd: &mut Command, features: Features) -> Result<(), SetupFeaturesError> {
+pub fn setup_features(mut cmd: Command, features: Features) -> Result<(), SetupFeaturesError> {
     let feature_args = features_to_args(features);
     if feature_args.is_empty() {
         return Ok(());

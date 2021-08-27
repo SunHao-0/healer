@@ -13,14 +13,50 @@ pub struct Report {
     pub prog: Option<Prog>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ReportConfig {
     pub os: String,
     pub arch: String,
-    pub id: usize,
+    pub id: u64,
     pub syz_dir: String,
     pub kernel_obj_dir: Option<String>,
     pub kernel_src_dir: Option<String>,
+}
+
+impl Default for ReportConfig {
+    fn default() -> Self {
+        Self {
+            os: "linux".to_string(),
+            arch: "amd64".to_string(),
+            id: 0,
+            syz_dir: "./".to_string(),
+            kernel_obj_dir: None,
+            kernel_src_dir: None,
+        }
+    }
+}
+
+impl ReportConfig {
+    pub fn check(&mut self) -> Result<(), String> {
+        let syz_dir = PathBuf::from(&self.syz_dir);
+        let syz_symbolize = syz_dir.join("bin").join("syz-symbolize");
+        if !syz_symbolize.exists() {
+            return Err(format!("{} not exists", syz_symbolize.display()));
+        }
+        if let Some(dir) = self.kernel_obj_dir.as_ref() {
+            let dir = PathBuf::from(dir);
+            if !dir.is_dir() {
+                return Err(format!("{} not exists", dir.display()));
+            }
+        }
+        if let Some(dir) = self.kernel_src_dir.as_ref() {
+            let dir = PathBuf::from(dir);
+            if !dir.is_dir() {
+                return Err(format!("{} not exists", dir.display()));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]

@@ -40,6 +40,21 @@ pub struct QemuConfig {
     pub shmids: Vec<(String, usize)>,
 }
 
+impl Default for QemuConfig {
+    fn default() -> Self {
+        Self {
+            target: "linux/amd64".to_string(),
+            kernel_img: Some("./bzImage".to_string()),
+            disk_img: "./stretch.img".to_string(),
+            ssh_key: "./stretch.id_rsa".to_string(),
+            ssh_user: "root".to_string(),
+            qemu_smp: 2,
+            qemu_mem: 4096,
+            shmids: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum QemuConfigError {
     #[error("unsupported target: {0}")]
@@ -268,6 +283,7 @@ impl QemuHandle {
         while waited < total {
             sleep(wait_duration);
             if self.is_alive() {
+                self.reset();
                 alive = true;
                 break;
             }

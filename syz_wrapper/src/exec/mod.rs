@@ -26,6 +26,8 @@ use std::{
 };
 use thiserror::Error;
 
+use self::features::Features;
+
 /// Env flags to executor.
 pub type EnvFlags = u64;
 
@@ -189,8 +191,21 @@ pub const OUT_SHM_SZ: usize = 16 << 20;
 pub struct ExecConfig {
     pub pid: u64,
     pub env: EnvFlags,
+    pub features: Features,
     pub shms: Option<(Shmem, Shmem)>,
     pub use_forksrv: bool,
+}
+
+impl Clone for ExecConfig {
+    fn clone(&self) -> Self {
+        Self {
+            pid: self.pid,
+            env: self.env,
+            features: self.features,
+            shms: None,
+            use_forksrv: self.use_forksrv,
+        }
+    }
 }
 
 pub struct ExecutorHandle {
@@ -211,6 +226,9 @@ pub struct ExecutorHandle {
 
     debug: bool,
 }
+
+unsafe impl Send for ExecutorHandle {}
+unsafe impl Sync for ExecutorHandle {}
 
 impl ExecutorHandle {
     pub fn with_config(config: ExecConfig) -> Self {

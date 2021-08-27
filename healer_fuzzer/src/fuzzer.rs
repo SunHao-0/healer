@@ -1,4 +1,4 @@
-use crate::{crash::Crash, feedback::Feedback, stats::Stats, Config};
+use crate::{config::Config, crash::Crash, feedback::Feedback, stats::Stats};
 use healer_core::{
     corpus::CorpusWrapper, prog::Prog, relation::RelationWrapper, target::Target, RngType,
 };

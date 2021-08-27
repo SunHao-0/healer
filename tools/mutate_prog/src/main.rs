@@ -73,7 +73,7 @@ fn dummy_corpus(target: &Target, relation: &RelationWrapper, rng: &mut SmallRng)
     set_prog_len_range(3..8); // progs in corpus are always shorter
     for _ in 0..n {
         let prio = rng.gen_range(64..=1024);
-        corpus.add_prog(gen::gen_prog(target, &relation, rng), prio);
+        corpus.add_prog(gen::gen_prog(target, relation, rng), prio);
     }
     set_prog_len_range(FAVORED_MIN_PROG_LEN..FAVORED_MAX_PROG_LEN); // restore
     corpus
