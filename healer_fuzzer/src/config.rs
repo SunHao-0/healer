@@ -10,7 +10,7 @@ pub struct Config {
     pub relations: Option<PathBuf>,
     pub input_prog: Option<PathBuf>,
     pub crash_whitelist: Option<PathBuf>,
-    pub job: usize,
+    pub job: u64,
     pub syz_dir: PathBuf,
     pub output_dir: PathBuf,
     pub skip_repro: bool,

@@ -1,5 +1,7 @@
 //! Healer fuzz
 
+#[macro_use]
+pub mod fuzzer_log;
 pub mod arch;
 pub mod config;
 pub mod crash;
@@ -134,7 +136,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         let mut fuzzer_config = config.clone();
 
         let handle = thread::spawn(move || {
-            fuzzer_config.exec_config.as_mut().unwrap().pid = id as u64;
+            fuzzer_config.exec_config.as_mut().unwrap().pid = id;
             fuzzer_config.fixup();
             if use_shm {
                 setup_fuzzer_shm(id, &mut fuzzer_config)
@@ -300,7 +302,7 @@ fn load_crash_whitelist(path: &Path) -> anyhow::Result<HashSet<String>> {
     Ok(titles)
 }
 
-fn setup_fuzzer_shm(fuzzer_id: usize, config: &mut Config) -> anyhow::Result<()> {
+fn setup_fuzzer_shm(fuzzer_id: u64, config: &mut Config) -> anyhow::Result<()> {
     let in_shm_id = format!("healer-in_shm-{}-{}", fuzzer_id, std::process::id());
     let out_shm_id = format!("healer-out_shm_{}-{}", fuzzer_id, std::process::id());
     let in_shm = create_shm(&in_shm_id, IN_SHM_SZ).context("failed to create input shm")?;
@@ -334,11 +336,11 @@ fn spawn_syz(config: &Config, qemu: &QemuHandle, exec: &mut ExecutorHandle) -> a
     exec.spawn(ssh).map_err(|e| e.into())
 }
 
-fn split_input_progs(progs: Vec<Prog>, job: usize) -> Vec<Vec<Prog>> {
+fn split_input_progs(progs: Vec<Prog>, job: u64) -> Vec<Vec<Prog>> {
     if progs.is_empty() {
         return Vec::new();
     }
-
+    let job = job as usize;
     let n = progs.len() + job - 1;
     let m = n / job;
     progs.chunks(m).map(|c| c.to_vec()).collect()
