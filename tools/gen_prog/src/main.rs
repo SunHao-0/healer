@@ -1,6 +1,6 @@
 use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::gen;
-use healer_core::relation::Relation;
+use healer_core::relation::{Relation, RelationWrapper};
 use healer_core::verbose::set_verbose;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -31,9 +31,10 @@ fn main() {
         exit(1)
     });
     let relation = Relation::new(&target);
+    let rw = RelationWrapper::new(relation);
     let mut rng = SmallRng::from_entropy();
     for _ in 0..settings.n {
-        let p = gen::gen_prog(&target, &relation, &mut rng);
+        let p = gen::gen_prog(&target, &rw, &mut rng);
         println!("{}\n", p.display(&target));
     }
     exit(0);

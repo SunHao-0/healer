@@ -73,7 +73,7 @@ pub fn remove_call(ctx: &mut Context, _corpus: &CorpusWrapper, rng: &mut RngType
 /// Select new call to location `idx`.
 fn select_call_to(ctx: &mut Context, rng: &mut RngType, idx: usize) -> SyscallId {
     let mut candidates: HashMap<SyscallId, u64> = HashMap::new();
-    let r = ctx.relation();
+    let r = ctx.relation().inner.read().unwrap();
     let calls = ctx.calls();
 
     // first, consider calls that can be influenced by calls before `idx`.

@@ -9,6 +9,7 @@ use healer_core::{
     ty::Type,
 };
 use std::{
+    error::Error,
     fmt::Display,
     str::FromStr,
     sync::{Mutex, Once},
@@ -138,10 +139,12 @@ impl Display for LoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LoadError::TargetNotSupported => write!(f, "target not supported"),
-            LoadError::Parse(e) => write!(f, "failed to parse: {}", e),
+            LoadError::Parse(e) => write!(f, "parse: {}", e),
         }
     }
 }
+
+impl Error for LoadError {}
 
 pub fn load_target<T: AsRef<str>>(target: T) -> Result<Target, LoadError> {
     let sys = target
@@ -263,6 +266,7 @@ mod tests {
     use healer_core::corpus::CorpusWrapper;
     use healer_core::gen::{set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_MIN_PROG_LEN};
     use healer_core::parse::parse_prog;
+    use healer_core::relation::RelationWrapper;
     use healer_core::target::Target;
     use healer_core::{gen, mutation::mutate, relation::Relation};
     use rand::prelude::*;
@@ -289,8 +293,9 @@ mod tests {
         let mut rng = SmallRng::from_entropy();
         let target = load_target("linux/amd64").unwrap();
         let relation = Relation::new(&target);
+        let rw = RelationWrapper::new(relation);
         for _ in 0..4096 {
-            gen::gen_prog(&target, &relation, &mut rng);
+            gen::gen_prog(&target, &rw, &mut rng);
         }
     }
 
@@ -300,13 +305,18 @@ mod tests {
         let mut rng = SmallRng::from_entropy();
         let target = load_target("linux/amd64").unwrap();
         let relation = Relation::new(&target);
+        let rw = RelationWrapper::new(relation);
         for _ in 0..4096 {
-            let p = gen::gen_prog(&target, &relation, &mut rng);
+            let p = gen::gen_prog(&target, &rw, &mut rng);
             let _ = serialize(&target, &p, &mut buf);
         }
     }
 
-    fn dummy_corpus(target: &Target, relation: &Relation, rng: &mut SmallRng) -> CorpusWrapper {
+    fn dummy_corpus(
+        target: &Target,
+        relation: &RelationWrapper,
+        rng: &mut SmallRng,
+    ) -> CorpusWrapper {
         let corpus = CorpusWrapper::new();
         let n = rng.gen_range(8..=32);
         set_prog_len_range(3..8); // progs in corpus are always shorter
@@ -324,11 +334,13 @@ mod tests {
         let mut rng = SmallRng::from_entropy();
         let target = load_target("linux/amd64").unwrap();
         let relation = Relation::new(&target);
-        let corpus = dummy_corpus(&target, &relation, &mut rng);
+        let rw = RelationWrapper::new(relation);
+
+        let corpus = dummy_corpus(&target, &rw, &mut rng);
         for _ in 0..1024 {
             let mut p = corpus.select_one(&mut rng).unwrap();
             for _ in 0..32 {
-                mutate(&target, &relation, &corpus, &mut rng, &mut p);
+                mutate(&target, &rw, &corpus, &mut rng, &mut p);
             }
         }
     }
@@ -338,8 +350,10 @@ mod tests {
         let mut rng = SmallRng::from_entropy();
         let target = load_target("linux/amd64").unwrap();
         let relation = Relation::new(&target);
+        let rw = RelationWrapper::new(relation);
+
         for _ in 0..1024 {
-            let p = gen::gen_prog(&target, &relation, &mut rng);
+            let p = gen::gen_prog(&target, &rw, &mut rng);
             let p_str = p.display(&target).to_string();
             if let Err(e) = parse_prog(&target, &p_str) {
                 println!("{}", p_str);

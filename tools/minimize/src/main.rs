@@ -1,7 +1,7 @@
 use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::gen::{self, minimize};
 use healer_core::parse::parse_prog;
-use healer_core::relation::Relation;
+use healer_core::relation::{Relation, RelationWrapper};
 use healer_core::verbose::set_verbose;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -35,6 +35,7 @@ fn main() {
         exit(1)
     });
     let relation = Relation::new(&target);
+    let rw = RelationWrapper::new(relation);
     let mut rng = SmallRng::from_entropy();
     set_verbose(settings.verbose);
     let mut p = if let Some(prog_file) = settings.prog.as_ref() {
@@ -47,7 +48,7 @@ fn main() {
             exit(1)
         })
     } else {
-        gen::gen_prog(&target, &relation, &mut rng)
+        gen::gen_prog(&target, &rw, &mut rng)
     };
     println!(
         "> Prog to minimize, len {}:\n{}",

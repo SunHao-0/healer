@@ -57,7 +57,7 @@ pub fn select_with_calls(ctx: &Context, rng: &mut RngType) -> SyscallId {
 /// Select based on generated calls and relations.
 pub fn select_with_relation(ctx: &Context, rng: &mut RngType) -> Option<SyscallId> {
     let mut candidates: HashMap<SyscallId, Weight> = HashMap::new();
-    let r = ctx.relation();
+    let r = ctx.relation().inner.read().unwrap();
     let calls = ctx.calls();
 
     for sid in calls.iter().map(|c| c.sid()) {

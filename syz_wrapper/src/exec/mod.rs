@@ -185,7 +185,15 @@ pub const IN_SHM_SZ: usize = 4 << 20;
 /// Size of syz-executor output shared memory.
 pub const OUT_SHM_SZ: usize = 16 << 20;
 
-pub struct Executor {
+/// Config for executor, auto detected.
+pub struct ExecConfig {
+    pub pid: u64,
+    pub env: EnvFlags,
+    pub shms: Option<(Shmem, Shmem)>,
+    pub use_forksrv: bool,
+}
+
+pub struct ExecutorHandle {
     pid: u64,
     env: EnvFlags,
 
@@ -204,13 +212,13 @@ pub struct Executor {
     debug: bool,
 }
 
-impl Executor {
-    pub fn new(pid: u64, env: EnvFlags, shms: Option<(Shmem, Shmem)>, use_forksrv: bool) -> Self {
-        let use_shm = shms.is_some();
+impl ExecutorHandle {
+    pub fn with_config(config: ExecConfig) -> Self {
+        let use_shm = config.shms.is_some();
         let (mut in_shm, mut out_shm) = (None, None);
         let (mut in_mem, mut out_mem) = (None, None);
         if use_shm {
-            let shms = shms.unwrap();
+            let shms = config.shms.unwrap();
             in_shm = Some(shms.0);
             out_shm = Some(shms.1);
         } else {
@@ -219,14 +227,14 @@ impl Executor {
         };
 
         Self {
-            pid,
+            pid: config.pid,
             use_shm,
-            use_forksrv,
+            use_forksrv: config.use_forksrv,
             in_shm,
             out_shm,
             in_mem,
             out_mem,
-            env,
+            env: config.env,
             exec_child: None,
             exec_stdin: None,
             exec_stdout: None,
@@ -542,7 +550,7 @@ impl Executor {
     }
 }
 
-impl Drop for Executor {
+impl Drop for ExecutorHandle {
     fn drop(&mut self) {
         self.kill();
     }

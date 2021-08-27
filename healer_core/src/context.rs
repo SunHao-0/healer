@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     alloc::{Allocator, VmaAllocator},
     prog::{Call, Prog},
-    relation::Relation,
+    relation::RelationWrapper,
     target::Target,
     ty::ResKind,
     value::ResValueId,
@@ -16,7 +16,7 @@ pub struct Context<'a, 'b> {
     /// Fuzzing target of current prog.
     pub(crate) target: &'a Target,
     /// Relations between syscalls.
-    pub(crate) relation: &'b Relation,
+    pub(crate) relation: &'b RelationWrapper,
     /// Dummy mem allocator.
     pub(crate) mem_allocator: Allocator,
     /// Dummy vma allocator.
@@ -37,7 +37,7 @@ pub struct Context<'a, 'b> {
 
 impl<'a, 'b> Context<'a, 'b> {
     /// Create an empty context with `target` and `relation`.
-    pub fn new(target: &'a Target, relation: &'b Relation) -> Self {
+    pub fn new(target: &'a Target, relation: &'b RelationWrapper) -> Self {
         Self {
             target,
             relation,
@@ -56,7 +56,7 @@ impl<'a, 'b> Context<'a, 'b> {
     pub(crate) fn dummy() -> Self {
         let dummy = &0;
         let target: &'static Target = unsafe { std::mem::transmute(dummy) };
-        let relation: &'static Relation = unsafe { std::mem::transmute(dummy) };
+        let relation: &'static RelationWrapper = unsafe { std::mem::transmute(dummy) };
         Self {
             target,
             relation,
@@ -79,7 +79,7 @@ impl<'a, 'b> Context<'a, 'b> {
 
     /// Get current relation of context.
     #[inline(always)]
-    pub fn relation(&self) -> &Relation {
+    pub fn relation(&self) -> &RelationWrapper {
         self.relation
     }
 

@@ -9,7 +9,7 @@ use crate::{
         seq::{insert_calls, remove_call, splice},
     },
     prog::{Call, Prog},
-    relation::Relation,
+    relation::RelationWrapper,
     target::Target,
     ty::{Dir, ResKind, TypeKind},
     value::{ResValue, ResValueId, ResValueKind, Value, ValueKind},
@@ -28,7 +28,7 @@ pub mod seq;
 /// Muate input prog `p`
 pub fn mutate(
     target: &Target,
-    relation: &Relation,
+    relation: &RelationWrapper,
     corpus: &CorpusWrapper,
     rng: &mut RngType,
     p: &mut Prog,

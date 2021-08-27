@@ -14,7 +14,7 @@ use crate::{
     len::calculate_len_args,
     mutation::fixup,
     prog::{CallBuilder, Prog},
-    relation::Relation,
+    relation::RelationWrapper,
     select::select,
     syscall::SyscallId,
     target::Target,
@@ -74,7 +74,7 @@ fn next_prog_len() -> usize {
 }
 
 /// Generate prog based on `target` and `relation`.
-pub fn gen_prog(target: &Target, relation: &Relation, rng: &mut RngType) -> Prog {
+pub fn gen_prog(target: &Target, relation: &RelationWrapper, rng: &mut RngType) -> Prog {
     let mut ctx = Context::new(target, relation);
     let len = next_prog_len();
     debug_info!("prog len: {}", len);

@@ -25,11 +25,11 @@ pub struct QemuConfig {
     /// Booting target, such as linux/amd64.
     pub target: String,
     /// Path to kernel image.
-    pub kernel_img: Option<PathBuf>,
+    pub kernel_img: Option<String>,
     /// Path to disk image to boot, default is "stretch.img".
-    pub disk_img: PathBuf,
+    pub disk_img: String,
     /// Path to ssh secret key to login to os under test.
-    pub ssh_key: PathBuf,
+    pub ssh_key: String,
     /// Username to login os under test.
     pub ssh_user: String,
     /// Smp, default is 2.
@@ -37,7 +37,7 @@ pub struct QemuConfig {
     /// Mem size in megabyte.
     pub qemu_mem: u32,
     /// Shared memory device file path, creadted automatically if use qemu ivshm.
-    pub shmids: Vec<(PathBuf, usize)>,
+    pub shmids: Vec<(String, usize)>,
 }
 
 #[derive(Debug, Error)]
@@ -61,22 +61,16 @@ impl QemuConfig {
         if !SUPPORTED_TARGETS.contains(&&self.target[..]) {
             return Err(QemuConfigError::UnsupportedTarget(self.target.clone()));
         }
-        if !self.disk_img.is_file() {
-            return Err(QemuConfigError::InvalidPath(
-                self.disk_img.to_string_lossy().into_owned(),
-            ));
+        if !PathBuf::from(&self.disk_img).is_file() {
+            return Err(QemuConfigError::InvalidPath(self.disk_img.clone()));
         }
         if let Some(kernel_img) = self.kernel_img.as_ref() {
-            if !kernel_img.is_file() {
-                return Err(QemuConfigError::InvalidPath(
-                    kernel_img.to_string_lossy().into_owned(),
-                ));
+            if !PathBuf::from(kernel_img).is_file() {
+                return Err(QemuConfigError::InvalidPath(kernel_img.clone()));
             }
         }
-        if !self.ssh_key.is_file() {
-            return Err(QemuConfigError::InvalidPath(
-                self.ssh_key.to_string_lossy().into_owned(),
-            ));
+        if !PathBuf::from(&self.ssh_key).is_file() {
+            return Err(QemuConfigError::InvalidPath(self.ssh_key.clone()));
         }
         if self.ssh_user.is_empty() {
             return Err(QemuConfigError::EmptySshUser);
@@ -142,7 +136,8 @@ impl QemuConfig {
 
     pub fn add_shm(&mut self, shm_id: &str, sz: usize) -> &mut Self {
         let shm_path = PathBuf::from("/dev/shm").join(shm_id);
-        self.shmids.push((shm_path, sz));
+        self.shmids
+            .push((shm_path.to_str().unwrap().to_owned(), sz));
         self
     }
 }
@@ -176,7 +171,7 @@ impl QemuHandle {
         let mut ssh_cmd = ssh::ssh_basic_cmd(
             &qemu_ip,
             qemu_port,
-            &self.qemu_cfg.ssh_key.to_str().unwrap().to_string(),
+            &self.qemu_cfg.ssh_key,
             &self.qemu_cfg.ssh_user,
         );
         let output = ssh_cmd.arg("pwd").output().unwrap();
@@ -202,7 +197,7 @@ impl QemuHandle {
         }
     }
 
-    pub fn ssh(&self) -> Option<(PathBuf, String)> {
+    pub fn ssh(&self) -> Option<(String, String)> {
         Some((
             self.qemu_cfg.ssh_key.clone(),
             self.qemu_cfg.ssh_user.clone(),
@@ -369,7 +364,7 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
     ];
     let image = vec![
         "-drive".to_string(),
-        format!("file={},index=0,media=disk", conf.disk_img.display()),
+        format!("file={},index=0,media=disk", conf.disk_img),
     ];
 
     let mut append = static_conf.append.clone();
@@ -378,7 +373,7 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
     if let Some(kernel_img) = conf.kernel_img.as_ref() {
         append_args = vec![
             "-kernel".to_string(),
-            kernel_img.display().to_string(),
+            kernel_img.clone(),
             "-append".to_string(),
             append.join(" "),
         ];
@@ -394,9 +389,7 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
             "-object".to_string(),
             format!(
                 "memory-backend-file,size={},share,mem-path={},id=hostmem{}",
-                sz,
-                f.display(),
-                i
+                sz, f, i
             ),
         ];
         inshm.extend(dev);

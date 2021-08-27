@@ -1,6 +1,50 @@
 //! Relation learning algorithm.
 
+use std::sync::RwLock;
+
 use crate::{prog::Prog, syscall::SyscallId, target::Target, HashMap};
+
+#[derive(Debug)]
+pub struct RelationWrapper {
+    pub inner: RwLock<Relation>,
+}
+
+impl RelationWrapper {
+    pub fn new(r: Relation) -> Self {
+        Self {
+            inner: RwLock::new(r),
+        }
+    }
+
+    pub fn try_update<T>(&self, p: &Prog, pred: T) -> usize
+    where
+        T: FnMut(&Prog, usize) -> bool, // fn(new_prog: &Prog, index: usize) -> bool
+    {
+        let mut inner = self.inner.write().unwrap();
+        inner.try_update(p, pred)
+    }
+
+    /// Return if `a` can influence the execution of `b`.
+    #[inline]
+    pub fn influence(&self, a: SyscallId, b: SyscallId) -> bool {
+        let inner = self.inner.read().unwrap();
+        inner.influence(a, b)
+    }
+
+    /// Return if `a` can be influenced by the execution of `b`.
+    #[inline]
+    pub fn influence_by(&self, a: SyscallId, b: SyscallId) -> bool {
+        let inner = self.inner.read().unwrap();
+        inner.influence_by(a, b)
+    }
+
+    /// Return the number of known relations.
+    #[inline(always)]
+    pub fn num(&self) -> usize {
+        let inner = self.inner.read().unwrap();
+        inner.num()
+    }
+}
 
 /// Influence relations between syscalls.
 #[derive(Debug, Clone)]

@@ -1,5 +1,7 @@
 [package]
 name = "healer_fuzzer"
+description = "Healer fuzzer"
+authors = ["Hao Sun <sunhao.th@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
 
@@ -10,3 +12,13 @@ path = "src/main.rs"
 [dependencies]
 healer_core = {path = "../healer_core"}
 healer_alloc = {path = "../healer_utils/healer_alloc"}
+healer_vm = {path = "../healer_utils/healer_vm"}
+syz_wrapper = {path = "../syz_wrapper"}
+ahash = "0.7"
+rand = {version = "0.8", features = ["small_rng"]}
+log = "0.4"
+clap = "3.0.0-beta.2"
+anyhow = "1.0"
+thiserror = "1.0"
+shared_memory = "0.12"
+signal-hook = {version = "0.3", features = ["iterator", "extended-siginfo"]}

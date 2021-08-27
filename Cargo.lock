@@ -29,6 +29,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28ae2b3dec75a406790005a200b1bd89785afc02517a00ca99ecfe093ee9e6cf"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -448,8 +454,18 @@ dependencies = [
 name = "healer_fuzzer"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.7.4",
+ "anyhow",
+ "clap 3.0.0-beta.2",
  "healer_alloc",
  "healer_core",
+ "healer_vm",
+ "log",
+ "rand",
+ "shared_memory",
+ "signal-hook",
+ "syz_wrapper",
+ "thiserror",
 ]
 
 [[package]]
@@ -1023,6 +1039,26 @@ dependencies = [
  "nix",
  "rand",
  "winapi",
+]
+
+[[package]]
+name = "signal-hook"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "470c5a6397076fae0094aaf06a08e6ba6f37acb77d3b1b91ea92b4d6c8650c39"
+dependencies = [
+ "cc",
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
