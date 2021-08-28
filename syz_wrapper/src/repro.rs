@@ -17,18 +17,10 @@ pub struct ReproInfo {
     pub repro_log: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum ReproResult {
-    Succ(ReproInfo),
-    Failed(String),
-}
-
 #[derive(Debug, Error)]
 pub enum ReproError {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
-    #[error("syz_repro: {0}")]
-    SyzRepro(String),
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +32,7 @@ pub struct ReproConfig {
     pub disk_img: String,
     pub kernel_img: String,
     pub ssh_key: String,
-    pub qemu_count: usize,
+    pub qemu_count: u64,
     pub qemu_smp: usize,
     pub qemu_mem: usize,
 }
@@ -79,7 +71,7 @@ pub fn repro(
     target: &Target,
     crash_log: &[u8],
     run_history: &[(ExecOpt, Prog)],
-) -> Result<ReproResult, ReproError> {
+) -> Result<Option<ReproInfo>, ReproError> {
     let log = build_log(target, run_history, crash_log);
     let tmp_log = temp_dir().join(format!("healer-run_log-{}.tmp", config.id));
     write(&tmp_log, &log)?;
@@ -97,19 +89,17 @@ pub fn repro(
         let repro_log = String::from_utf8_lossy(&syz_repro.stdout).into_owned();
         Ok(parse_repro_log(log, repro_log))
     } else {
-        let err = String::from_utf8_lossy(&syz_repro.stderr).into_owned();
-        Err(ReproError::SyzRepro(err))
+        Ok(None)
     }
 }
 
 #[allow(clippy::while_let_on_iterator)]
-fn parse_repro_log(log: String, repro_log: String) -> ReproResult {
+fn parse_repro_log(log: String, repro_log: String) -> Option<ReproInfo> {
     const FAILED: &str = "reproduction failed:";
     let mut lines = repro_log.lines();
     while let Some(l) = lines.next() {
-        if let Some(mut i) = l.rfind(FAILED) {
-            i += FAILED.len();
-            return ReproResult::Failed(String::from(l[i..].trim()));
+        if l.rfind(FAILED).is_some() {
+            return None;
         }
 
         if l.contains("opts: {") && l.contains("} crepro: ") {
@@ -153,7 +143,7 @@ fn parse_repro_log(log: String, repro_log: String) -> ReproResult {
                 None
             };
 
-            return ReproResult::Succ(ReproInfo {
+            return Some(ReproInfo {
                 log,
                 opt,
                 p,
@@ -162,7 +152,7 @@ fn parse_repro_log(log: String, repro_log: String) -> ReproResult {
             });
         }
     }
-    ReproResult::Failed(format!("failed to repro:\n {}", log))
+    None
 }
 
 fn build_log(target: &Target, history: &[(ExecOpt, Prog)], crash_log: &[u8]) -> Vec<u8> {

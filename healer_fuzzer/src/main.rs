@@ -1,42 +1,106 @@
+use clap::{crate_authors, crate_description, crate_version, AppSettings, Clap};
+use healer_fuzzer::{boot, config::Config};
+use healer_vm::qemu::QemuConfig;
+use log::LevelFilter;
 use std::path::PathBuf;
+use syz_wrapper::{report::ReportConfig, repro::ReproConfig};
 
-#[derive(Debug)]
-pub struct Settings {
+#[derive(Debug, Clap)]
+#[clap(version = crate_version!(), author=crate_authors!(), about=crate_description!())]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Settings {
     /// Target os to fuzz.
-    pub os: String,
+    #[clap(long, short = 'O', default_value = "linux")]
+    os: String,
     /// Parallel fuzzing jobs.
-    pub job: u64,
+    #[clap(long, short = 'j', default_value = "4")]
+    job: u64,
     /// Directory to input prog.
-    pub input: Option<PathBuf>,
-    /// Workdir to write kinds of output data.
-    pub workdir: Option<PathBuf>,
+    #[clap(long, short = 'i')]
+    input: Option<PathBuf>,
+    /// Directory to write kinds of output data.
+    #[clap(long, short = 'o', default_value = "output")]
+    output: PathBuf,
     /// Path to kernel image.
-    pub kernel_img: Option<PathBuf>,
-    /// Path to disk image to boot, default is "stretch.img".
-    pub disk_img: PathBuf,
-    pub kernel_obj_dir: Option<PathBuf>,
+    #[clap(long, short = 'k', default_value = "bzImage")]
+    kernel_img: PathBuf,
+    /// Path to disk image.
+    #[clap(long, short = 'd', default_value = "stretch.img")]
+    disk_img: PathBuf,
+    /// Directory of target kernel object.
+    #[clap(long, short = 'b')]
+    kernel_obj_dir: Option<PathBuf>,
     /// Srouce file directory of target kernel.
-    pub kernel_src_dir: Option<PathBuf>,
+    #[clap(long, short = 'r')]
+    kernel_src_dir: Option<PathBuf>,
     /// Directory to syzkaller dir.
-    pub syz_dir: PathBuf,
+    #[clap(long, short = 'S', default_value = "./")]
+    syz_dir: PathBuf,
     /// Relations file.
-    pub relations: Option<PathBuf>,
+    #[clap(long, short = 'R')]
+    relations: Option<PathBuf>,
     /// Path to ssh secret key to login to os under test.
-    pub ssh_key: PathBuf,
+    #[clap(long, short = 's', default_value = "./stretch.id_rsa")]
+    ssh_key: PathBuf,
     /// Username to login os under test.
-    pub ssh_user: String,
-    /// Smp, default is 2.
-    pub qemu_smp: u32,
-    /// Mem size in megabyte.
-    pub qemu_mem: u32,
-    /// Skip crash reproducing.
-    pub skip_repro: bool,
+    #[clap(long, short = 'u', default_value = "root")]
+    ssh_user: String,
+    /// QEMU smp.
+    #[clap(long, short = 'c', default_value = "2")]
+    qemu_smp: u32,
+    /// QEMU mem size in megabyte.
+    #[clap(long, short = 'm', default_value = "4096")]
+    qemu_mem: u32,
     /// Path to disabled syscalls.
-    pub disable_syscalls: Option<PathBuf>,
+    #[clap(long)]
+    disable_syscalls: Option<PathBuf>,
     /// Path to crash white list.
-    pub crash_white_list: Option<PathBuf>,
-    #[cfg(debug_assertions)]
-    /// Debug mode.
-    pub debug: bool,
+    #[clap(long)]
+    crash_whitelist: Option<PathBuf>,
+    /// Number of instance used for repro.
+    #[clap(long, default_value = "2")]
+    repro_vm_count: u64,
 }
-fn main() {}
+
+fn main() -> anyhow::Result<()> {
+    let settings = Settings::parse();
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .format_timestamp_secs()
+        .init();
+    let config = Config {
+        os: settings.os,
+        relations: settings.relations,
+        input: settings.input,
+        crash_whitelist: settings.crash_whitelist,
+        job: settings.job,
+        syz_dir: settings.syz_dir,
+        output: settings.output,
+        disabled_calls: settings.disable_syscalls,
+        qemu_config: QemuConfig {
+            qemu_smp: settings.qemu_smp,
+            qemu_mem: settings.qemu_mem,
+            ssh_key: settings.ssh_key.to_str().unwrap().to_string(),
+            ssh_user: settings.ssh_user,
+            kernel_img: Some(settings.kernel_img.to_str().unwrap().to_string()),
+            disk_img: settings.disk_img.to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+        repro_config: ReproConfig {
+            qemu_count: settings.repro_vm_count,
+            ..Default::default()
+        },
+        report_config: ReportConfig {
+            kernel_obj_dir: settings
+                .kernel_obj_dir
+                .map(|s| s.to_str().unwrap().to_string()),
+            kernel_src_dir: settings
+                .kernel_src_dir
+                .map(|s| s.to_str().unwrap().to_string()),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    boot(config)
+}

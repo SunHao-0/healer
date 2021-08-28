@@ -1,6 +1,6 @@
 [package]
 name = "healer_fuzzer"
-description = "Healer fuzzer"
+description = "Kernel fuzzer inspired by Syzkaller"
 authors = ["Hao Sun <sunhao.th@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
@@ -22,3 +22,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 shared_memory = "0.12"
 signal-hook = {version = "0.3", features = ["iterator", "extended-siginfo"]}
+sha-1 = "0.9"
+hex = "0.4"
+env_logger = "0.9"

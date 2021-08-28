@@ -15,8 +15,15 @@ pub fn fuzzer_id() -> u64 {
 }
 
 #[macro_export]
+macro_rules! fuzzer_trace {
+    ($t: tt, $($arg:tt)*) => (
+        log::trace!(std::concat!("fuzzer-{}: ", $t), crate::fuzzer_log::fuzzer_id(), $($arg)*)
+    )
+}
+
+#[macro_export]
 macro_rules! fuzzer_info {
-    ($t: tt $(, $arg:tt)*) => (
+    ($t: tt, $($arg:tt)*) => (
         log::info!(std::concat!("fuzzer-{}: ", $t), crate::fuzzer_log::fuzzer_id(), $($arg)*)
     )
 }

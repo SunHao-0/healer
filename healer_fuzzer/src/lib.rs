@@ -11,11 +11,11 @@ pub mod stats;
 pub mod util;
 
 use crate::{
-    crash::Crash,
+    crash::CrashManager,
     feedback::Feedback,
     fuzzer::{Fuzzer, SharedState, HISTORY_CAPACITY},
     stats::Stats,
-    util::stop_req,
+    util::{stop_req, stop_soon},
 };
 use anyhow::Context;
 use config::Config;
@@ -34,12 +34,12 @@ use std::{
     collections::VecDeque,
     fs::{read_dir, read_to_string},
     os::raw::c_int,
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
     str::FromStr,
     sync::Arc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use syz_wrapper::{
     exec::{
@@ -74,7 +74,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     }
 
     let mut input_progs = Vec::new();
-    if let Some(p) = config.input_prog.as_ref() {
+    if let Some(p) = config.input.as_ref() {
         log::info!("loading input progs");
         let progs = load_progs(p, &target).context("failed to load input progs")?;
         input_progs = split_input_progs(progs, config.job);
@@ -83,12 +83,12 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     let crash = if let Some(l) = config.crash_whitelist.as_ref() {
         log::info!("loading crash whitelist");
         let l = load_crash_whitelist(l).context("failed to load crash whitelist")?;
-        Crash::with_whitelist(l)
+        CrashManager::with_whitelist(l, config.output.clone())
     } else {
-        Crash::new()
+        CrashManager::new(config.output.clone())
     };
 
-    log::info!("pre booting one vm...");
+    log::info!("pre-booting one vm...");
     let use_shm = target_exec_use_shm(sys_target);
     if use_shm {
         setup_fuzzer_shm(0, &mut config).context("failed to setup shm")?;
@@ -98,7 +98,8 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     let boot_duration = qemu.boot().context("failed to boot qemu")?;
     log::info!("boot cost around {}s", boot_duration.as_secs());
 
-    let ssh_syz = ssh_syz_cmd(&config.syz_executor(), &qemu);
+    let remote_exec_path = scp_to_vm(&config.syz_executor(), &qemu)?;
+    let ssh_syz = ssh_syz_cmd(&remote_exec_path, &qemu);
     log::info!("detecting features");
     let features = detect_features(ssh_syz).context("failed to detect features")?;
     config.exec_config.as_mut().unwrap().features = features;
@@ -108,14 +109,15 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         }
     }
 
-    log::info!("pre setup one executor...");
-    let ssh_syz = ssh_syz_cmd(&config.syz_executor(), &qemu);
+    log::info!("pre-setup one executor...");
+    let ssh_syz = ssh_syz_cmd(&remote_exec_path, &qemu);
     setup_features(ssh_syz, features).context("failed to setup features")?;
     features_to_env_flags(features, &mut config.exec_config.as_mut().unwrap().env);
     let exec_config = config.exec_config.take().unwrap();
     config.exec_config = Some(exec_config.clone()); // clear the shm
     let mut executor = ExecutorHandle::with_config(exec_config);
-    spawn_syz(&config, &qemu, &mut executor).context("failed to spawn executor for fuzzer-0")?;
+    spawn_syz(&remote_exec_path, &qemu, &mut executor)
+        .context("failed to spawn executor for fuzzer-0")?;
     log::info!("ok, fuzzer-0 should be ready");
 
     let stats = Arc::new(Stats::new());
@@ -156,6 +158,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
                 qemu,
                 run_history: VecDeque::with_capacity(HISTORY_CAPACITY),
                 config: fuzzer_config,
+                last_reboot: Instant::now(),
             };
             fuzzer.fuzz_loop(progs)
         });
@@ -175,6 +178,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             qemu,
             run_history: VecDeque::with_capacity(HISTORY_CAPACITY),
             config,
+            last_reboot: Instant::now(),
         };
         fuzzer.fuzz_loop(progs)
     });
@@ -188,9 +192,13 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
 
     for f in fuzzers {
         if let Ok(Err(e)) = f.join() {
-            log::error!("fuzzer exited with error info: {}", e)
+            if !stop_soon() {
+                // ignore errors caused by termination
+                log::error!("fuzzer exited with error info: {}", e)
+            }
         }
     }
+    log::info!("All done");
     Ok(())
 }
 
@@ -307,6 +315,7 @@ fn setup_fuzzer_shm(fuzzer_id: u64, config: &mut Config) -> anyhow::Result<()> {
     let out_shm_id = format!("healer-out_shm_{}-{}", fuzzer_id, std::process::id());
     let in_shm = create_shm(&in_shm_id, IN_SHM_SZ).context("failed to create input shm")?;
     let out_shm = create_shm(&out_shm_id, OUT_SHM_SZ).context("failed to create outpout shm")?;
+    config.qemu_config.shmids.clear(); // TODO fix this
     config
         .qemu_config
         .add_shm(&in_shm_id, IN_SHM_SZ)
@@ -330,8 +339,12 @@ fn create_shm(id: &str, sz: usize) -> anyhow::Result<Shmem> {
     }
 }
 
-fn spawn_syz(config: &Config, qemu: &QemuHandle, exec: &mut ExecutorHandle) -> anyhow::Result<()> {
-    let mut ssh = ssh_syz_cmd(&config.syz_executor(), qemu);
+fn spawn_syz(
+    remote_syz_exec: &Path,
+    qemu: &QemuHandle,
+    exec: &mut ExecutorHandle,
+) -> anyhow::Result<()> {
+    let mut ssh = ssh_syz_cmd(remote_syz_exec, qemu);
     ssh.arg("use-ivshm"); // use ivshm mode.
     exec.spawn(ssh).map_err(|e| e.into())
 }
@@ -344,6 +357,16 @@ fn split_input_progs(progs: Vec<Prog>, job: u64) -> Vec<Vec<Prog>> {
     let n = progs.len() + job - 1;
     let m = n / job;
     progs.chunks(m).map(|c| c.to_vec()).collect()
+}
+
+fn scp_to_vm(p: &Path, qemu: &QemuHandle) -> anyhow::Result<PathBuf> {
+    let (vm_ip, vm_port) = qemu.addr().unwrap();
+    let (ssh_key, ssh_user) = qemu.ssh().unwrap();
+    let f = p.file_name().unwrap();
+    let to = PathBuf::from("~").join(f);
+    healer_vm::ssh::scp(vm_ip, vm_port, ssh_key, ssh_user, p, &to)
+        .context("failed to scp to vm")?;
+    Ok(to)
 }
 
 #[inline]
@@ -364,9 +387,10 @@ fn prepare_exec_env(
     let exec_config = config.exec_config.as_ref().unwrap();
     qemu.boot()
         .with_context(|| format!("failed boot qemu for fuzzer-{}", exec_config.pid))?;
-    let ssh_syz = ssh_syz_cmd(&config.syz_executor(), qemu);
+    let remote_exec_path = scp_to_vm(&config.syz_executor(), qemu)?;
+    let ssh_syz = ssh_syz_cmd(&remote_exec_path, qemu);
     setup_features(ssh_syz, exec_config.features).context("failed to setup features")?;
-    spawn_syz(config, qemu, exec)
+    spawn_syz(&remote_exec_path, qemu, exec)
         .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))
 }
 

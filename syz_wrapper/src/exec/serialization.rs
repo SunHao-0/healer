@@ -203,16 +203,27 @@ impl ExecCtx<'_, '_> {
                         self.write_const_arg(val.size(self.target), val.val, 0, 0, 0, ty.format());
                     }
                     ResValueKind::Ref(idx) => {
-                        self.write_u64(EXEC_ARG_RESULT);
-                        let info = &self.res_args[idx];
-                        let idx = info.idx;
-                        let ty = val.ty(self.target);
-                        let meta = val.size(self.target) | (ty.format() as u64) << 8;
-                        self.write_u64(meta);
-                        self.write_u64(idx);
-                        self.write_u64(val.op_div);
-                        self.write_u64(val.op_add);
-                        self.write_u64(val.val);
+                        if let Some(info) = self.res_args.get(idx).cloned() {
+                            self.write_u64(EXEC_ARG_RESULT);
+                            let idx = info.idx;
+                            let ty = val.ty(self.target);
+                            let meta = val.size(self.target) | (ty.format() as u64) << 8;
+                            self.write_u64(meta);
+                            self.write_u64(idx);
+                            self.write_u64(val.op_div);
+                            self.write_u64(val.op_add);
+                            self.write_u64(val.val);
+                        } else {
+                            let ty = val.ty(self.target);
+                            self.write_const_arg(
+                                val.size(self.target),
+                                val.val,
+                                0,
+                                0,
+                                0,
+                                ty.format(),
+                            );
+                        }
                     }
                 }
             }
