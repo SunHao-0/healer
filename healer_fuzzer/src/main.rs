@@ -60,12 +60,16 @@ struct Settings {
     /// Number of instance used for repro.
     #[clap(long, default_value = "2")]
     repro_vm_count: u64,
+    /// Enable fault injection.
+    #[clap(long)]
+    enable_fault_injection: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let settings = Settings::parse();
     env_logger::builder()
         .filter_level(LevelFilter::Info)
+        .format_module_path(false)
         .format_timestamp_secs()
         .init();
     let config = Config {
@@ -77,6 +81,7 @@ fn main() -> anyhow::Result<()> {
         syz_dir: settings.syz_dir,
         output: settings.output,
         disabled_calls: settings.disable_syscalls,
+        enable_fault_injection: settings.enable_fault_injection,
         qemu_config: QemuConfig {
             qemu_smp: settings.qemu_smp,
             qemu_mem: settings.qemu_mem,

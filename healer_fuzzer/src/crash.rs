@@ -62,7 +62,7 @@ impl CrashManager {
             return Ok(false);
         }
 
-        let title = report.title.clone();
+        let title = report.title.trim().to_string();
         let mut id = None;
         {
             let mut reports = self.reports.lock().unwrap();
@@ -84,7 +84,13 @@ impl CrashManager {
             }
         }
         let mut ri = self.reproducing.lock().unwrap();
-        Ok(ri.insert(title))
+        let ret = if ri.contains(&title) {
+            false
+        } else {
+            ri.insert(title);
+            true
+        };
+        Ok(ret)
     }
 
     pub fn unique_crashes(&self) -> u64 {

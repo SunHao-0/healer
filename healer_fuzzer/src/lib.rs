@@ -103,6 +103,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     log::info!("detecting features");
     let features = detect_features(ssh_syz).context("failed to detect features")?;
     config.exec_config.as_mut().unwrap().features = features;
+    config.features = Some(features);
     for (i, feature) in FEATURES_NAME.iter().enumerate() {
         if features & (1 << i) != 0 {
             log::info!("{:<28}: enabled", feature);
@@ -182,7 +183,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         };
         fuzzer.fuzz_loop(progs)
     });
-    fuzzers.push(handle);
+    fuzzers.insert(0, handle);
 
     thread::spawn(move || {
         stats.report(Duration::from_secs(10));
@@ -190,16 +191,27 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
 
     setup_signal_handler();
 
-    for f in fuzzers {
+    let mut err = None;
+    for (i, f) in fuzzers.into_iter().enumerate() {
         if let Ok(Err(e)) = f.join() {
-            if !stop_soon() {
-                // ignore errors caused by termination
-                log::error!("fuzzer exited with error info: {}", e)
+            if err.is_none() {
+                err = Some("fuzzer exits with errors:".to_string());
             }
+
+            let mut info = format!("\n\tfuzzer-{}: {}", i, e);
+            for (i, cause) in e.chain().enumerate() {
+                let cause = format!("\n\t\t{}. {}", i, cause);
+                info.push_str(&cause);
+            }
+            err.as_mut().unwrap().push_str(&info);
         }
     }
-    log::info!("All done");
-    Ok(())
+    if err.is_none() || stop_soon() {
+        log::info!("All done");
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(err.unwrap()))
+    }
 }
 
 fn setup_signal_handler() {
@@ -339,6 +351,7 @@ fn create_shm(id: &str, sz: usize) -> anyhow::Result<Shmem> {
     }
 }
 
+#[inline]
 fn spawn_syz(
     remote_syz_exec: &Path,
     qemu: &QemuHandle,

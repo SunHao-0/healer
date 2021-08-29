@@ -7,7 +7,12 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use syz_wrapper::{exec::ExecConfig, report::ReportConfig, repro::ReproConfig, sys::SysTarget};
+use syz_wrapper::{
+    exec::{features::Features, ExecConfig},
+    report::ReportConfig,
+    repro::ReproConfig,
+    sys::SysTarget,
+};
 
 #[derive(Clone)]
 pub struct Config {
@@ -21,6 +26,8 @@ pub struct Config {
     pub skip_repro: bool,
     pub disable_relation_detect: bool,
     pub disabled_calls: Option<PathBuf>,
+    pub features: Option<Features>,
+    pub enable_fault_injection: bool,
 
     pub qemu_config: QemuConfig,
     pub repro_config: ReproConfig,
@@ -41,6 +48,8 @@ impl Default for Config {
             skip_repro: false,
             disabled_calls: None,
             disable_relation_detect: false,
+            features: None,
+            enable_fault_injection: false,
 
             qemu_config: QemuConfig::default(),
             exec_config: None,

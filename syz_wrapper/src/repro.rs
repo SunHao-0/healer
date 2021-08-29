@@ -1,6 +1,6 @@
 use crate::exec::{ExecOpt, FLAG_INJECT_FAULT};
 use healer_core::{prog::Prog, target::Target};
-use simd_json::json;
+use simd_json::{json, to_string};
 use std::env::temp_dir;
 use std::fmt::Write;
 use std::fs::write;
@@ -176,12 +176,12 @@ fn build_log(target: &Target, history: &[(ExecOpt, Prog)], crash_log: &[u8]) -> 
 
 fn syz_conf(conf: &ReproConfig) -> String {
     let conf = json!({
-        "target": conf.target,
+        "target": &conf.target,
         "http": "127.0.0.1:65534",
-        "workdir": conf.work_dir,
-        "image": conf.disk_img,
-        "sshkey": conf.ssh_key,
-        "syzkaller": conf.syz_dir,
+        "workdir": &conf.work_dir,
+        "image": &conf.disk_img,
+        "sshkey": &conf.ssh_key,
+        "syzkaller": &conf.syz_dir,
         "procs": 2,
         "type": "qemu",
         "vm": {
@@ -192,5 +192,6 @@ fn syz_conf(conf: &ReproConfig) -> String {
         }
     });
 
-    conf.to_string()
+    // conf.to_string()
+    to_string(&conf).unwrap()
 }

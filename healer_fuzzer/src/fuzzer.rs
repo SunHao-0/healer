@@ -1,6 +1,6 @@
 use crate::{
     config::Config, crash::CrashManager, feedback::Feedback, fuzzer_log::set_fuzzer_id,
-    prepare_exec_env, ssh_syz_cmd, stats::Stats, util::stop_soon,
+    prepare_exec_env, spawn_syz, stats::Stats, util::stop_soon,
 };
 use anyhow::Context;
 use healer_core::{
@@ -24,7 +24,10 @@ use std::{
     time::{Duration, Instant},
 };
 use syz_wrapper::{
-    exec::{ExecError, ExecOpt, ExecutorHandle, FLAG_COLLIDE},
+    exec::{
+        features::FEATURE_FAULT, ExecError, ExecOpt, ExecutorHandle, CALL_FAULT_INJECTED,
+        FLAG_COLLIDE, FLAG_INJECT_FAULT,
+    },
     report::extract_report,
     repro::repro,
 };
@@ -74,9 +77,19 @@ impl Fuzzer {
         self.shared_state.stats.inc_fuzzing();
         log::info!("fuzzer-{} online", self.id);
 
+        let mut err = None;
+
         for prog in progs {
-            self.execute_one(prog)
-                .context("failed to execute input prog")?;
+            if let Err(e) = self
+                .execute_one(prog)
+                .context("failed to execute input prog")
+            {
+                err = Some(e);
+            }
+        }
+        if let Some(e) = err {
+            self.shared_state.stats.dec_fuzzing();
+            return Err(e);
         }
 
         for i in 0_u64.. {
@@ -87,8 +100,13 @@ impl Fuzzer {
                     &self.shared_state.relation,
                     &mut self.rng,
                 );
-                self.execute_one(p)
-                    .context("failed to execute generated prog")?;
+                if let Err(e) = self
+                    .execute_one(p)
+                    .context("failed to execute generated prog")
+                {
+                    err = Some(e);
+                    break;
+                }
             } else {
                 let mut p = self.shared_state.corpus.select_one(&mut self.rng).unwrap();
                 mutate(
@@ -98,8 +116,13 @@ impl Fuzzer {
                     &mut self.rng,
                     &mut p,
                 );
-                self.execute_one(p)
-                    .context("failed to execute mutated prog")?;
+                if let Err(e) = self
+                    .execute_one(p)
+                    .context("failed to execute mutated prog")
+                {
+                    err = Some(e);
+                    break;
+                }
             }
 
             if stop_soon() {
@@ -107,7 +130,12 @@ impl Fuzzer {
             }
         }
 
-        Ok(())
+        self.shared_state.stats.dec_fuzzing();
+        if let Some(e) = err {
+            Err(e)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn execute_one(&mut self, p: Prog) -> anyhow::Result<bool> {
@@ -200,7 +228,42 @@ impl Fuzzer {
             false
         });
 
-        self.do_save_prog(p, &brs)
+        self.do_save_prog(p.clone(), &brs)?;
+        if self.config.features.unwrap() & FEATURE_FAULT != 0 && self.config.enable_fault_injection
+        {
+            self.fail_call(&p, idx)?;
+        }
+        Ok(())
+    }
+
+    fn fail_call(&mut self, p: &Prog, idx: usize) -> anyhow::Result<()> {
+        let t = Arc::clone(&self.shared_state.target);
+        let mut opt = ExecOpt::new();
+        opt.enable(FLAG_INJECT_FAULT);
+        opt.fault_call = idx as i32;
+        for i in 0..100 {
+            opt.fault_nth = i;
+            self.record_execution(p, &opt);
+            let ret = self.executor.execute_one(&t, p, &opt);
+            match ret {
+                Ok(info) => {
+                    if info.call_infos.len() > idx
+                        && info.call_infos[idx].flags & CALL_FAULT_INJECTED == 0
+                    {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if let Some(crash) = self.check_vm(p, e) {
+                        self.handle_crash(p, crash)
+                            .context("failed to handle crash")?;
+                    } else {
+                        self.restart_exec()?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn do_save_prog(&mut self, p: Prog, cov: &HashSet<u32>) -> anyhow::Result<()> {
@@ -256,7 +319,7 @@ impl Fuzzer {
     }
 
     fn check_vm(&mut self, p: &Prog, e: ExecError) -> Option<Vec<u8>> {
-        fuzzer_warn!("failed to exec prog: {}", e);
+        fuzzer_trace!("failed to exec prog: {}", e);
 
         let crash_error = !matches!(
             e,
@@ -264,7 +327,7 @@ impl Fuzzer {
         );
         if crash_error && !self.qemu.is_alive() {
             fuzzer_warn!(
-                "kernel crashed, maybe caused by: {}",
+                "kernel crashed, maybe caused by:\n{}",
                 p.display(&self.shared_state.target)
             );
             let log = self.qemu.collect_crash_log().unwrap();
@@ -280,21 +343,27 @@ impl Fuzzer {
         }
 
         self.shared_state.stats.inc_crashes();
-        let reports = extract_report(&self.config.report_config, p, &crash_log)
-            .context("failed to extract report")?;
-        if !reports.is_empty() {
-            let title = reports[0].title.clone();
-            fuzzer_info!("crash: {}", title);
-            let need_repro = self
-                .shared_state
-                .crash
-                .save_new_report(&self.shared_state.target, reports[0].clone())?;
-            if need_repro {
-                self.try_repro(&title, &crash_log)
-                    .context("failed to repro")?;
+        let ret = extract_report(&self.config.report_config, p, &crash_log);
+        match ret.as_deref() {
+            Ok([report, ..]) => {
+                let title = report.title.clone();
+                fuzzer_info!("crash: {}", title);
+                let need_repro = self
+                    .shared_state
+                    .crash
+                    .save_new_report(&self.shared_state.target, report.clone())?;
+                if need_repro {
+                    fuzzer_info!("trying to repro...",);
+                    self.try_repro(&title, &crash_log)
+                        .context("failed to repro")?;
+                }
             }
-        } else {
-            self.shared_state.crash.save_raw_log(&crash_log)?;
+            _ => {
+                if !crash_log.is_empty() {
+                    fuzzer_info!("failed to extract report, saving to raw logs",);
+                    self.shared_state.crash.save_raw_log(&crash_log)?;
+                }
+            }
         }
 
         self.reboot_vm()
@@ -304,6 +373,7 @@ impl Fuzzer {
         if stop_soon() {
             return Ok(());
         }
+
         self.shared_state.stats.inc_repro();
         self.shared_state.stats.dec_fuzzing();
         let history = self.run_history.make_contiguous();
@@ -320,6 +390,7 @@ impl Fuzzer {
         self.shared_state
             .stats
             .set_unique_crash(self.shared_state.crash.unique_crashes());
+
         Ok(())
     }
 
@@ -346,9 +417,7 @@ impl Fuzzer {
 
     fn restart_exec(&mut self) -> anyhow::Result<()> {
         let syz_exec = PathBuf::from("~/syz-executor"); // TODO fix this
-        let exec_cmd = ssh_syz_cmd(&syz_exec, &self.qemu);
-        self.executor
-            .spawn(exec_cmd)
+        spawn_syz(&syz_exec, &self.qemu, &mut self.executor)
             .with_context(|| format!("failed to spawn syz-executor for fuzzer-{}", self.id))
     }
 
