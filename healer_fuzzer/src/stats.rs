@@ -91,7 +91,7 @@ impl Stats {
             let corpus_cov = self.cal_cov.load(Ordering::Relaxed);
             let max_cov = self.max_cov.load(Ordering::Relaxed);
             log::info!(
-                "exec: {}, fuzz/repro {}/{}, unique/crash {}/{}, cov/max {}/{}, corpus: {}",
+                "exec: {}, fuzz/repro {}/{}, uniq/total crashes {}/{}, cal/max cover {}/{}, corpus: {}",
                 exec_total,
                 fuzzing,
                 repro,

@@ -99,6 +99,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     log::info!("boot cost around {}s", boot_duration.as_secs());
 
     let remote_exec_path = scp_to_vm(&config.syz_executor(), &qemu)?;
+    config.remote_exec = Some(remote_exec_path.clone());
     let ssh_syz = ssh_syz_cmd(&remote_exec_path, &qemu);
     log::info!("detecting features");
     let features = detect_features(ssh_syz).context("failed to detect features")?;
@@ -136,7 +137,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     for id in 1..config.job {
         let progs = input_progs.pop().unwrap_or_default();
         let shared_state = SharedState::clone(&shared_state);
-        let mut fuzzer_config = config.clone();
+        let mut fuzzer_config = config.clone(); // shm removed
 
         let handle = thread::spawn(move || {
             fuzzer_config.exec_config.as_mut().unwrap().pid = id;
@@ -150,7 +151,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             let exec_config = fuzzer_config.exec_config.take().unwrap();
             fuzzer_config.exec_config = Some(exec_config.clone());
             let mut executor = ExecutorHandle::with_config(exec_config);
-            prepare_exec_env(&fuzzer_config, &mut qemu, &mut executor)?;
+            prepare_exec_env(&mut fuzzer_config, &mut qemu, &mut executor)?;
             let mut fuzzer = Fuzzer {
                 shared_state,
                 id,
@@ -240,7 +241,9 @@ fn setup_signal_handler() {
             from,
             info.cause
         );
+        let _ = Command::new("pkill").arg("syz-repro").output(); // stop syz-repro, ignore all errors.
         println!("Waiting fuzzers to exit...");
+
         stop_req();
     });
 }
@@ -327,7 +330,7 @@ fn setup_fuzzer_shm(fuzzer_id: u64, config: &mut Config) -> anyhow::Result<()> {
     let out_shm_id = format!("healer-out_shm_{}-{}", fuzzer_id, std::process::id());
     let in_shm = create_shm(&in_shm_id, IN_SHM_SZ).context("failed to create input shm")?;
     let out_shm = create_shm(&out_shm_id, OUT_SHM_SZ).context("failed to create outpout shm")?;
-    config.qemu_config.shmids.clear(); // TODO fix this
+    config.qemu_config.shmids.clear(); // clear old shms
     config
         .qemu_config
         .add_shm(&in_shm_id, IN_SHM_SZ)
@@ -393,7 +396,7 @@ fn ssh_syz_cmd(syz: &Path, qemu: &QemuHandle) -> Command {
 
 #[inline]
 fn prepare_exec_env(
-    config: &Config,
+    config: &mut Config,
     qemu: &mut QemuHandle,
     exec: &mut ExecutorHandle,
 ) -> anyhow::Result<()> {
@@ -401,6 +404,7 @@ fn prepare_exec_env(
     qemu.boot()
         .with_context(|| format!("failed boot qemu for fuzzer-{}", exec_config.pid))?;
     let remote_exec_path = scp_to_vm(&config.syz_executor(), qemu)?;
+    config.remote_exec = Some(remote_exec_path.clone());
     let ssh_syz = ssh_syz_cmd(&remote_exec_path, qemu);
     setup_features(ssh_syz, exec_config.features).context("failed to setup features")?;
     spawn_syz(&remote_exec_path, qemu, exec)

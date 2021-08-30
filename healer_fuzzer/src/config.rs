@@ -28,6 +28,7 @@ pub struct Config {
     pub disabled_calls: Option<PathBuf>,
     pub features: Option<Features>,
     pub enable_fault_injection: bool,
+    pub remote_exec: Option<PathBuf>,
 
     pub qemu_config: QemuConfig,
     pub repro_config: ReproConfig,
@@ -50,6 +51,7 @@ impl Default for Config {
             disable_relation_detect: false,
             features: None,
             enable_fault_injection: false,
+            remote_exec: None,
 
             qemu_config: QemuConfig::default(),
             exec_config: None,

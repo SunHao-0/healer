@@ -19,7 +19,6 @@ use std::{
     collections::VecDeque,
     fs::{create_dir_all, write},
     io::ErrorKind,
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -139,6 +138,10 @@ impl Fuzzer {
     }
 
     pub fn execute_one(&mut self, p: Prog) -> anyhow::Result<bool> {
+        if stop_soon() {
+            return Ok(false);
+        }
+
         let opt = ExecOpt::new();
         self.record_execution(&p, &opt);
         let ret = self
@@ -312,6 +315,8 @@ impl Fuzzer {
             Err(e) => {
                 if let Some(crash) = self.check_vm(p, e) {
                     self.handle_crash(p, crash)?;
+                } else {
+                    self.restart_exec()?;
                 }
                 Ok(None)
             }
@@ -352,6 +357,9 @@ impl Fuzzer {
                     .shared_state
                     .crash
                     .save_new_report(&self.shared_state.target, report.clone())?;
+                self.shared_state
+                    .stats
+                    .set_unique_crash(self.shared_state.crash.unique_crashes());
                 if need_repro {
                     fuzzer_info!("trying to repro...",);
                     self.try_repro(&title, &crash_log)
@@ -377,6 +385,7 @@ impl Fuzzer {
         self.shared_state.stats.inc_repro();
         self.shared_state.stats.dec_fuzzing();
         let history = self.run_history.make_contiguous();
+        let now = Instant::now();
         let repro = repro(
             &self.config.repro_config,
             &self.shared_state.target,
@@ -386,12 +395,19 @@ impl Fuzzer {
         .context("failed to repro")?;
         self.shared_state.stats.dec_repro();
         self.shared_state.stats.inc_fuzzing();
-        self.shared_state.crash.repro_done(title, repro)?;
-        self.shared_state
-            .stats
-            .set_unique_crash(self.shared_state.crash.unique_crashes());
+        let cost = now.elapsed();
+        if let Some(r) = repro.as_ref() {
+            fuzzer_info!(
+                "'{}' repro success, cost: {}s, crepro: {}",
+                title,
+                cost.as_secs(),
+                r.c_prog.is_some()
+            );
+        } else {
+            fuzzer_info!("failed to repro '{}'", title);
+        }
 
-        Ok(())
+        self.shared_state.crash.repro_done(title, repro)
     }
 
     fn record_execution(&mut self, p: &Prog, opt: &ExecOpt) {
@@ -411,19 +427,22 @@ impl Fuzzer {
             n + 1
         });
         if n >= 64 {
+            LAST_CLEAR.with(|v| {
+                v.set(0);
+            });
             self.qemu.reset();
         }
     }
 
     fn restart_exec(&mut self) -> anyhow::Result<()> {
-        let syz_exec = PathBuf::from("~/syz-executor"); // TODO fix this
+        let syz_exec = self.config.remote_exec.clone().unwrap();
         spawn_syz(&syz_exec, &self.qemu, &mut self.executor)
             .with_context(|| format!("failed to spawn syz-executor for fuzzer-{}", self.id))
     }
 
     #[inline]
     fn reboot_vm(&mut self) -> anyhow::Result<()> {
-        let ret = prepare_exec_env(&self.config, &mut self.qemu, &mut self.executor)
+        let ret = prepare_exec_env(&mut self.config, &mut self.qemu, &mut self.executor)
             .context("failed to reboot");
         self.last_reboot = Instant::now();
         ret

@@ -1,10 +1,9 @@
 use clap::{crate_authors, crate_description, crate_version, AppSettings, Clap};
+use env_logger::{Env, TimestampPrecision};
 use healer_fuzzer::{boot, config::Config};
 use healer_vm::qemu::QemuConfig;
-use log::LevelFilter;
 use std::path::PathBuf;
 use syz_wrapper::{report::ReportConfig, repro::ReproConfig};
-
 #[derive(Debug, Clap)]
 #[clap(version = crate_version!(), author=crate_authors!(), about=crate_description!())]
 #[clap(setting = AppSettings::ColoredHelp)]
@@ -67,11 +66,14 @@ struct Settings {
 
 fn main() -> anyhow::Result<()> {
     let settings = Settings::parse();
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .format_module_path(false)
-        .format_timestamp_secs()
+
+    let log_env = Env::new()
+        .filter_or("HEALER_LOG", "info")
+        .default_write_style_or("auto");
+    env_logger::Builder::from_env(log_env)
+        .format_timestamp(Some(TimestampPrecision::Seconds))
         .init();
+
     let config = Config {
         os: settings.os,
         relations: settings.relations,

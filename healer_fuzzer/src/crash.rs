@@ -84,13 +84,7 @@ impl CrashManager {
             }
         }
         let mut ri = self.reproducing.lock().unwrap();
-        let ret = if ri.contains(&title) {
-            false
-        } else {
-            ri.insert(title);
-            true
-        };
-        Ok(ret)
+        Ok(ri.insert(title))
     }
 
     pub fn unique_crashes(&self) -> u64 {
@@ -136,6 +130,7 @@ impl CrashManager {
             let mut ri = self.reproducing.lock().unwrap();
             ri.remove(title);
         }
+
         if let Some(repro) = repro {
             let mut save = false;
             {

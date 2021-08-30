@@ -10,9 +10,14 @@ use crate::{
     exec::{message::*, serialization::*, util::*},
     HashMap, HashSet,
 };
+use chrono::Duration;
 use healer_core::{prog::Prog, target::Target};
 use healer_io::{thread::read_background, BackgroundIoHandle};
 use iota::iota;
+use nix::{
+    sys::signal::{kill, Signal::SIGTERM},
+    unistd::Pid,
+};
 use shared_memory::Shmem;
 use std::{
     io::Write,
@@ -376,10 +381,11 @@ impl ExecutorHandle {
         out_buf[0..4].iter_mut().for_each(|v| *v = 0);
         out_buf = &mut out_buf[4..];
 
-        // let child = self.exec_child.as_mut().unwrap().id();
-        // let timer = timer().schedule_with_delay(Duration::seconds(20), move || {
-        //     let _ = kill(Pid::from_raw(child as i32), SIGTERM);
-        // });
+        let child = self.exec_child.as_mut().unwrap().id();
+        let timer = timer().schedule_with_delay(Duration::seconds(20), move || {
+            log::trace!("time out");
+            let _ = kill(Pid::from_raw(child as i32), SIGTERM);
+        });
 
         let exit_status;
         let mut exec_reply: ExecuteReply;
@@ -408,7 +414,7 @@ impl ExecutorHandle {
             out_buf = &mut out_buf[size_of_val(&r)..];
         }
 
-        // drop(timer);
+        drop(timer);
         match exit_status {
             0 => Ok(()),
             SYZ_STATUS_INTERNAL_ERROR => Err(ExecError::ExecInternal),
