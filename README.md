@@ -7,8 +7,6 @@ Similar to Syzkaller, Healer uses the syscall information provided by the [Syzla
 
 Unlike Syzkaller, Healer does not use an empirical [choice-table](https://github.com/google/syzkaller/blob/master/prog/prio.go), but detects the influence relationships between syscalls by dynamically removing calls in the minimized call sequences and observing coverage changes, and uses the influence relationships to guide the generation and mutation of call sequences. In addition, Healer also uses a different architectural design than Syzkaller.
 
-When the [refactoring](https://github.com/SunHao-0/healer/tree/refactor) code is stable, we will add more information about how Healer works in the documentation.
-
 ## Build Healer
 
 Healer is written in pure rust, except for some patching code. Therefore, [rust](https://www.rust-lang.org/) toolchain should be installed first.
@@ -18,7 +16,7 @@ Healer is written in pure rust, except for some patching code. Therefore, [rust]
 > rustc --version # check install
 ```
 
-In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/blob/master/build.rs) will automatically *download* Syzkaller, which may increase the build time, add [patches](https://github.com/SunHao-0/healer/tree/master/patches) to the source code and build Syzkaller. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required for Syzkaller needs to be installed, e.g. golang compiler with GO111MODULE on, GCC 6.1.0 or later.
+In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/blob/master/build.rs) will automatically *download* Syzkaller and *add* [patches](https://github.com/SunHao-0/healer/tree/master/patches) to the source code and build Syzkaller, which may increase the build time. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required for Syzkaller needs to be installed, e.g. golang compiler with GO111MODULE on, GCC 6.1.0 or later.
 
 Once all the required tools have been installed, Healer can be easily built using following command:
 
@@ -43,17 +41,16 @@ bin  bzImage  stretch.id_rsa  stretch.img
 healer linux_amd64  syz-repro  syz-symbolize  syz-sysgen
 ```
 
-Finally, executing following command to start the fuzzing, where `-i` specifies the path to disk image, `-l` specify the path to kernel image, `-t` indicates the fuzzing target and `--ssh-key` specifies the path to ssh key.
+Finally, executing following command to start the fuzzing, where `-d` specifies the path to disk image, `-k` specifies the path to kernel image and `--ssh-key` specifies the path to ssh key.
 
 ```
 > # `sudo` maybe needed for `kvm` accessing. 
-> healer -i stretch.img --ssh-key stretch.id_rsa -k bzImage -t linux/amd64
+> healer -d stretch.img --ssh-key stretch.id_rsa -k bzImage
 ```
 
-One can also specify the parallel fuzzing instance (thread) via `-j`, the path to kernel object file (`vmlinux`) and srouce code via `-O` and `-S` so that Healer can symbolize the kernel crash log. See more options via `healer --help`.
+One can also specify the parallel fuzzing instance (thread) via `-j`, the path to kernel object file (`vmlinux`) and srouce code via `-b` and `-r` so that Healer can symbolize the kernel crash log. See more options via `healer --help`.
 If everything works ok, you'll see following log:
 ``` 
-
  ___   ___   ______   ________   __       ______   ______
 /__/\ /__/\ /_____/\ /_______/\ /_/\     /_____/\ /_____/\
 \::\ \\  \ \\::::_\/_\::: _  \ \\:\ \    \::::_\/_\:::_ \ \
@@ -62,28 +59,27 @@ If everything works ok, you'll see following log:
    \: \ \\::\ \\:\____/\\:.\ \  \ \\:\/___/\\:\____/\\ \ `\ \ \
     \__\/ \::\/ \_____\/ \__\/\__\/ \_____\/ \_____\/ \_\/ \_\/
 
-2021-02-28 12:24:25 [INFO] Loading target linux/amd64...
-2021-02-28 12:24:25 [INFO] Revision: 0085e0
-2021-02-28 12:24:25 [INFO] Syscalls: 3581/3960
-2021-02-28 12:24:25 [INFO] Initial relations: 0
-2021-02-28 12:24:25 [INFO] Booting 14 linux/amd64 on qemu...
-2021-02-28 12:24:49 [INFO] code coverage               : enabled
-2021-02-28 12:24:49 [INFO] setuid sandbox              : enabled
-2021-02-28 12:24:49 [INFO] namespace sandbox           : enabled
-2021-02-28 12:24:49 [INFO] fault injection             : enabled
-2021-02-28 12:24:49 [INFO] net packet injection        : enabled
-2021-02-28 12:24:49 [INFO] net device setup            : enabled
-2021-02-28 12:24:49 [INFO] concurrency sanitizer       : enabled
-2021-02-28 12:24:49 [INFO] USB emulation               : enabled
-2021-02-28 12:24:49 [INFO] hci packet injection        : enabled
-2021-02-28 12:24:49 [INFO] wifi device emulation       : enabled
-2021-02-28 12:24:50 [INFO] Boot finished, cost 25s
-2021-02-28 12:24:50 [INFO] Let the fuzz begin
-2021-02-28 12:24:51 [INFO] Fuzzer-0: detect new relation: (socket$inet_tcp, getsockopt$inet6_mreq)
+[2021-08-30T03:05:28Z INFO  healer_fuzzer] loading target linux/amd64...
+[2021-08-30T03:05:30Z INFO  healer_fuzzer] loading input progs
+[2021-08-30T03:05:30Z INFO  healer_fuzzer] progs loaded: 1765/1765
+[2021-08-30T03:05:30Z INFO  healer_fuzzer] pre-booting one vm...
+[2021-08-30T03:05:58Z INFO  healer_fuzzer] boot cost around 28s
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] detecting features
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] code coverage               : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] setuid sandbox              : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] namespace sandbox           : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] fault injection             : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] net packet injection        : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] net device setup            : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] USB emulation               : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] hci packet injection        : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] wifi device emulation       : enabled
+[2021-08-30T03:05:59Z INFO  healer_fuzzer] pre-setup one executor...
+[2021-08-30T03:06:02Z INFO  healer_fuzzer] ok, fuzzer-0 should be ready
 ...
 ```
 
-Again，When the [refactoring](https://github.com/SunHao-0/healer/tree/refactor) code is stable, we will add more information about how to use Healer in the documentation.
+We will add more information about how to use *Healer* and how *Healer* works in the documentation.
 
 ## Contributing
 All contributions are welcome, if you have a feature request don't hesitate to open an issue!
