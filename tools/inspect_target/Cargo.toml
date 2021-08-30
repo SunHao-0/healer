@@ -1,0 +1,20 @@
+[package]
+name = "inspect_target"
+description = "inspect target information"
+authors = ["Hao Sun <sunhao.th@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+
+[[bin]]
+name = "inspect-target"
+path = "src/main.rs"
+
+[dependencies]
+healer_core = {path = "../../healer_core"}
+syz_wrapper = {path = "../../syz_wrapper"}
+healer_alloc = {path = "../../healer_utils/healer_alloc"}
+rand = {version = "0.8", features = ["small_rng"]}
+
+[dependencies.clap]
+version = "3.0.0-beta.2"
+features = [ "suggestions", "color" ]

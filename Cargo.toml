@@ -1,0 +1,33 @@
+[workspace]
+members = [
+    "healer_core",
+    "healer_fuzzer",
+    "syz_wrapper",
+
+    # utils 
+    "healer_utils/healer_alloc",
+    "healer_utils/healer_vm",
+    "healer_utils/healer_io",
+    
+    # tools mainly for debug purpose 
+    "tools/inspect_target",
+    "tools/gen_prog",
+    "tools/mutate_prog",
+    "tools/minimize"
+]
+
+[profile.dev]
+debug-assertions = true # enable verbose mode
+opt-level = 3
+
+[profile.release]
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = 'unwind'
+codegen-units = 1
+opt-level = 3
+
+[profile.test]
+opt-level = 3    

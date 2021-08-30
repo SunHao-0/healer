@@ -1,0 +1,14 @@
+[package]
+name = "healer_core"
+description = "core algorithm and data structure of healer"
+authors = ["Hao Sun <sunhao.th@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+ahash = "0.7"
+rand = {version = "0.8", features = ["small_rng"]}
+log = "0.4"
+pest = "2.1"
+pest_derive = "2.1"
+hex = "0.4"

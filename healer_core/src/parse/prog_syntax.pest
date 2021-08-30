@@ -1,0 +1,58 @@
+// Grammer for prog
+
+Prog = _{SOI ~ Call* ~ EOI}
+
+Call = {Ret? ~ CallName ~ (EmptyArg | Args)}
+Ret = {ResName ~ "="}
+EmptyArg = _{"(" ~ ")"}
+Args = _{"(" ~ Value ~ ("," ~ Value)* ~ ")"}
+
+Value = {Auto | Int | Data | Ptr | Vma | Res | Array | Struct | Union}
+
+Auto = {"AUTO"}
+
+/// Rule for `ConstValue`
+/// Value that confirms to `Int` rule could be special res value, speical ptr too.
+Int = @{("0x" | "0X") ~ ASCII_HEX_DIGIT+} 
+
+/// Rule for `DataValue`
+Data = {ReadableData | NonReadableData} 
+ReadableData = ${"'" ~ EscapedStr ~ "'" ~ DataLen?}
+EscapedStr = @{(!"'" ~("\\'" | "\\\\" | ANY))*}
+DataLen = _{"/" ~ Number}
+// This could also be an output data value 
+NonReadableData = ${"\"" ~ HexEncodedStr ~ "\"" ~ DataLen?}  
+HexEncodedStr = @{ASCII_HEX_DIGIT*}
+
+/// Rule for `PtrValue`
+Ptr = {"&" ~ (Auto | ("(" ~ (Int) ~ ")")) ~ ("=" ~ AnyPtr? ~ (Nil | Value))?}
+AnyPtr = {"ANY" ~ "="}
+Nil = {"nil"}
+/// Rule for `VmaValue`
+Vma = {"&" ~ "(" ~ Int ~ "/" ~ Int ~ ")" ~ "=" ~ "nil"}
+
+/// Rule for `ResValue`
+Res = {OutRes | InRes}
+OutRes = {"<" ~ ResName ~ "=>" ~ Int?}
+InRes = {ResName ~ ResOpDiv? ~ ResOpAdd?}
+ResOpDiv = {"/" ~ Number}
+ResOpAdd = {"+" ~ Number}
+
+/// Rule for `GroupValue`
+Array = {EmptyArray | NonEmptyArray}  
+EmptyArray = _{"[" ~ "]"}
+NonEmptyArray = _{"[" ~ Value ~ ("," ~ Value)* ~ "]"}
+Struct = {EmptyStruct | NonEmptyStruct} 
+EmptyStruct = _{"{" ~ "}"}
+NonEmptyStruct = _{"{" ~ Value ~ ("," ~ Value)* ~ "}"}
+
+/// Rule for `UnionValue`
+Union = {"@" ~ Ident ~ ("=" ~ Value)?}
+
+CallName = @{Ident ~ ("$" ~ (ASCII_ALPHANUMERIC | "_")+)?} 
+ResName = ${"r" ~ Number}
+Number = @{ASCII_DIGIT+}
+Ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+WHITESPACE = _{" " | "\t" | "\r" | "\n"}
+COMMENT = _{"#" ~ (!"\n" ~ ANY)*}

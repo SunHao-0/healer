@@ -1,0 +1,17 @@
+[package]
+name = "healer_io"
+description = "Healer IO utility"
+authors = ["Hao Sun <sunhao.th@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+
+[features]
+tokio-io = ["tokio"]
+
+[dependencies]
+log = "0.4"
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "fs", "io-util"]
+optional = true 
