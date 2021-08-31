@@ -15,7 +15,7 @@ use crate::{
     feedback::Feedback,
     fuzzer::{Fuzzer, SharedState, HISTORY_CAPACITY},
     stats::Stats,
-    util::{stop_req, stop_soon},
+    util::stop_req,
 };
 use anyhow::Context;
 use config::Config;
@@ -65,12 +65,14 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         shms: None,
         use_forksrv: target_exec_use_forksrv(sys_target),
     });
+    let stats = Arc::new(Stats::new());
 
     let mut relation = Relation::new(&target);
     if let Some(r) = config.relations.as_ref() {
         log::info!("loading extra relations...");
         load_extra_relations(r, &mut relation, &target)
             .context("failed to load extra reltaions")?;
+        stats.set_re(relation.num() as u64);
     }
 
     let mut input_progs = Vec::new();
@@ -122,8 +124,6 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         .context("failed to spawn executor for fuzzer-0")?;
     log::info!("ok, fuzzer-0 should be ready");
 
-    let stats = Arc::new(Stats::new());
-    stats.set_re(relation.num() as u64);
     let shared_state = SharedState {
         target: Arc::new(target),
         relation: Arc::new(RelationWrapper::new(relation)),
@@ -208,7 +208,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             err.as_mut().unwrap().push_str(&info);
         }
     }
-    if err.is_none() || stop_soon() {
+    if err.is_none() {
         log::info!("All done");
         Ok(())
     } else {

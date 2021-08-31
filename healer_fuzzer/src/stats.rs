@@ -79,7 +79,6 @@ impl Stats {
 
             let fuzzing = self.fuzzing.load(Ordering::Relaxed);
             let repro = self.repro.load(Ordering::Relaxed);
-            let relations = self.relations.load(Ordering::Relaxed);
             let crashes = self.crashes.load(Ordering::Relaxed);
             let unique_crash = self.unique_crash.load(Ordering::Relaxed);
             let corpus_size = self.corpus_size.load(Ordering::Relaxed);
@@ -87,7 +86,7 @@ impl Stats {
             let corpus_cov = self.cal_cov.load(Ordering::Relaxed);
             let max_cov = self.max_cov.load(Ordering::Relaxed);
             log::info!(
-                "exec: {}, fuzz/repro {}/{}, uniq/total crashes {}/{}, cal/max cover {}/{}, re: {}, corpus: {}",
+                "exec: {}, fuzz/repro {}/{}, uniq/total crashes {}/{}, cal/max cover {}/{}, corpus: {}",
                 exec_total,
                 fuzzing,
                 repro,
@@ -95,7 +94,6 @@ impl Stats {
                 crashes,
                 corpus_cov,
                 max_cov,
-                relations,
                 corpus_size
             );
         }
