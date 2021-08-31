@@ -168,6 +168,7 @@ pub struct QemuHandle {
 impl QemuHandle {
     pub fn boot(&mut self) -> Result<Duration, BootError> {
         if self.qemu.is_some() {
+            log::debug!("rebooting");
             self.kill_qemu();
         }
         self.boot_inner()
@@ -259,6 +260,8 @@ impl QemuHandle {
                 Ok(())
             });
         }
+        log::debug!("qemu cmd: {:?}", qemu_cmd);
+
         let mut child = qemu_cmd.spawn()?;
         let stdout = read_background(child.stdout.take().unwrap());
         let stderr = read_background(child.stderr.take().unwrap());

@@ -190,7 +190,7 @@ impl Fuzzer {
         }
     }
 
-    fn save_if_new(&mut self, p: &Prog, idx: usize, brs: HashSet<u32>) -> anyhow::Result<()> {
+    fn save_if_new(&mut self, p: &Prog, mut idx: usize, brs: HashSet<u32>) -> anyhow::Result<()> {
         let mut new = self
             .shared_state
             .feedback
@@ -198,8 +198,11 @@ impl Fuzzer {
         if new.is_empty() {
             return Ok(());
         }
-        let syscall = self.shared_state.target.syscall_of(p.calls()[idx].sid());
-        fuzzer_trace!("[{}] new cov: {}", syscall.name(), new.len());
+        fuzzer_debug!(
+            "[{}] new cov: {}",
+            self.shared_state.target.syscall_of(p.calls()[idx].sid()),
+            new.len()
+        );
 
         // calibrate new cov
         let mut failed = 0;
@@ -221,15 +224,33 @@ impl Fuzzer {
 
         // minimize
         let mut p = p.clone();
-        let target = Arc::clone(&self.shared_state.target); //TODO
-        minimize(&target, &mut p, idx, |p, new_idx| {
+        let target = Arc::clone(&self.shared_state.target);
+        idx = minimize(&target, &mut p, idx, |new_p, new_idx| {
             for _ in 0..3 {
-                if let Ok(Some(brs)) = self.reexec(p, new_idx) {
+                if let Ok(Some(brs)) = self.reexec(new_p, new_idx) {
                     return brs.intersection(&new).copied().count() == new.len();
                 }
             }
             false
         });
+
+        let relation = Arc::clone(&self.shared_state.relation);
+        let found_new = relation.try_update(&p, idx, |new_p, new_idx| {
+            for _ in 0..3 {
+                if let Ok(Some(brs)) = self.reexec(new_p, new_idx) {
+                    return brs.intersection(&new).copied().count() != new.len();
+                }
+            }
+            false
+        });
+        if found_new {
+            let a = self
+                .shared_state
+                .target
+                .syscall_of(p.calls()[idx - 1].sid());
+            let b = self.shared_state.target.syscall_of(p.calls()[idx].sid());
+            fuzzer_info!("new relation: {} -> {}", a.name(), b.name());
+        }
 
         self.do_save_prog(p.clone(), &brs)?;
         if self.config.features.unwrap() & FEATURE_FAULT != 0 && self.config.enable_fault_injection
@@ -324,7 +345,7 @@ impl Fuzzer {
     }
 
     fn check_vm(&mut self, p: &Prog, e: ExecError) -> Option<Vec<u8>> {
-        fuzzer_trace!("failed to exec prog: {}", e);
+        fuzzer_debug!("failed to exec prog: {}", e);
 
         let crash_error = !matches!(
             e,

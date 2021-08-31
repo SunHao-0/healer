@@ -10,21 +10,18 @@ use crate::{
     exec::{message::*, serialization::*, util::*},
     HashMap, HashSet,
 };
-use chrono::Duration;
 use healer_core::{prog::Prog, target::Target};
 use healer_io::{thread::read_background, BackgroundIoHandle};
 use iota::iota;
-use nix::{
-    sys::signal::{kill, Signal::SIGTERM},
-    unistd::Pid,
-};
 use shared_memory::Shmem;
+use std::{io::ErrorKind, time::Duration};
 use std::{
     io::Write,
     mem::size_of_val,
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
 use thiserror::Error;
+use timeout_readwrite::TimeoutReader;
 
 use self::features::Features;
 
@@ -175,11 +172,19 @@ pub enum ExecError {
     #[error("exec internel")]
     ExecInternal,
     #[error("killed(maybe cause by timeout)")]
-    Signal,
+    TimeOut,
     #[error("unexpected executor exit status: {0}")]
     UnexpectedExitStatus(i32),
     #[error("output parse: {0}")]
     OutputParse(String),
+}
+
+#[derive(Debug, Error)]
+pub enum SpawnError {
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("failed ti handshake: {0}")]
+    HandShake(std::io::Error),
 }
 
 /// Size of syz-executor input shared memory.
@@ -221,7 +226,7 @@ pub struct ExecutorHandle {
 
     exec_child: Option<Child>,
     exec_stdin: Option<ChildStdin>,
-    exec_stdout: Option<ChildStdout>,
+    exec_stdout: Option<TimeoutReader<ChildStdout>>,
     exec_stderr: Option<BackgroundIoHandle>,
 
     debug: bool,
@@ -272,11 +277,13 @@ impl ExecutorHandle {
         opt: &ExecOpt,
     ) -> Result<ProgExecInfo<'a, 'a>, ExecError> {
         if let Err(ExecError::Io(e)) = self.req_exec(target, p, opt) {
+            log::debug!("failed to send exec req: {}", e);
             self.kill();
             return Err(ExecError::Io(e));
         }
 
         if let Err(e) = self.wait_finish() {
+            log::debug!("error happened during waiting exec finish: {}", e);
             self.kill();
             return Err(e);
         }
@@ -284,7 +291,7 @@ impl ExecutorHandle {
         self.parse_output(p)
     }
 
-    pub fn spawn(&mut self, mut exec_cmd: Command) -> Result<(), std::io::Error> {
+    pub fn spawn(&mut self, mut exec_cmd: Command) -> Result<(), SpawnError> {
         self.kill();
 
         exec_cmd.stdin(Stdio::piped());
@@ -297,7 +304,10 @@ impl ExecutorHandle {
 
         let mut child = exec_cmd.spawn()?;
         self.exec_stdin = Some(child.stdin.take().unwrap());
-        self.exec_stdout = Some(child.stdout.take().unwrap());
+        self.exec_stdout = Some(TimeoutReader::new(
+            child.stdout.take().unwrap(),
+            Duration::from_secs(20),
+        ));
         if self.debug {
             self.exec_stderr = Some(read_background(child.stderr.take().unwrap()));
         }
@@ -313,15 +323,16 @@ impl ExecutorHandle {
         Ok(())
     }
 
-    fn handshake(&mut self) -> Result<(), std::io::Error> {
+    fn handshake(&mut self) -> Result<(), SpawnError> {
         let req = HandshakeReq {
             magic: IN_MAGIC,
             env_flags: self.env,
             pid: self.pid,
         };
-        write_all(&mut self.exec_stdin.as_mut().unwrap(), &req)?;
+        write_all(&mut self.exec_stdin.as_mut().unwrap(), &req).map_err(SpawnError::HandShake)?;
 
-        let reply: HandshakeReply = read_exact(&mut self.exec_stdout.as_mut().unwrap())?;
+        let reply: HandshakeReply =
+            read_exact(&mut self.exec_stdout.as_mut().unwrap()).map_err(SpawnError::HandShake)?;
         if reply.magic != OUT_MAGIC {
             panic!(
                 "handshake reply magic not match, require: {:x}, got: {:x}",
@@ -381,12 +392,6 @@ impl ExecutorHandle {
         out_buf[0..4].iter_mut().for_each(|v| *v = 0);
         out_buf = &mut out_buf[4..];
 
-        let child = self.exec_child.as_mut().unwrap().id();
-        let timer = timer().schedule_with_delay(Duration::seconds(20), move || {
-            log::trace!("time out");
-            let _ = kill(Pid::from_raw(child as i32), SIGTERM);
-        });
-
         let exit_status;
         let mut exec_reply: ExecuteReply;
         loop {
@@ -414,7 +419,6 @@ impl ExecutorHandle {
             out_buf = &mut out_buf[size_of_val(&r)..];
         }
 
-        drop(timer);
         match exit_status {
             0 => Ok(()),
             SYZ_STATUS_INTERNAL_ERROR => Err(ExecError::ExecInternal),
@@ -517,26 +521,32 @@ impl ExecutorHandle {
     }
 
     fn handle_possible_timeout(&mut self, e: std::io::Error) -> ExecError {
-        use std::os::unix::process::ExitStatusExt;
-
-        let status = match self.child().wait() {
-            Ok(status) => status,
-            Err(_) => return ExecError::Io(e), // ignore wait error
-        };
-
-        if let Some(code) = status.signal() {
-            if code == nix::sys::signal::SIGTERM as i32 {
-                return ExecError::Signal;
-            }
+        if e.kind() == ErrorKind::TimedOut {
+            log::debug!("executor timeout");
+            ExecError::TimeOut
+        } else {
+            ExecError::Io(e)
         }
+        // use std::os::unix::process::ExitStatusExt;
 
-        ExecError::Io(e)
+        // let status = match self.child().wait() {
+        //     Ok(status) => status,
+        //     Err(_) => return ExecError::Io(e), // ignore wait error
+        // };
+
+        // if let Some(code) = status.signal() {
+        //     if code == nix::sys::signal::SIGTERM as i32 {
+        //         return ExecError::TimeOut;
+        //     }
+        // }
+
+        // ExecError::Io(e)
     }
 
-    #[inline]
-    fn child(&mut self) -> &mut Child {
-        self.exec_child.as_mut().unwrap()
-    }
+    // #[inline]
+    // fn child(&mut self) -> &mut Child {
+    //     self.exec_child.as_mut().unwrap()
+    // }
 
     #[inline]
     fn kill(&mut self) {

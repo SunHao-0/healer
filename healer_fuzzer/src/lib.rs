@@ -75,7 +75,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
 
     let mut input_progs = Vec::new();
     if let Some(p) = config.input.as_ref() {
-        log::info!("loading input progs");
+        log::info!("loading input progs...");
         let progs = load_progs(p, &target).context("failed to load input progs")?;
         input_progs = split_input_progs(progs, config.job);
     }

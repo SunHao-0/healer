@@ -16,12 +16,12 @@ impl RelationWrapper {
         }
     }
 
-    pub fn try_update<T>(&self, p: &Prog, pred: T) -> usize
+    pub fn try_update<T>(&self, p: &Prog, idx: usize, pred: T) -> bool
     where
         T: FnMut(&Prog, usize) -> bool, // fn(new_prog: &Prog, index: usize) -> bool
     {
         let mut inner = self.inner.write().unwrap();
-        inner.try_update(p, pred)
+        inner.try_update(p, idx, pred)
     }
 
     /// Return if `a` can influence the execution of `b`.
@@ -105,30 +105,32 @@ impl Relation {
 
     /// Detect relations by removing calls dynamically.
     ///
-    /// The algorithm removes each call of `p` except for the last one and calls the callback
+    /// The algorithm removes call before call `idx `of `p` and calls the callback
     /// `changed` to verify if the removal changed the feedback of adjacent call.
     /// For example, for prog [open, read], the algorithm removes `open` first and calls `changed`
     /// with the index of `open` (0 in this case) and the `new_prog`. The index of `open` equals to
     /// the index of `read` in the new `prog` and the callback `changed` should judge the feedback
     /// changes of the `index` call after the execution of `new_prog`. Finally, `try_update` returns
     /// the number of detected new relations.
-    pub fn try_update<T>(&mut self, p: &Prog, mut pred: T) -> usize
+    pub fn try_update<T>(&mut self, p: &Prog, idx: usize, mut pred: T) -> bool
     where
         T: FnMut(&Prog, usize) -> bool, // fn(new_prog: &Prog, index: usize) -> bool
     {
-        let mut n = 0;
-        for (i, adjacent_calls) in p.calls().windows(2).enumerate() {
-            let a = &adjacent_calls[0];
-            let b = &adjacent_calls[1];
-            if !self.influence(a.sid(), b.sid()) {
-                let new_p = p.remove_call(i);
-                if pred(&new_p, i) {
-                    self.push_ordered(a.sid(), b.sid());
-                    n += 1;
-                }
+        let mut found_new = false;
+        if idx == 0 {
+            return found_new;
+        }
+        let a = &p.calls[idx - 1];
+        let b = &p.calls[idx];
+        if !self.influence(a.sid(), b.sid()) {
+            let new_p = p.remove_call(idx - 1);
+            if pred(&new_p, idx - 1) {
+                self.push_ordered(a.sid(), b.sid());
+                found_new = true;
             }
         }
-        n
+
+        found_new
     }
 
     /// Return if `a` can influence the execution of `b`.

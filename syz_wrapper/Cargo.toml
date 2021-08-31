@@ -12,9 +12,8 @@ iota = "0.2"
 bytes = "1.1"
 thiserror = "1.0"
 shared_memory = "0.12"
-timer = "0.2"
+timeout-readwrite = "0.3.1"
 nix = "0.22"
-chrono = "0.4"
 log = "0.4"
 
 [dependencies.simd-json]

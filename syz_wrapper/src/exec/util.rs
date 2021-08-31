@@ -3,9 +3,7 @@ use core::slice;
 use std::{
     io::{Read, Write},
     mem,
-    sync::Once,
 };
-use timer::Timer;
 
 pub fn read_u32(buf: &mut &[u8]) -> Option<u32> {
     if buf.remaining() >= 4 {
@@ -71,14 +69,4 @@ pub fn cast_from<T: Sized>(v: &[u8]) -> &T {
     assert_eq!(v.len(), mem::size_of::<T>());
     let ptr = v.as_ptr() as *const T;
     unsafe { ptr.as_ref().unwrap() }
-}
-
-static mut TIMER: Option<Timer> = None;
-static ONCE: Once = Once::new();
-
-pub fn timer() -> &'static Timer {
-    ONCE.call_once(|| unsafe {
-        TIMER = Some(Timer::new());
-    });
-    unsafe { TIMER.as_ref().unwrap() }
 }
