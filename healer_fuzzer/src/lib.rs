@@ -123,6 +123,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     log::info!("ok, fuzzer-0 should be ready");
 
     let stats = Arc::new(Stats::new());
+    stats.set_re(relation.num() as u64);
     let shared_state = SharedState {
         target: Arc::new(target),
         relation: Arc::new(RelationWrapper::new(relation)),

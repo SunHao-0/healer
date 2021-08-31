@@ -12,7 +12,7 @@ pub(crate) struct Stats {
     relations: AtomicU64,
     crashes: AtomicU64,
     unique_crash: AtomicU64,
-    crash_suppressed: AtomicU64,
+    // crash_suppressed: AtomicU64,
     vm_restarts: AtomicU64,
     corpus_size: AtomicU64,
     exec_total: AtomicU64,
@@ -41,9 +41,9 @@ impl Stats {
         self.repro.fetch_sub(1, Ordering::Relaxed);
     }
 
-    // pub(crate) fn inc_re(&self) {
-    //     self.relations.fetch_add(1, Ordering::Relaxed);
-    // }
+    pub(crate) fn set_re(&self, n: u64) {
+        self.relations.store(n, Ordering::Relaxed);
+    }
 
     pub(crate) fn set_unique_crash(&self, n: u64) {
         self.unique_crash.store(n, Ordering::Relaxed);
@@ -52,10 +52,6 @@ impl Stats {
     pub(crate) fn inc_crashes(&self) {
         self.crashes.fetch_add(1, Ordering::Relaxed);
     }
-
-    // pub(crate) fn inc_crash_suppressed(&self) {
-    //     self.crash_suppressed.fetch_add(1, Ordering::Relaxed);
-    // }
 
     pub(crate) fn inc_vm_restarts(&self) {
         self.vm_restarts.fetch_add(1, Ordering::Relaxed);
@@ -83,7 +79,7 @@ impl Stats {
 
             let fuzzing = self.fuzzing.load(Ordering::Relaxed);
             let repro = self.repro.load(Ordering::Relaxed);
-            // let relations = self.relations.load(Ordering::Relaxed);
+            let relations = self.relations.load(Ordering::Relaxed);
             let crashes = self.crashes.load(Ordering::Relaxed);
             let unique_crash = self.unique_crash.load(Ordering::Relaxed);
             let corpus_size = self.corpus_size.load(Ordering::Relaxed);
@@ -91,7 +87,7 @@ impl Stats {
             let corpus_cov = self.cal_cov.load(Ordering::Relaxed);
             let max_cov = self.max_cov.load(Ordering::Relaxed);
             log::info!(
-                "exec: {}, fuzz/repro {}/{}, uniq/total crashes {}/{}, cal/max cover {}/{}, corpus: {}",
+                "exec: {}, fuzz/repro {}/{}, uniq/total crashes {}/{}, cal/max cover {}/{}, re: {}, corpus: {}",
                 exec_total,
                 fuzzing,
                 repro,
@@ -99,6 +95,7 @@ impl Stats {
                 crashes,
                 corpus_cov,
                 max_cov,
+                relations,
                 corpus_size
             );
         }

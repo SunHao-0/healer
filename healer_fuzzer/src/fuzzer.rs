@@ -249,7 +249,10 @@ impl Fuzzer {
                 .target
                 .syscall_of(p.calls()[idx - 1].sid());
             let b = self.shared_state.target.syscall_of(p.calls()[idx].sid());
-            fuzzer_info!("new relation: {} -> {}", a.name(), b.name());
+            self.shared_state
+                .stats
+                .set_re(self.shared_state.relation.num() as u64);
+            fuzzer_debug!("new relation: {} -> {}", a.name(), b.name());
         }
 
         self.do_save_prog(p.clone(), &brs)?;
