@@ -183,7 +183,7 @@ pub enum ExecError {
 pub enum SpawnError {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
-    #[error("failed ti handshake: {0}")]
+    #[error("failed to handshake: {0}")]
     HandShake(std::io::Error),
 }
 
@@ -306,7 +306,7 @@ impl ExecutorHandle {
         self.exec_stdin = Some(child.stdin.take().unwrap());
         self.exec_stdout = Some(TimeoutReader::new(
             child.stdout.take().unwrap(),
-            Duration::from_secs(20),
+            Duration::from_secs(30),
         ));
         if self.debug {
             self.exec_stderr = Some(read_background(child.stderr.take().unwrap()));

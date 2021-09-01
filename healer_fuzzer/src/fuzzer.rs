@@ -74,7 +74,7 @@ impl Fuzzer {
 
         set_fuzzer_id(self.id);
         self.shared_state.stats.inc_fuzzing();
-        log::info!("fuzzer-{} online", self.id);
+        fuzzer_info!("online",);
 
         let mut err = None;
 
@@ -88,6 +88,7 @@ impl Fuzzer {
         }
         if let Some(e) = err {
             self.shared_state.stats.dec_fuzzing();
+            fuzzer_warn!("offline",);
             return Err(e);
         }
 
@@ -131,8 +132,10 @@ impl Fuzzer {
 
         self.shared_state.stats.dec_fuzzing();
         if let Some(e) = err {
+            fuzzer_warn!("offline with error: {}", e);
             Err(e)
         } else {
+            fuzzer_info!("offline",);
             Ok(())
         }
     }
@@ -234,6 +237,7 @@ impl Fuzzer {
             false
         });
 
+        // detect relations
         let relation = Arc::clone(&self.shared_state.relation);
         let found_new = relation.try_update(&p, idx, |new_p, new_idx| {
             for _ in 0..3 {
@@ -264,10 +268,20 @@ impl Fuzzer {
     }
 
     fn fail_call(&mut self, p: &Prog, idx: usize) -> anyhow::Result<()> {
+        const IGNORES: &[&str] = &["fork", "clone"];
+
         let t = Arc::clone(&self.shared_state.target);
         let mut opt = ExecOpt::new();
         opt.enable(FLAG_INJECT_FAULT);
         opt.fault_call = idx as i32;
+
+        // TODO use a more general way to to this
+        let sid = p.calls()[idx].sid();
+        let call_name = self.shared_state.target.syscall_of(sid).name();
+        if IGNORES.iter().any(|i| i.contains(call_name)) {
+            return Ok(());
+        }
+
         for i in 0..100 {
             opt.fault_nth = i;
             self.record_execution(p, &opt);
@@ -460,8 +474,13 @@ impl Fuzzer {
 
     fn restart_exec(&mut self) -> anyhow::Result<()> {
         let syz_exec = self.config.remote_exec.clone().unwrap();
-        spawn_syz(&syz_exec, &self.qemu, &mut self.executor)
-            .with_context(|| format!("failed to spawn syz-executor for fuzzer-{}", self.id))
+        if let Err(e) = spawn_syz(&syz_exec, &self.qemu, &mut self.executor) {
+            fuzzer_warn!("failed to spawn executor: {}", e);
+            fuzzer_warn!("rebooting vm",);
+            self.reboot_vm()
+                .context("rebooting due to executor spawn failure")?;
+        }
+        Ok(())
     }
 
     #[inline]
@@ -475,7 +494,7 @@ impl Fuzzer {
     fn maybe_reboot_vm(&mut self) -> anyhow::Result<()> {
         let du = self.last_reboot.elapsed();
         if du >= Duration::from_secs(60 * 60) {
-            // restart 1  every hour
+            fuzzer_info!("running for 1 hour, rebooting vm...",);
             self.reboot_vm()?;
             self.shared_state.stats.inc_vm_restarts();
         }
