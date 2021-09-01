@@ -197,6 +197,18 @@ impl QemuHandle {
     pub fn collect_crash_log(&mut self) -> Option<Vec<u8>> {
         if self.qemu.is_some() {
             let stdout = self.stdout.take().unwrap();
+            let max_wait = Duration::from_secs(15); // give qemu 15s to write log
+            let mut waited = Duration::new(0, 0);
+            let delta = Duration::from_millis(100);
+            let qemu = self.qemu.as_mut().unwrap();
+            while waited < max_wait {
+                if let Ok(None) = qemu.try_wait() {
+                    sleep(delta);
+                    waited += delta;
+                } else {
+                    break;
+                }
+            }
             self.kill_qemu(); // make sure we don't hang here
             Some(stdout.wait_finish())
         } else {

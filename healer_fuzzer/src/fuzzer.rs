@@ -70,7 +70,7 @@ pub const HISTORY_CAPACITY: usize = 1024;
 
 impl Fuzzer {
     pub fn fuzz_loop(&mut self, progs: Vec<Prog>) -> anyhow::Result<()> {
-        const GENERATE_PERIOD: u64 = 100;
+        const GENERATE_PERIOD: u64 = 50;
 
         set_fuzzer_id(self.id);
         self.shared_state.stats.inc_fuzzing();
@@ -278,7 +278,7 @@ impl Fuzzer {
         // TODO use a more general way to to this
         let sid = p.calls()[idx].sid();
         let call_name = self.shared_state.target.syscall_of(sid).name();
-        if IGNORES.iter().any(|i| i.contains(call_name)) {
+        if IGNORES.iter().any(|i| call_name.contains(i)) {
             return Ok(());
         }
 
@@ -462,7 +462,7 @@ impl Fuzzer {
         let n = LAST_CLEAR.with(|v| {
             let n = v.get();
             v.set(n + 1);
-            n + 1
+            n
         });
         if n >= 64 {
             LAST_CLEAR.with(|v| {

@@ -243,7 +243,7 @@ fn setup_signal_handler() {
             info.cause
         );
         let _ = Command::new("pkill").arg("syz-repro").output(); // stop syz-repro, ignore all errors.
-        println!("Waiting fuzzers to exit...");
+        println!("please waiting fuzzers to exit...");
 
         stop_req();
     });
