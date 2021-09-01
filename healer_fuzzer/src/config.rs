@@ -155,8 +155,9 @@ impl Config {
         self.repro_config.kernel_img = self.qemu_config.kernel_img.clone().unwrap();
         self.repro_config.ssh_key = self.qemu_config.ssh_key.clone();
 
+        self.report_config.os = self.os.clone();
         self.report_config.arch = TARGET_ARCH.to_string();
-        self.repro_config.id = self.exec_config.as_ref().unwrap().pid;
+        self.report_config.id = self.exec_config.as_ref().unwrap().pid;
         self.report_config.syz_dir = self.syz_dir.to_str().unwrap().to_string();
         if let Some(kernel_obj) = self.report_config.kernel_obj_dir.as_mut() {
             let path = canonicalize(&kernel_obj).unwrap();
