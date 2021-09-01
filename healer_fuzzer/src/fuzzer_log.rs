@@ -34,3 +34,10 @@ macro_rules! fuzzer_warn {
         log::warn!(std::concat!("fuzzer-{}: ", $t), crate::fuzzer_log::fuzzer_id(), $($arg)*)
     )
 }
+
+#[macro_export]
+macro_rules! fuzzer_error {
+    ($t: tt, $($arg:tt)*) => (
+        log::error!(std::concat!("fuzzer-{}: ", $t), crate::fuzzer_log::fuzzer_id(), $($arg)*)
+    )
+}

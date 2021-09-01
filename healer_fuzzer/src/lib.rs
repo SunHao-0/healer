@@ -28,7 +28,10 @@ use healer_core::{
     HashSet,
 };
 use healer_vm::{qemu::QemuHandle, ssh::ssh_basic_cmd};
-use rand::{prelude::SmallRng, SeedableRng};
+use rand::{
+    prelude::{SliceRandom, SmallRng},
+    SeedableRng,
+};
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::{
     collections::VecDeque,
@@ -292,6 +295,7 @@ fn load_progs(input_dir: &Path, target: &Target) -> anyhow::Result<Vec<Prog>> {
         .with_context(|| format!("failed to read_dir: {}", input_dir.display()))?;
     let mut failed = 0;
     let mut progs = Vec::new();
+    let mut rng = SmallRng::from_entropy();
 
     for f in dir_iter.filter_map(|f| f.ok()) {
         let path = f.path();
@@ -307,6 +311,7 @@ fn load_progs(input_dir: &Path, target: &Target) -> anyhow::Result<Vec<Prog>> {
         progs.push(p);
     }
     log::info!("progs loaded: {}/{}", progs.len(), progs.len() + failed);
+    progs.shuffle(&mut rng);
     Ok(progs)
 }
 

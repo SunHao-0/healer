@@ -70,27 +70,56 @@ pub const HISTORY_CAPACITY: usize = 1024;
 
 impl Fuzzer {
     pub fn fuzz_loop(&mut self, progs: Vec<Prog>) -> anyhow::Result<()> {
-        const GENERATE_PERIOD: u64 = 50;
-
+        // set fuzzer id to thread_local
         set_fuzzer_id(self.id);
         self.shared_state.stats.inc_fuzzing();
         fuzzer_info!("online",);
 
-        let mut err = None;
+        // execute input progs
+        if let Err(e) = self.exec_input_prog(progs) {
+            self.shared_state.stats.dec_fuzzing();
+            fuzzer_error!("{}", e);
+            fuzzer_info!("offline",);
+            return Err(e);
+        } else if stop_soon() {
+            self.shared_state.stats.dec_fuzzing();
+            fuzzer_info!("offline",);
+            return Ok(());
+        }
 
+        // real fuzz loop
+        let mut ret = Ok(());
+        if let Err(e) = self.fuzz_loop_inner() {
+            fuzzer_error!("{}", e);
+            ret = Err(e);
+        }
+        self.shared_state.stats.dec_fuzzing();
+        fuzzer_info!("offline",);
+        ret
+    }
+
+    fn exec_input_prog(&mut self, progs: Vec<Prog>) -> anyhow::Result<()> {
+        if progs.is_empty() {
+            return Ok(());
+        }
+        let prog_num = progs.len();
+        fuzzer_info!("executing {} input progs", prog_num);
         for prog in progs {
-            if let Err(e) = self
-                .execute_one(prog)
-                .context("failed to execute input prog")
-            {
-                err = Some(e);
+            self.execute_one(prog)
+                .context("failed to execute input prog")?;
+            if stop_soon() {
+                return Ok(());
             }
         }
-        if let Some(e) = err {
-            self.shared_state.stats.dec_fuzzing();
-            fuzzer_warn!("offline",);
-            return Err(e);
-        }
+        fuzzer_info!(
+            "{} input progs execution finished, start to prog generation&mutation",
+            prog_num
+        );
+        Ok(())
+    }
+
+    fn fuzz_loop_inner(&mut self) -> anyhow::Result<()> {
+        const GENERATE_PERIOD: u64 = 50;
 
         for i in 0_u64.. {
             // TODO update period based on gaining
@@ -100,13 +129,8 @@ impl Fuzzer {
                     &self.shared_state.relation,
                     &mut self.rng,
                 );
-                if let Err(e) = self
-                    .execute_one(p)
-                    .context("failed to execute generated prog")
-                {
-                    err = Some(e);
-                    break;
-                }
+                self.execute_one(p)
+                    .context("failed to execute generated prog")?;
             } else {
                 let mut p = self.shared_state.corpus.select_one(&mut self.rng).unwrap();
                 mutate(
@@ -116,13 +140,8 @@ impl Fuzzer {
                     &mut self.rng,
                     &mut p,
                 );
-                if let Err(e) = self
-                    .execute_one(p)
-                    .context("failed to execute mutated prog")
-                {
-                    err = Some(e);
-                    break;
-                }
+                self.execute_one(p)
+                    .context("failed to execute mutated prog")?;
             }
 
             if stop_soon() {
@@ -130,21 +149,10 @@ impl Fuzzer {
             }
         }
 
-        self.shared_state.stats.dec_fuzzing();
-        if let Some(e) = err {
-            fuzzer_warn!("offline with error: {}", e);
-            Err(e)
-        } else {
-            fuzzer_info!("offline",);
-            Ok(())
-        }
+        Ok(())
     }
 
     pub fn execute_one(&mut self, p: Prog) -> anyhow::Result<bool> {
-        if stop_soon() {
-            return Ok(false);
-        }
-
         let opt = ExecOpt::new();
         self.record_execution(&p, &opt);
         let ret = self
@@ -285,6 +293,7 @@ impl Fuzzer {
         for i in 0..100 {
             opt.fault_nth = i;
             self.record_execution(p, &opt);
+            self.shared_state.stats.inc_exec_total();
             let ret = self.executor.execute_one(&t, p, &opt);
             match ret {
                 Ok(info) => {
@@ -302,6 +311,10 @@ impl Fuzzer {
                         self.restart_exec()?;
                     }
                 }
+            }
+
+            if stop_soon() {
+                break;
             }
         }
         Ok(())
@@ -381,10 +394,6 @@ impl Fuzzer {
     }
 
     fn handle_crash(&mut self, p: &Prog, crash_log: Vec<u8>) -> anyhow::Result<()> {
-        if stop_soon() {
-            return Ok(());
-        }
-
         self.shared_state.stats.inc_crashes();
         let ret = extract_report(&self.config.report_config, p, &crash_log);
         match ret.as_deref() {
@@ -436,7 +445,7 @@ impl Fuzzer {
         let cost = now.elapsed();
         if let Some(r) = repro.as_ref() {
             fuzzer_info!(
-                "'{}' repro success, cost: {}s, crepro: {}",
+                "'{}' repro success, cost: {}s, c_repro: {}",
                 title,
                 cost.as_secs(),
                 r.c_prog.is_some()
@@ -448,6 +457,7 @@ impl Fuzzer {
         self.shared_state.crash.repro_done(title, repro)
     }
 
+    #[inline]
     fn record_execution(&mut self, p: &Prog, opt: &ExecOpt) {
         if self.run_history.len() >= HISTORY_CAPACITY {
             self.run_history.pop_front();
@@ -464,7 +474,7 @@ impl Fuzzer {
             v.set(n + 1);
             n
         });
-        if n >= 64 {
+        if n >= 16 {
             LAST_CLEAR.with(|v| {
                 v.set(0);
             });
@@ -472,6 +482,7 @@ impl Fuzzer {
         }
     }
 
+    #[inline]
     fn restart_exec(&mut self) -> anyhow::Result<()> {
         let syz_exec = self.config.remote_exec.clone().unwrap();
         if let Err(e) = spawn_syz(&syz_exec, &self.qemu, &mut self.executor) {
@@ -492,6 +503,9 @@ impl Fuzzer {
     }
 
     fn maybe_reboot_vm(&mut self) -> anyhow::Result<()> {
+        if stop_soon() {
+            return Ok(());
+        }
         let du = self.last_reboot.elapsed();
         if du >= Duration::from_secs(60 * 60) {
             fuzzer_info!("running for 1 hour, rebooting vm...",);

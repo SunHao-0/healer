@@ -16,7 +16,7 @@ Healer is written in pure rust, except for some patching code. Therefore, [rust]
 > rustc --version # check install
 ```
 
-In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/blob/master/build.rs) will automatically *download* Syzkaller and *add* [patches](https://github.com/SunHao-0/healer/tree/master/patches) to the source code and build Syzkaller, which may increase the build time. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required for Syzkaller needs to be installed, e.g. golang compiler with GO111MODULE on, GCC 6.1.0 or later.
+In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/blob/master/build.rs) will automatically *download* Syzkaller and *add* [patches](https://github.com/SunHao-0/healer/tree/master/patches) to the source code and build Syzkaller, which may increase the build time. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required for Syzkaller needs to be installed, e.g., golang compiler with GO111MODULE on, GCC 6.1.0 or later.
 
 Once all the required tools have been installed, Healer can be easily built using following command:
 
