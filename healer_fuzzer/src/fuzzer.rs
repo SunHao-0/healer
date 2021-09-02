@@ -383,7 +383,7 @@ impl Fuzzer {
         );
         if crash_error && !self.qemu.is_alive() {
             fuzzer_warn!(
-                "kernel crashed, maybe caused by:\n{}",
+                "QEMU not alive, kernel maybe crashed, last executed prog:\n{}",
                 p.display(&self.shared_state.target)
             );
             let log = self.qemu.collect_crash_log().unwrap();

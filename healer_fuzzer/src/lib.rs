@@ -40,7 +40,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Barrier},
     thread,
     time::{Duration, Instant},
 };
@@ -81,16 +81,27 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     let mut input_progs = Vec::new();
     if let Some(p) = config.input.as_ref() {
         log::info!("loading input progs...");
+        // TODO inplace-resume
         let progs = load_progs(p, &target).context("failed to load input progs")?;
         input_progs = split_input_progs(progs, config.job);
     }
 
     let crash = if let Some(l) = config.crash_whitelist.as_ref() {
         log::info!("loading crash whitelist");
+        // TODO inplace-resume
         let l = load_crash_whitelist(l).context("failed to load crash whitelist")?;
         CrashManager::with_whitelist(l, config.output.clone())
     } else {
         CrashManager::new(config.output.clone())
+    };
+
+    let shared_state = SharedState {
+        target: Arc::new(target),
+        relation: Arc::new(RelationWrapper::new(relation)),
+        corpus: Arc::new(CorpusWrapper::new()),
+        stats: Arc::clone(&stats),
+        feedback: Arc::new(Feedback::new()),
+        crash: Arc::new(crash),
     };
 
     log::info!("pre-booting one vm...");
@@ -106,7 +117,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     let remote_exec_path = scp_to_vm(&config.syz_executor(), &qemu)?;
     config.remote_exec = Some(remote_exec_path.clone());
     let ssh_syz = ssh_syz_cmd(&remote_exec_path, &qemu);
-    log::info!("detecting features");
+    log::info!("detecting features...");
     let features = detect_features(ssh_syz).context("failed to detect features")?;
     config.exec_config.as_mut().unwrap().features = features;
     config.features = Some(features);
@@ -127,21 +138,37 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         .context("failed to spawn executor for fuzzer-0")?;
     log::info!("ok, fuzzer-0 should be ready");
 
-    let shared_state = SharedState {
-        target: Arc::new(target),
-        relation: Arc::new(RelationWrapper::new(relation)),
-        corpus: Arc::new(CorpusWrapper::new()),
-        stats: Arc::clone(&stats),
-        feedback: Arc::new(Feedback::new()),
-        crash: Arc::new(crash),
-    };
+    setup_signal_handler();
+    thread::spawn(move || {
+        stats.report(Duration::from_secs(10));
+    });
 
-    let mut fuzzers = Vec::new();
+    let mut fuzzers = Vec::with_capacity(config.job as usize);
+    // run fuzzer-0
+    let progs = input_progs.pop().unwrap_or_default();
+    let config1 = config.clone();
+    let shared_state1 = SharedState::clone(&shared_state);
+    let handle = thread::spawn(move || {
+        let mut fuzzer = Fuzzer {
+            shared_state: shared_state1,
+            id: 0,
+            rng: SmallRng::from_entropy(),
+            executor,
+            qemu,
+            run_history: VecDeque::with_capacity(HISTORY_CAPACITY),
+            config,
+            last_reboot: Instant::now(),
+        };
+        fuzzer.fuzz_loop(progs)
+    });
+    fuzzers.push(handle);
     // skip fuzzer-0
-    for id in 1..config.job {
+    for id in 1..config1.job {
         let progs = input_progs.pop().unwrap_or_default();
         let shared_state = SharedState::clone(&shared_state);
-        let mut fuzzer_config = config.clone(); // shm removed
+        let mut fuzzer_config = config1.clone(); // shm removed
+        let a = Arc::new(Barrier::new(2));
+        let b = Arc::clone(&a);
 
         let handle = thread::spawn(move || {
             fuzzer_config.exec_config.as_mut().unwrap().pid = id;
@@ -156,6 +183,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             fuzzer_config.exec_config = Some(exec_config.clone());
             let mut executor = ExecutorHandle::with_config(exec_config);
             prepare_exec_env(&mut fuzzer_config, &mut qemu, &mut executor)?;
+            b.wait();
             let mut fuzzer = Fuzzer {
                 shared_state,
                 id,
@@ -169,32 +197,10 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             fuzzer.fuzz_loop(progs)
         });
 
+        log::info!("waiting fuzzer-{} online...", id);
+        a.wait();
         fuzzers.push(handle);
     }
-
-    // run fuzzer-0
-    let progs = input_progs.pop().unwrap_or_default();
-    let handle = thread::spawn(move || {
-        config.fixup();
-        let mut fuzzer = Fuzzer {
-            shared_state,
-            id: 0,
-            rng: SmallRng::from_entropy(),
-            executor,
-            qemu,
-            run_history: VecDeque::with_capacity(HISTORY_CAPACITY),
-            config,
-            last_reboot: Instant::now(),
-        };
-        fuzzer.fuzz_loop(progs)
-    });
-    fuzzers.insert(0, handle);
-
-    thread::spawn(move || {
-        stats.report(Duration::from_secs(10));
-    });
-
-    setup_signal_handler();
 
     let mut err = None;
     for (i, f) in fuzzers.into_iter().enumerate() {
