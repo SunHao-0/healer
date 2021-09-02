@@ -302,6 +302,7 @@ impl Fuzzer {
                     {
                         break;
                     }
+                    self.clear_vm_log();
                 }
                 Err(e) => {
                     if let Some(crash) = self.check_vm(p, e) {
@@ -356,12 +357,13 @@ impl Fuzzer {
 
         match ret {
             Ok(info) => {
+                let mut ret = Ok(None);
                 if info.call_infos.len() > idx && !info.call_infos[idx].branches.is_empty() {
                     let brs = info.call_infos[idx].branches.iter().copied().collect();
-                    Ok(Some(brs))
-                } else {
-                    Ok(None)
+                    ret = Ok(Some(brs));
                 }
+                self.clear_vm_log();
+                ret
             }
             Err(e) => {
                 if let Some(crash) = self.check_vm(p, e) {
@@ -465,6 +467,7 @@ impl Fuzzer {
         self.run_history.push_back((opt.clone(), p.clone()))
     }
 
+    #[inline]
     fn clear_vm_log(&mut self) {
         thread_local! {
             static LAST_CLEAR: Cell<u64> = Cell::new(0)
@@ -474,7 +477,7 @@ impl Fuzzer {
             v.set(n + 1);
             n
         });
-        if n >= 8 {
+        if n >= 4 {
             LAST_CLEAR.with(|v| {
                 v.set(0);
             });

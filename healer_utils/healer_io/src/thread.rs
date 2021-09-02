@@ -18,8 +18,10 @@ pub fn read_background<T: IntoRawFd>(f: T) -> BackgroundIoHandle {
     let finished1 = Arc::clone(&finished);
 
     std::thread::spawn(move || {
-        let mut buf = [0_u8; 4096];
-        while let Ok(sz) = f.read(&mut buf) {
+        let buf = vec![0_u8; 1024 * 128];
+        let mut buf = buf.into_boxed_slice();
+
+        while let Ok(sz) = f.read(&mut buf[..]) {
             if sz == 0 {
                 break;
             }

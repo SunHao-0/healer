@@ -49,8 +49,9 @@ pub fn read_background<T: IntoRawFd>(f: T) -> BackgroundIoHandle {
 
     runtime().spawn(async move {
         use tokio::io::*;
+        let buf = vec![0_u8; 1024 * 128];
+        let mut buf = buf.into_boxed_slice();
 
-        let mut buf = [0_u8; 4096];
         while let Ok(sz) = f.read(&mut buf).await {
             if sz == 0 {
                 break;

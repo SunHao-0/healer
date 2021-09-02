@@ -15,7 +15,7 @@ use crate::{
     feedback::Feedback,
     fuzzer::{Fuzzer, SharedState, HISTORY_CAPACITY},
     stats::Stats,
-    util::stop_req,
+    util::{stop_req, stop_soon},
 };
 use anyhow::Context;
 use config::Config;
@@ -40,8 +40,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
-    sync::{Arc, Barrier},
-    thread,
+    sync::Arc,
+    thread::{self, sleep},
     time::{Duration, Instant},
 };
 use syz_wrapper::{
@@ -167,8 +167,6 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         let progs = input_progs.pop().unwrap_or_default();
         let shared_state = SharedState::clone(&shared_state);
         let mut fuzzer_config = config1.clone(); // shm removed
-        let a = Arc::new(Barrier::new(2));
-        let b = Arc::clone(&a);
 
         let handle = thread::spawn(move || {
             fuzzer_config.exec_config.as_mut().unwrap().pid = id;
@@ -183,7 +181,6 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             fuzzer_config.exec_config = Some(exec_config.clone());
             let mut executor = ExecutorHandle::with_config(exec_config);
             prepare_exec_env(&mut fuzzer_config, &mut qemu, &mut executor)?;
-            b.wait();
             let mut fuzzer = Fuzzer {
                 shared_state,
                 id,
@@ -197,9 +194,15 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             fuzzer.fuzz_loop(progs)
         });
 
-        log::info!("waiting fuzzer-{} online...", id);
-        a.wait();
         fuzzers.push(handle);
+
+        if id != config1.job - 1 {
+            sleep(Duration::from_secs(5)); // slow down
+        }
+
+        if stop_soon() {
+            break;
+        }
     }
 
     let mut err = None;
