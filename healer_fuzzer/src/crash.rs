@@ -70,7 +70,15 @@ impl CrashManager {
                 .entry(title.clone())
                 .or_insert_with(|| Vec::with_capacity(100));
             if entry.len() < 100 {
-                entry.push(report.clone());
+                let mut r = report.clone();
+                if !entry.is_empty() {
+                    r.title.clear(); // do not save there info in mem, except for the first one.
+                    r.cc_mails.clear();
+                    r.to_mails.clear();
+                    r.raw_log.clear();
+                    r.report.clear();
+                }
+                entry.push(r);
                 id = Some(entry.len());
             }
         }

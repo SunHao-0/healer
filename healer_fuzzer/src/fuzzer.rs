@@ -474,7 +474,7 @@ impl Fuzzer {
             v.set(n + 1);
             n
         });
-        if n >= 16 {
+        if n >= 8 {
             LAST_CLEAR.with(|v| {
                 v.set(0);
             });
