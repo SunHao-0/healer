@@ -58,10 +58,6 @@ impl CrashManager {
     }
 
     pub fn save_new_report(&self, target: &Target, report: Report) -> anyhow::Result<bool> {
-        if self.white_list.contains(&report.title) {
-            return Ok(false);
-        }
-
         let title = report.title.trim().to_string();
         let mut id = None;
         {
@@ -84,6 +80,9 @@ impl CrashManager {
         }
         if let Some(id) = id {
             self.save_report(target, report, id)?;
+        }
+        if self.white_list.contains(&title) {
+            return Ok(false);
         }
         {
             let r = self.repros.lock().unwrap();

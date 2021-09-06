@@ -87,7 +87,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     }
 
     let crash = if let Some(l) = config.crash_whitelist.as_ref() {
-        log::info!("loading crash whitelist");
+        log::info!("loading crash whitelist...");
         // TODO inplace-resume
         let l = load_crash_whitelist(l).context("failed to load crash whitelist")?;
         CrashManager::with_whitelist(l, config.output.clone())

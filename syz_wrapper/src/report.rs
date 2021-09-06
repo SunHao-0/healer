@@ -65,6 +65,8 @@ pub enum ReportError {
     Io(#[from] std::io::Error),
     #[error("syz_symbolize: {0}")]
     SyzSymbolize(String),
+    #[error("parse: {0}")]
+    Parse(String),
 }
 
 pub fn extract_report(
@@ -90,113 +92,106 @@ pub fn extract_report(
     let output = syz_symbolize.output().unwrap();
 
     if output.status.success() {
-        let mut ret = parse(&output.stdout);
+        let content = String::from_utf8_lossy(&output.stdout).into_owned();
+        let mut ret = parse(&content);
         for r in ret.iter_mut() {
             r.prog = Some(p.clone());
             r.raw_log = Vec::from(raw_log);
         }
-        Ok(ret)
+        if ret.is_empty() {
+            Err(ReportError::Parse(content))
+        } else {
+            Ok(ret)
+        }
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
         Err(ReportError::SyzSymbolize(err.into_owned()))
     }
 }
 
-fn parse(content: &[u8]) -> Vec<Report> {
-    let content = String::from_utf8_lossy(content);
+fn parse(content: &str) -> Vec<Report> {
     let mut ret = Vec::new();
-    let mut lines = content.lines();
+    let lines = &mut content.lines();
+    let mut last_title = None;
 
     loop {
-        let title = parse_line(&mut lines, "TITLE:", |nl| String::from(&nl[7..]));
+        let mut title = None;
+        if last_title.is_none() {
+            for l in &mut *lines {
+                if l.contains("TITLE:") {
+                    let l = l.trim();
+                    title = Some(String::from(&l[7..]));
+                    break;
+                }
+            }
+        } else {
+            title = last_title.take();
+        }
+
         if title.is_none() {
             break;
         }
 
-        let corrupted = parse_line(&mut lines, "CORRUPTED:", |nl| {
-            let mut corrupted = None;
-            if nl.contains("true") {
-                let idx = nl.find('(').unwrap();
-                let mut corr = String::from(&nl[idx + 1..]);
-                corr.pop(); // drop ')'
-                corrupted = Some(corr);
-            }
-            corrupted
-        });
-        if corrupted.is_none() {
-            break;
-        }
-
-        let to_mails = parse_line(&mut lines, "MAINTAINERS (TO):", |nl| {
-            let start = nl.find('[').unwrap();
-            let end = nl.rfind(']').unwrap();
-            let mut mails = Vec::new();
-            if start + 1 != end {
-                for mail in nl[start + 1..end].split_ascii_whitespace() {
-                    mails.push(String::from(mail));
+        let mut corrupted = None;
+        for l in &mut *lines {
+            if l.contains("CORRUPTED:") {
+                if l.contains("true") {
+                    let idx = l.find('(').unwrap();
+                    let mut corr = String::from(&l[idx + 1..]);
+                    corr.pop(); // drop ')'
+                    corrupted = Some(corr);
                 }
+                break;
             }
-            mails
-        });
-        if to_mails.is_none() {
-            break;
         }
 
-        let cc_mails = parse_line(&mut lines, "MAINTAINERS (CC):", |nl| {
-            let start = nl.find('[').unwrap();
-            let end = nl.rfind(']').unwrap();
-            let mut mails = Vec::new();
-            if start + 1 != end {
-                for mail in nl[start + 1..end].split_ascii_whitespace() {
-                    mails.push(String::from(mail));
+        let mut to_mails = Vec::new();
+        for l in &mut *lines {
+            if l.contains("MAINTAINERS (TO):") {
+                let start = l.find('[').unwrap();
+                let end = l.rfind(']').unwrap();
+                if start + 1 != end {
+                    for mail in l[start + 1..end].split_ascii_whitespace() {
+                        to_mails.push(String::from(mail));
+                    }
                 }
+                break;
             }
-            mails
-        });
-        if cc_mails.is_none() {
-            break;
         }
 
-        if lines.next().is_none() {
-            // skip empty line.
-            break;
+        let mut cc_mails = Vec::new();
+        for l in &mut *lines {
+            if l.contains("MAINTAINERS (CC):") {
+                let start = l.find('[').unwrap();
+                let end = l.rfind(']').unwrap();
+                if start + 1 != end {
+                    for mail in l[start + 1..end].split_ascii_whitespace() {
+                        cc_mails.push(String::from(mail));
+                    }
+                }
+                break;
+            }
         }
 
         let mut report = String::new();
-        let mut first_empty = true;
-        for l in &mut lines {
-            if l.is_empty() {
-                if first_empty {
-                    first_empty = false;
-                    continue;
-                } else {
-                    break;
-                }
+        for l in &mut *lines {
+            if l.contains("TITLE:") {
+                let l = l.trim();
+                last_title = Some(String::from(&l[7..]));
+                break; // next report
+            } else {
+                writeln!(report, "{}", l).unwrap();
             }
-            writeln!(report, "{}", l).unwrap();
         }
 
         ret.push(Report {
             title: title.unwrap(),
-            corrupted: corrupted.unwrap(),
-            to_mails: to_mails.unwrap(),
-            cc_mails: cc_mails.unwrap(),
-            report,
+            corrupted,
+            to_mails,
+            cc_mails,
+            report: report.trim().to_string(),
             ..Default::default()
         });
     }
     ret
-}
-
-fn parse_line<F, T>(lines: &mut std::str::Lines<'_>, val: &str, mut f: F) -> Option<T>
-where
-    F: FnMut(&str) -> T,
-{
-    for nl in lines {
-        if nl.contains(val) {
-            let nl = nl.trim();
-            return Some(f(nl));
-        }
-    }
-    None
 }
