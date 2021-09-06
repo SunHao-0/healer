@@ -16,7 +16,7 @@ Healer is written in pure rust, except for some patching code. Therefore, [rust]
 > rustc --version # check install
 ```
 
-In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/blob/master/build.rs) will automatically *download* Syzkaller and *add* [patches](https://github.com/SunHao-0/healer/tree/master/patches) to the source code and build Syzkaller, which may increase the build time. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required for Syzkaller needs to be installed, e.g., golang compiler with GO111MODULE on, GCC 6.1.0 or later.
+In order to use the Syzlang descriptions, Healer's [build script](https://github.com/SunHao-0/healer/tree/main/syz_wrapper/build.rs) will automatically *download* Syzkaller and *add* [patches](https://github.com/SunHao-0/healer/tree/main/syz_wrapper/patches) to the source code and build Syzkaller, which may increase the build time. Therefore, the [build tool](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) required by Syzkaller needs to be installed, e.g., golang compiler with GO111MODULE on, GCC 6.1.0 or later.
 
 Once all the required tools have been installed, Healer can be easily built using following command:
 
@@ -30,9 +30,9 @@ Finally, Healer itself and the patched Syzkaller binary (`syz-bin`) can be found
 
 Overall, fuzzing Linux kernel with Healer requires three steps: (1) prepare the disk image, (2) compile the kernel, and (3) start Healer. 
 
-Healer uses qumu to boot the kernel, so the disk image and kernel image need to be prepared. The booted qemu needs to be able to log in via the ssh key, and the kernel needs to have at least the `kcov` feature. [This document](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md) from Syzkaller describes in detail how to build `stretch.img` and compile the Linux kernel with specific configuration, so follow the instructions there to complete the first two steps.
+Healer uses qumu to boot the kernel, so the disk image and kernel image need to be prepared. The booted qemu needs to be able to login via the ssh key, and the kernel needs to have at least the `kcov` feature. [This document](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md) from Syzkaller describes in detail how to build `stretch.img` and compile the Linux kernel with specific configuration, so follow the instructions there to complete the first two steps.
 
-Once the `stretch.img`, `ssh-stretch.id_rsa`, `bzImage` are ready, my recommendation is to create a working directory, create a `bin` directory and copy the patched Syzkaller binary and healer binary to that directory, taking care not to change the `syz-bin` directory structure. The final working directory needs to have the following files.
+Once the `stretch.img`, `ssh-stretch.id_rsa`, `bzImage` are ready, my recommendation is to create a working directory. Then, create a `bin` directory inside the workdir and copy the patched Syzkaller binary and healer binary to that directory, taking care not to change the `syz-bin` directory structure. The final working directory needs to have the following files.
 
 ```
 > cd path/to/workdir && ls 
