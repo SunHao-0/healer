@@ -1,12 +1,7 @@
 use crate::arch::{self, TARGET_ARCH};
 use anyhow::Context;
 use healer_vm::qemu::QemuConfig;
-use std::{
-    env::current_dir,
-    fs::{canonicalize, create_dir_all},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{env::current_dir, fs::canonicalize, path::PathBuf, str::FromStr};
 use syz_wrapper::{
     exec::{features::Features, ExecConfig},
     report::ReportConfig,
@@ -101,18 +96,8 @@ impl Config {
         if !syz_executor.exists() {
             anyhow::bail!("{} not exists", syz_executor.display());
         }
-        if self.output.is_dir() {
-            anyhow::bail!(
-                "output dir ({}) already existed, cleanup first",
-                self.output.display()
-            );
-        }
-        if let Err(e) = create_dir_all(&self.output) {
-            anyhow::bail!(
-                "failed to create ouput dir {}: {}",
-                self.output.display(),
-                e
-            );
+        if self.output.exists() && !self.output.is_dir() {
+            anyhow::bail!("'{}' not a directory", self.output.display());
         }
         if let Some(i) = self.disabled_calls.as_ref() {
             if !i.is_file() {

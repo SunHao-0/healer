@@ -35,7 +35,7 @@ use rand::{
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::{
     collections::VecDeque,
-    fs::{read_dir, read_to_string},
+    fs::{create_dir_all, read_dir, read_to_string},
     os::raw::c_int,
     path::{Path, PathBuf},
     process::Command,
@@ -78,22 +78,52 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         stats.set_re(relation.num() as u64);
     }
 
-    let mut input_progs = Vec::new();
-    if let Some(p) = config.input.as_ref() {
-        log::info!("loading input progs...");
-        // TODO inplace-resume
-        let progs = load_progs(p, &target).context("failed to load input progs")?;
-        input_progs = split_input_progs(progs, config.job);
+    if !config.output.exists() {
+        create_dir_all(&config.output).context("failed to create output directory")?;
     }
 
-    let crash = if let Some(l) = config.crash_whitelist.as_ref() {
+    let mut all_progs = Vec::new();
+    if let Some(p) = config.input.as_ref() {
+        log::info!("loading input progs...");
+        all_progs = load_progs(p, &target).context("failed to load input progs")?;
+    }
+    let corpus = config.output.join("corpus");
+    if corpus.exists() {
+        // resume
+        log::info!("loading corpus progs...");
+        let corpus_progs = load_progs(&corpus, &target).context("failed to load corpus progs")?;
+        all_progs.extend(corpus_progs);
+    }
+    let mut input_progs = Vec::new();
+    if !all_progs.is_empty() {
+        log::info!("progs loaded: {}", all_progs.len());
+        let mut rng = SmallRng::from_entropy();
+        all_progs.shuffle(&mut rng);
+        input_progs = split_input_progs(all_progs, config.job);
+    }
+
+    let mut known_crashes = HashSet::new();
+    if let Some(l) = config.crash_whitelist.as_ref() {
         log::info!("loading crash whitelist...");
-        // TODO inplace-resume
-        let l = load_crash_whitelist(l).context("failed to load crash whitelist")?;
-        CrashManager::with_whitelist(l, config.output.clone())
-    } else {
-        CrashManager::new(config.output.clone())
-    };
+        known_crashes = load_crash_whitelist(l).context("failed to load crash whitelist")?;
+        if !known_crashes.is_empty() {
+            log::info!("whitelist: {}", known_crashes.len());
+        }
+    }
+    let crash_dir = config.output.join("crashes");
+    if crash_dir.is_dir() {
+        // resume
+        let reproed = collect_reproed_crashes(&crash_dir).context("failed to scan old crashes")?;
+        log::info!("collecting reproed crashes...");
+        if !reproed.is_empty() {
+            log::info!("reproed crashes: {}", reproed.len());
+            known_crashes.extend(reproed);
+        }
+    }
+    if !known_crashes.is_empty() {
+        log::info!("total known crashes: {}", known_crashes.len());
+    }
+    let crash = CrashManager::with_whitelist(known_crashes, config.output.clone());
 
     let shared_state = SharedState {
         target: Arc::new(target),
@@ -302,25 +332,18 @@ fn load_extra_relations(
 fn load_progs(input_dir: &Path, target: &Target) -> anyhow::Result<Vec<Prog>> {
     let dir_iter = read_dir(input_dir)
         .with_context(|| format!("failed to read_dir: {}", input_dir.display()))?;
-    let mut failed = 0;
     let mut progs = Vec::new();
-    let mut rng = SmallRng::from_entropy();
 
     for f in dir_iter.filter_map(|f| f.ok()) {
         let path = f.path();
-        let content =
-            read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-        let p = match parse_prog(target, &content) {
-            Ok(p) => p,
-            Err(_) => {
-                failed += 1;
-                continue;
-            }
+        let content = match read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue, // skip
         };
-        progs.push(p);
+        if let Ok(p) = parse_prog(target, &content) {
+            progs.push(p);
+        }
     }
-    log::info!("progs loaded: {}/{}", progs.len(), progs.len() + failed);
-    progs.shuffle(&mut rng);
     Ok(progs)
 }
 
@@ -334,10 +357,28 @@ fn load_crash_whitelist(path: &Path) -> anyhow::Result<HashSet<String>> {
         }
         titles.insert(t.to_string());
     }
-    if !titles.is_empty() {
-        log::info!("crash whitelist: {} entries", titles.len());
-    }
     Ok(titles)
+}
+
+fn collect_reproed_crashes(dir: &Path) -> anyhow::Result<HashSet<String>> {
+    let mut reproed = HashSet::new();
+    for entry in read_dir(dir)
+        .context("failed to read dir")?
+        .filter_map(|e| e.ok())
+    {
+        let entry = entry.path();
+        if !entry.is_dir() {
+            continue;
+        }
+        let meta = entry.join("meta");
+        let c_repro = entry.join("repro.c");
+        let syz_repro = entry.join("repro.prog");
+        if meta.is_file() && (c_repro.is_file() || syz_repro.is_file()) {
+            let name = entry.file_name().unwrap();
+            reproed.insert(name.to_string_lossy().trim().to_string());
+        }
+    }
+    Ok(reproed)
 }
 
 fn setup_fuzzer_shm(fuzzer_id: u64, config: &mut Config) -> anyhow::Result<()> {
