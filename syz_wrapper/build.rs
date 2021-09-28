@@ -14,31 +14,32 @@ use std::{
     process::{exit, Command},
 };
 
-const LATEST_REVISION: &str = "master";
 /// Revision that the patches can be applied stably.
-const STABLE_REVISION: &str = "b599f2fcc734e2183016a340d4f6fc2891d8e41f";
-const STABLE_CSUM: &str = "335e91539a18f4c53867986d34bb32c50ba4eb381c6d842eae38bb7da0a30ad63906ab9777e1dd40fa22323479a22512";
+const STABLE_REVISION: &str = "169724fe58e8d7d0b4be6f59ca7c1e0f300399e1";
+const STABLE_CSUM: &str = "293a65f4604dce1103ca94746fec6bb175229576271ffdcd319747cc33db2b89f5467acea86a2bf8b38c0fc95adea3c0";
 
 fn main() {
     if env::var("SKIP_SYZ_BUILD").is_err() {
         check_env();
+        // TODO We cannot use the latest syz-executor any more, because `a7ce77be27d8e3728b97122a005bc5b23298cfc3` contains breaking change
         // Try to patch the latest revision first
-        let syz_dir = download(LATEST_REVISION, None);
+        // const LATEST_REVISION: &str = "master";
+        // let syz_dir = download(LATEST_REVISION, None);
+        // if let Some(sys_dir) = build_syz(syz_dir) {
+        // copy_sys(sys_dir);
+        // } else {
+        eprintln!("failed to patch and build latest revision, failback...");
+        let syz_dir = download(STABLE_REVISION, Some(STABLE_CSUM));
         if let Some(sys_dir) = build_syz(syz_dir) {
             copy_sys(sys_dir);
-        } else {
-            eprintln!("failed to patch and build latest revision, failback...");
-            let syz_dir = download(STABLE_REVISION, Some(STABLE_CSUM));
-            if let Some(sys_dir) = build_syz(syz_dir) {
-                copy_sys(sys_dir);
-                return;
-            }
-            eprintln!(
-                "failed to build and patch Syzkaller with stable revision ({})",
-                STABLE_REVISION
-            );
-            exit(1)
+            return;
         }
+        eprintln!(
+            "failed to build and patch Syzkaller with stable revision ({})",
+            STABLE_REVISION
+        );
+        exit(1)
+        // }
     } else if let Ok(sys_dir) = env::var("SYZ_SYS_DIR") {
         let sys_dir = PathBuf::from(sys_dir);
         copy_sys(sys_dir)
