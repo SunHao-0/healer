@@ -59,9 +59,12 @@ struct Settings {
     /// Number of instance used for repro.
     #[clap(long, default_value = "2")]
     repro_vm_count: u64,
-    /// Enable fault injection.
+    /// Disable call fault injection.
     #[clap(long)]
-    enable_fault_injection: bool,
+    disable_fault_injection: bool,
+    /// Whitelist for fault injection.
+    #[clap(long)]
+    fault_injection_whitelist: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -83,7 +86,8 @@ fn main() -> anyhow::Result<()> {
         syz_dir: settings.syz_dir,
         output: settings.output,
         disabled_calls: settings.disable_syscalls,
-        enable_fault_injection: settings.enable_fault_injection,
+        disable_fault_injection: settings.disable_fault_injection,
+        fault_injection_whitelist_path: settings.fault_injection_whitelist,
         qemu_config: QemuConfig {
             qemu_smp: settings.qemu_smp,
             qemu_mem: settings.qemu_mem,

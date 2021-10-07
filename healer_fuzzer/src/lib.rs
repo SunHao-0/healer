@@ -11,6 +11,7 @@ pub mod stats;
 pub mod util;
 
 use crate::{
+    config::Config,
     crash::CrashManager,
     feedback::Feedback,
     fuzzer::{Fuzzer, SharedState, HISTORY_CAPACITY},
@@ -18,7 +19,6 @@ use crate::{
     util::{stop_req, stop_soon},
 };
 use anyhow::Context;
-use config::Config;
 use healer_core::{
     corpus::CorpusWrapper,
     parse::parse_prog,
@@ -35,14 +35,15 @@ use rand::{
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::{
     collections::VecDeque,
-    fs::{create_dir_all, read_dir, read_to_string},
+    fs::{create_dir_all, read_dir, read_to_string, rename, OpenOptions},
+    io::BufWriter,
     os::raw::c_int,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
     sync::Arc,
     thread::{self, sleep},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use syz_wrapper::{
     exec::{
@@ -110,18 +111,34 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
             log::info!("whitelist: {}", known_crashes.len());
         }
     }
+    let whitelist_file = config.output.join("whitelist");
+    if whitelist_file.is_file() {
+        log::info!("loading old whitelist...");
+        let old_known_crashes =
+            load_crash_whitelist(&whitelist_file).context("failed to load crash whitelist")?;
+        if !old_known_crashes.is_empty() {
+            log::info!("whitelist: {}", old_known_crashes.len());
+        }
+        known_crashes.extend(old_known_crashes);
+    }
     let crash_dir = config.output.join("crashes");
     if crash_dir.is_dir() {
         // resume
-        let reproed = collect_reproed_crashes(&crash_dir).context("failed to scan old crashes")?;
         log::info!("collecting reproed crashes...");
+        let reproed = collect_reproed_crashes(&crash_dir).context("failed to scan old crashes")?;
         if !reproed.is_empty() {
             log::info!("reproed crashes: {}", reproed.len());
             known_crashes.extend(reproed);
         }
+        // move to old
+        if let Some(old_dir) = maybe_mv_to_old(&crash_dir)? {
+            log::info!("old crashes moved to: {}", old_dir.display());
+            create_dir_all(&crash_dir).context("failed to create crashes dir")?;
+        }
     }
     if !known_crashes.is_empty() {
         log::info!("total known crashes: {}", known_crashes.len());
+        dump_crash_whitelist(&config.output, &known_crashes)?;
     }
     let crash = CrashManager::with_whitelist(known_crashes, config.output.clone());
 
@@ -363,7 +380,7 @@ fn load_crash_whitelist(path: &Path) -> anyhow::Result<HashSet<String>> {
 fn collect_reproed_crashes(dir: &Path) -> anyhow::Result<HashSet<String>> {
     let mut reproed = HashSet::new();
     for entry in read_dir(dir)
-        .context("failed to read dir")?
+        .context("failed to read old crashes dir")?
         .filter_map(|e| e.ok())
     {
         let entry = entry.path();
@@ -372,13 +389,56 @@ fn collect_reproed_crashes(dir: &Path) -> anyhow::Result<HashSet<String>> {
         }
         let meta = entry.join("meta");
         let c_repro = entry.join("repro.c");
-        let syz_repro = entry.join("repro.prog");
-        if meta.is_file() && (c_repro.is_file() || syz_repro.is_file()) {
+        if meta.is_file() && c_repro.is_file() {
             let name = entry.file_name().unwrap();
             reproed.insert(name.to_string_lossy().trim().to_string());
         }
     }
     Ok(reproed)
+}
+
+fn maybe_mv_to_old(dir: &Path) -> anyhow::Result<Option<PathBuf>> {
+    let empty = read_dir(dir)
+        .context("failed to read crashes dir")?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .count()
+        == 0;
+    let mut new_dir = None;
+
+    if !empty {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let new_dir0 = PathBuf::from(format!("{}-{}", dir.display(), now));
+        rename(dir, &new_dir0).with_context(|| {
+            format!(
+                "failed to rename old crashes: {} -> {}",
+                dir.display(),
+                new_dir0.display()
+            )
+        })?;
+        new_dir = Some(new_dir0);
+    }
+    Ok(new_dir)
+}
+
+fn dump_crash_whitelist(out: &Path, crashes: &HashSet<String>) -> anyhow::Result<()> {
+    use std::io::Write;
+
+    let f = out.join("whitelist");
+    let f = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&f)
+        .with_context(|| format!("failed to open: {}", f.display()))?;
+    let mut w = BufWriter::new(f);
+    for crash in crashes {
+        writeln!(w, "{}", crash).with_context(|| format!("failed to write crash: {}", crash))?;
+    }
+    Ok(())
 }
 
 fn setup_fuzzer_shm(fuzzer_id: u64, config: &mut Config) -> anyhow::Result<()> {

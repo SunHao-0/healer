@@ -1,7 +1,13 @@
 use crate::arch::{self, TARGET_ARCH};
 use anyhow::Context;
 use healer_vm::qemu::QemuConfig;
-use std::{env::current_dir, fs::canonicalize, path::PathBuf, str::FromStr};
+use regex::RegexSet;
+use std::{
+    env::current_dir,
+    fs::{canonicalize, read_to_string},
+    path::PathBuf,
+    str::FromStr,
+};
 use syz_wrapper::{
     exec::{features::Features, ExecConfig},
     report::ReportConfig,
@@ -22,7 +28,9 @@ pub struct Config {
     pub disable_relation_detect: bool,
     pub disabled_calls: Option<PathBuf>,
     pub features: Option<Features>,
-    pub enable_fault_injection: bool,
+    pub disable_fault_injection: bool,
+    pub fault_injection_whitelist_path: Option<PathBuf>,
+    pub fault_injection_regex: Option<RegexSet>,
     pub remote_exec: Option<PathBuf>,
 
     pub qemu_config: QemuConfig,
@@ -45,7 +53,9 @@ impl Default for Config {
             disabled_calls: None,
             disable_relation_detect: false,
             features: None,
-            enable_fault_injection: false,
+            disable_fault_injection: false,
+            fault_injection_whitelist_path: None,
+            fault_injection_regex: None,
             remote_exec: None,
 
             qemu_config: QemuConfig::default(),
@@ -102,6 +112,35 @@ impl Config {
         if let Some(i) = self.disabled_calls.as_ref() {
             if !i.is_file() {
                 anyhow::bail!("bad disabled calls file: {}", i.display());
+            }
+        }
+        if self.disable_fault_injection && self.fault_injection_whitelist_path.is_some() {
+            anyhow::bail!(
+                "fault injection disabled: {}",
+                self.fault_injection_whitelist_path
+                    .as_ref()
+                    .unwrap()
+                    .display()
+            );
+        }
+        if let Some(i) = self.fault_injection_whitelist_path.as_ref() {
+            if !i.is_file() {
+                anyhow::bail!("bad fault injection whitelist file: {}", i.display());
+            }
+            let call_re = read_to_string(i).unwrap();
+            let re_str = call_re
+                .lines()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>();
+            if !re_str.is_empty() {
+                match RegexSet::new(re_str) {
+                    Ok(s) => self.fault_injection_regex = Some(s),
+                    Err(e) => anyhow::bail!(
+                        "bad re in fault injection whitelist file {}: {}",
+                        i.display(),
+                        e
+                    ),
+                }
             }
         }
 

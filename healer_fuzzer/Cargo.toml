@@ -25,3 +25,4 @@ signal-hook = {version = "0.3", features = ["iterator", "extended-siginfo"]}
 sha-1 = "0.9"
 hex = "0.4"
 env_logger = "0.9"
+regex = "1.5"

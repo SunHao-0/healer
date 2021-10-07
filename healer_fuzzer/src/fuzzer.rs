@@ -264,31 +264,41 @@ impl Fuzzer {
             self.shared_state
                 .stats
                 .set_re(self.shared_state.relation.num() as u64);
+            // TODO dump relations
             fuzzer_debug!("new relation: {} -> {}", a.name(), b.name());
         }
 
+        // save to local
         self.do_save_prog(p.clone(), &brs)?;
-        if self.config.features.unwrap() & FEATURE_FAULT != 0 && self.config.enable_fault_injection
-        {
+
+        // fail call that found new cov
+        if self.should_fail(&p) {
             self.fail_call(&p, idx)?;
         }
         Ok(())
     }
 
-    fn fail_call(&mut self, p: &Prog, idx: usize) -> anyhow::Result<()> {
-        const IGNORES: &[&str] = &["fork", "clone"];
+    fn should_fail(&self, p: &Prog) -> bool {
+        let has_fault = self.config.features.unwrap() & FEATURE_FAULT != 0;
+        if has_fault && !self.config.disable_fault_injection {
+            if let Some(re) = self.config.fault_injection_regex.as_ref() {
+                for c in p.calls() {
+                    let s = self.shared_state.target.syscall_of(c.sid());
+                    if re.is_match(s.name()) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        false
+    }
 
+    fn fail_call(&mut self, p: &Prog, idx: usize) -> anyhow::Result<()> {
         let t = Arc::clone(&self.shared_state.target);
         let mut opt = ExecOpt::new();
         opt.enable(FLAG_INJECT_FAULT);
         opt.fault_call = idx as i32;
-
-        // TODO use a more general way to to this
-        let sid = p.calls()[idx].sid();
-        let call_name = self.shared_state.target.syscall_of(sid).name();
-        if IGNORES.iter().any(|i| call_name.contains(i)) {
-            return Ok(());
-        }
 
         for i in 0..100 {
             opt.fault_nth = i;
