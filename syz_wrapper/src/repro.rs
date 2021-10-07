@@ -89,7 +89,7 @@ pub fn repro(
         let repro_log = String::from_utf8_lossy(&syz_repro.stdout).into_owned();
         Ok(parse_repro_log(log, repro_log))
     } else {
-        Ok(None)
+        Ok(None) // TODO return run_history, if repro failed
     }
 }
 

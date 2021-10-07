@@ -457,14 +457,36 @@ fn prepare_exec_env(
     exec: &mut ExecutorHandle,
 ) -> anyhow::Result<()> {
     let exec_config = config.exec_config.as_ref().unwrap();
-    qemu.boot()
+    retry_exec(|| qemu.boot())
         .with_context(|| format!("failed boot qemu for fuzzer-{}", exec_config.pid))?;
-    let remote_exec_path = scp_to_vm(&config.syz_executor(), qemu)?;
+    let remote_exec_path = retry_exec(|| scp_to_vm(&config.syz_executor(), qemu))?;
     config.remote_exec = Some(remote_exec_path.clone());
-    let ssh_syz = ssh_syz_cmd(&remote_exec_path, qemu);
-    setup_features(ssh_syz, exec_config.features).context("failed to setup features")?;
-    spawn_syz(&remote_exec_path, qemu, exec)
+    retry_exec(|| {
+        let ssh_syz = ssh_syz_cmd(&remote_exec_path, qemu);
+        setup_features(ssh_syz, exec_config.features)
+    })
+    .context("failed to setup features")?;
+    retry_exec(|| spawn_syz(&remote_exec_path, qemu, exec))
         .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))
+}
+
+fn retry_exec<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
+    let mut tried = 0;
+    let max = 3;
+
+    loop {
+        match f() {
+            Ok(r) => return Ok(r),
+            Err(e) => {
+                if tried < max && !stop_soon() {
+                    sleep(Duration::from_secs(10)); // wait
+                    tried += 1;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
 }
 
 const HEALER: &str = r"
