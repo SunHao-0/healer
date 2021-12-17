@@ -16,7 +16,4 @@ healer_alloc = {path = "../../healer_utils/healer_alloc"}
 rand = {version = "0.8", features = ["small_rng"]}
 env_logger = "0.9"
 log = "0.4"
-
-[dependencies.clap]
-version = "3.0.0-beta.2"
-features = [ "suggestions", "color" ]
+structopt = "0.3"

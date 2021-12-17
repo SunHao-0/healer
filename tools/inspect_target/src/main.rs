@@ -1,4 +1,3 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::relation::Relation;
 use healer_core::target::Target;
 use healer_core::ty::TypeKind;
@@ -7,64 +6,63 @@ use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::process::exit;
+use structopt::StructOpt;
 use syz_wrapper::sys;
 
-#[derive(Debug, Clap)]
-#[clap(name=crate_name!(), author = crate_authors!(), about = crate_description!(), version = crate_version!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Debug, StructOpt)]
 struct Settings {
     /// Target to inspect.
-    #[clap(long, default_value = "linux/amd64")]
+    #[structopt(long, default_value = "linux/amd64")]
     target: String,
     /// Show resource types.
-    #[clap(long, short)]
+    #[structopt(long, short)]
     res: bool,
     /// Show input/output syscalls of each resource type.
-    #[clap(long)]
+    #[structopt(long)]
     res_input_output_syscalls: bool,
     /// Show super type of each resource type.
-    #[clap(long)]
+    #[structopt(long)]
     res_super_ty: bool,
     /// Show syscalls.
-    #[clap(long, short)]
+    #[structopt(long, short)]
     syscalls: bool,
     /// Show input/output resource types of each syscall.
-    #[clap(long)]
+    #[structopt(long)]
     syscall_input_output_res: bool,
     /// Show relations between syscalls.
-    #[clap(long)]
+    #[structopt(long)]
     relation: bool,
     /// Show type information.
-    #[clap(long, short = 't')]
+    #[structopt(long, short = "t")]
     tys: bool,
     /// Only show `filter-ty` type kind.
-    #[clap(long)]
+    #[structopt(long)]
     filter_ty: Option<String>,
     /// Show all without sampling.
-    #[clap(long, short = 'a')]
+    #[structopt(long, short = "a")]
     show_all: bool,
     /// Max sampling number.
-    #[clap(long, short = 'n', default_value = "64")]
+    #[structopt(long, short = "n", default_value = "64")]
     sample_num: usize,
     /// Seed for random sampling.
-    #[clap(long, short = 'r')]
+    #[structopt(long, short = "r")]
     seed: Option<u64>,
     /// Inspect specific syscall.
-    #[clap(long)]
+    #[structopt(long)]
     inspect_syscall: Option<String>,
     /// Inspect specific type.
-    #[clap(long)]
+    #[structopt(long)]
     inspect_ty: Option<String>,
     /// Inspect specific resource.
-    #[clap(long)]
+    #[structopt(long)]
     inspect_res: Option<String>,
     /// Verbose.
-    #[clap(long)]
+    #[structopt(long)]
     verbose: bool,
 }
 
 fn main() {
-    let settings = Settings::parse();
+    let settings = Settings::from_args();
 
     let target_name = &settings.target;
     let target = match sys::load_target("linux/amd64") {

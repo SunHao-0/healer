@@ -1,4 +1,3 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::gen::{self, minimize};
 use healer_core::parse::parse_prog;
 use healer_core::relation::{Relation, RelationWrapper};
@@ -9,25 +8,24 @@ use std::fs::read_to_string;
 use std::io::{self};
 use std::path::PathBuf;
 use std::process::exit;
+use structopt::StructOpt;
 use syz_wrapper::sys::load_target;
 
-#[derive(Debug, Clap)]
-#[clap(name=crate_name!(), author = crate_authors!(), about = crate_description!(), version = crate_version!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Debug, StructOpt)]
 struct Settings {
     /// Target to inspect.
-    #[clap(long, default_value = "linux/amd64")]
+    #[structopt(long, default_value = "linux/amd64")]
     target: String,
     /// Prog to mutate, randomly generate if not given.
-    #[clap(short, long)]
+    #[structopt(short, long)]
     prog: Option<PathBuf>,
     /// Verbose.
-    #[clap(long)]
+    #[structopt(long)]
     verbose: bool,
 }
 
 fn main() {
-    let settings = Settings::parse();
+    let settings = Settings::from_args();
     env_logger::builder().format_timestamp_secs().init();
 
     let target = load_target(&settings.target).unwrap_or_else(|e| {

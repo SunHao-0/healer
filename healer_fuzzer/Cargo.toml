@@ -17,7 +17,7 @@ syz_wrapper = {path = "../syz_wrapper"}
 ahash = "0.7"
 rand = {version = "0.8", features = ["small_rng"]}
 log = "0.4"
-clap = "3.0.0-beta.2"
+structopt = "0.3"
 anyhow = "1.0"
 thiserror = "1.0"
 shared_memory = "0.12"

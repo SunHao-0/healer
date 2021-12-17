@@ -1,4 +1,3 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, AppSettings, Clap};
 use healer_core::corpus::CorpusWrapper;
 use healer_core::gen::{self, set_prog_len_range, FAVORED_MAX_PROG_LEN, FAVORED_MIN_PROG_LEN};
 use healer_core::mutation::mutate;
@@ -11,28 +10,27 @@ use rand::rngs::SmallRng;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::process::exit;
+use structopt::StructOpt;
 use syz_wrapper::sys::load_target;
 
-#[derive(Debug, Clap)]
-#[clap(name=crate_name!(), author = crate_authors!(), about = crate_description!(), version = crate_version!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Debug, StructOpt)]
 struct Settings {
     /// Target to inspect.
-    #[clap(long, default_value = "linux/amd64")]
+    #[structopt(long, default_value = "linux/amd64")]
     target: String,
     /// Verbose.
-    #[clap(long)]
+    #[structopt(long)]
     verbose: bool,
     /// Mutate `n` time.
-    #[clap(long, short, default_value = "1")]
+    #[structopt(long, short, default_value = "1")]
     n: usize,
     /// Prog to mutate, randomly generate if not given.
-    #[clap(short, long)]
+    #[structopt(short, long)]
     prog: Option<PathBuf>,
 }
 
 fn main() {
-    let settings = Settings::parse();
+    let settings = Settings::from_args();
     env_logger::builder().format_timestamp_secs().init();
 
     let target = load_target(&settings.target).unwrap_or_else(|e| {

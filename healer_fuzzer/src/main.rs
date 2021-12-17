@@ -1,74 +1,73 @@
-use clap::{crate_authors, crate_description, crate_version, AppSettings, Clap};
 use env_logger::{Env, TimestampPrecision};
 use healer_fuzzer::{boot, config::Config};
 use healer_vm::qemu::QemuConfig;
 use std::path::PathBuf;
+use structopt::StructOpt;
 use syz_wrapper::{report::ReportConfig, repro::ReproConfig};
-#[derive(Debug, Clap)]
-#[clap(version = crate_version!(), author=crate_authors!(), about=crate_description!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+
+#[derive(Debug, StructOpt)]
 struct Settings {
     /// Target os to fuzz.
-    #[clap(long, short = 'O', default_value = "linux")]
+    #[structopt(long, short = "O", default_value = "linux")]
     os: String,
     /// Parallel fuzzing jobs.
-    #[clap(long, short = 'j', default_value = "4")]
+    #[structopt(long, short = "j", default_value = "4")]
     job: u64,
     /// Directory to input prog.
-    #[clap(long, short = 'i')]
+    #[structopt(long, short = "i")]
     input: Option<PathBuf>,
     /// Directory to write kinds of output data.
-    #[clap(long, short = 'o', default_value = "output")]
+    #[structopt(long, short = "o", default_value = "output")]
     output: PathBuf,
     /// Path to kernel image.
-    #[clap(long, short = 'k', default_value = "bzImage")]
+    #[structopt(long, short = "k", default_value = "bzImage")]
     kernel_img: PathBuf,
     /// Path to disk image.
-    #[clap(long, short = 'd', default_value = "stretch.img")]
+    #[structopt(long, short = "d", default_value = "stretch.img")]
     disk_img: PathBuf,
     /// Directory of target kernel object.
-    #[clap(long, short = 'b')]
+    #[structopt(long, short = "b")]
     kernel_obj_dir: Option<PathBuf>,
     /// Srouce file directory of target kernel.
-    #[clap(long, short = 'r')]
+    #[structopt(long, short = "r")]
     kernel_src_dir: Option<PathBuf>,
     /// Directory to syzkaller dir.
-    #[clap(long, short = 'S', default_value = "./")]
+    #[structopt(long, short = "S", default_value = "./")]
     syz_dir: PathBuf,
     /// Relations file.
-    #[clap(long, short = 'R')]
+    #[structopt(long, short = "R")]
     relations: Option<PathBuf>,
     /// Path to ssh secret key to login to os under test.
-    #[clap(long, short = 's', default_value = "./stretch.id_rsa")]
+    #[structopt(long, short = "s", default_value = "./stretch.id_rsa")]
     ssh_key: PathBuf,
     /// Username to login os under test.
-    #[clap(long, short = 'u', default_value = "root")]
+    #[structopt(long, short = "u", default_value = "root")]
     ssh_user: String,
     /// QEMU smp.
-    #[clap(long, short = 'c', default_value = "2")]
+    #[structopt(long, short = "c", default_value = "2")]
     qemu_smp: u32,
     /// QEMU mem size in megabyte.
-    #[clap(long, short = 'm', default_value = "4096")]
+    #[structopt(long, short = "m", default_value = "4096")]
     qemu_mem: u32,
     /// Path to disabled syscalls.
-    #[clap(long)]
+    #[structopt(long)]
     disable_syscalls: Option<PathBuf>,
     /// Path to crash white list.
-    #[clap(long)]
+    #[structopt(long)]
     crash_whitelist: Option<PathBuf>,
     /// Number of instance used for repro.
-    #[clap(long, default_value = "2")]
+    #[structopt(long, default_value = "2")]
     repro_vm_count: u64,
     /// Disable call fault injection.
-    #[clap(long)]
+    #[structopt(long)]
     disable_fault_injection: bool,
     /// Whitelist for fault injection.
-    #[clap(long)]
+    #[structopt(long)]
     fault_injection_whitelist: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
-    let settings = Settings::parse();
+    let settings = Settings::from_args();
 
     let log_env = Env::new()
         .filter_or("HEALER_LOG", "info")
