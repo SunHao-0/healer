@@ -37,6 +37,7 @@ pub struct Config {
     pub repro_config: ReproConfig,
     pub report_config: ReportConfig,
     pub exec_config: Option<ExecConfig>,
+    pub use_unix_sock: bool,
 }
 
 impl Default for Config {
@@ -62,6 +63,7 @@ impl Default for Config {
             exec_config: None,
             repro_config: ReproConfig::default(),
             report_config: ReportConfig::default(),
+            use_unix_sock: true,
         }
     }
 }

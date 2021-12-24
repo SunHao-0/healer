@@ -180,7 +180,7 @@ fn check_download_csum<P: AsRef<Path>>(syz_zip: P, expected_csum: &str) -> bool 
 fn build_syz(syz_dir: PathBuf) -> Option<PathBuf> {
     if !syz_dir.join("bin").exists() {
         let patch_dir = PathBuf::from("./patches");
-        let headers = vec!["ivshm_setup.h", "features.h"];
+        let headers = vec!["ivshm_setup.h", "features.h", "unix_sock_setup.h"];
         for header in headers {
             let to = format!("executor/{}", header);
             copy(patch_dir.join(&header), syz_dir.join(&to)).unwrap_or_else(|e| {

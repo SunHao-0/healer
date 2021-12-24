@@ -67,6 +67,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         env: default_env_flags(false, "none"),
         features: 0,
         shms: None,
+        unix_socks: None,
         use_forksrv: target_exec_use_forksrv(sys_target),
     });
     let stats = Arc::new(Stats::new());
@@ -156,6 +157,9 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     if use_shm {
         setup_fuzzer_shm(0, &mut config).context("failed to setup shm")?;
     }
+    if config.use_unix_sock {
+        setup_unix_sock(0, &mut config);
+    }
     config.fixup();
     let mut qemu = QemuHandle::with_config(config.qemu_config.clone());
     let boot_duration = qemu.boot().context("failed to boot qemu")?;
@@ -181,7 +185,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     let exec_config = config.exec_config.take().unwrap();
     config.exec_config = Some(exec_config.clone()); // clear the shm
     let mut executor = ExecutorHandle::with_config(exec_config);
-    spawn_syz(&remote_exec_path, &qemu, &mut executor)
+    spawn_syz(&remote_exec_path, &mut qemu, &mut executor, &config)
         .context("failed to spawn executor for fuzzer-0")?;
     log::info!("ok, fuzzer-0 should be ready");
 
@@ -217,11 +221,14 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
 
         let handle = thread::spawn(move || {
             fuzzer_config.exec_config.as_mut().unwrap().pid = id;
-            fuzzer_config.fixup();
             if use_shm {
                 setup_fuzzer_shm(id, &mut fuzzer_config)
                     .with_context(|| format!("failed to setup shm for fuzzer-{}", id))?;
             }
+            if fuzzer_config.use_unix_sock {
+                setup_unix_sock(id, &mut fuzzer_config);
+            }
+            fuzzer_config.fixup();
 
             let mut qemu = QemuHandle::with_config(fuzzer_config.qemu_config.clone());
             let exec_config = fuzzer_config.exec_config.take().unwrap();
@@ -473,12 +480,25 @@ fn create_shm(id: &str, sz: usize) -> anyhow::Result<Shmem> {
 #[inline]
 fn spawn_syz(
     remote_syz_exec: &Path,
-    qemu: &QemuHandle,
+    qemu: &mut QemuHandle,
     exec: &mut ExecutorHandle,
+    config: &Config,
 ) -> anyhow::Result<()> {
-    let mut ssh = ssh_syz_cmd(remote_syz_exec, qemu);
-    ssh.arg("use-ivshm"); // use ivshm mode.
-    exec.spawn(ssh).map_err(|e| e.into())
+    if config.use_unix_sock {
+        let cmd = ssh_bg_syz_cmd(remote_syz_exec, qemu);
+        let exec_config = config.exec_config.as_ref().unwrap();
+        // TODO fix this
+        let (stdin, stdout, stderr) = exec_config.unix_socks.as_ref().unwrap();
+        let stdin = qemu.char_dev_sock(stdin).unwrap();
+        let stdout = qemu.char_dev_sock(stdout).unwrap();
+        let stderr = qemu.char_dev_sock(stderr);
+        exec.spawn_with_channel(cmd, (stdin, stdout, stderr))
+            .map_err(|e| e.into())
+    } else {
+        let mut ssh = ssh_syz_cmd(remote_syz_exec, qemu);
+        ssh.arg("use-ivshm"); // use ivshm mode.
+        exec.spawn(ssh).map_err(|e| e.into())
+    }
 }
 
 fn split_input_progs(progs: Vec<Prog>, job: u64) -> Vec<Vec<Prog>> {
@@ -511,6 +531,34 @@ fn ssh_syz_cmd(syz: &Path, qemu: &QemuHandle) -> Command {
 }
 
 #[inline]
+fn ssh_bg_syz_cmd(syz: &Path, qemu: &QemuHandle) -> Command {
+    let (vm_ip, vm_port) = qemu.addr().unwrap();
+    let (ssh_key, ssh_user) = qemu.ssh().unwrap();
+    let mut ssh = ssh_basic_cmd(vm_ip, vm_port, ssh_key, ssh_user);
+    let cmd = format!("nohup {} use-ivshm use-unix-socks&", syz.display());
+    ssh.arg(cmd);
+    ssh
+}
+
+fn setup_unix_sock(fuzzer_id: u64, config: &mut Config) {
+    // sync with executor
+    const PORT_STDIN: u8 = 30;
+    const PORT_STDOUT: u8 = 29;
+    const PORT_STDERR: u8 = 28;
+
+    let pid = std::process::id();
+    let stdin = format!("/tmp/healer-exec-stdin-{}-{}", pid, fuzzer_id);
+    let stdout = format!("/tmp/healer-exec-stdout-{}-{}", pid, fuzzer_id);
+    let stderr = format!("/tmp/healer-exec-stderr-{}-{}", pid, fuzzer_id);
+    config.exec_config.as_mut().unwrap().unix_socks =
+        Some((stdin.clone(), stdout.clone(), stderr.clone()));
+    config.qemu_config.serial_ports.push((stdin, PORT_STDIN));
+    config.qemu_config.serial_ports.push((stdout, PORT_STDOUT));
+    config.qemu_config.serial_ports.push((stderr, PORT_STDERR));
+    config.qemu_config.serial_ports.shrink_to_fit();
+}
+
+#[inline]
 fn prepare_exec_env(
     config: &mut Config,
     qemu: &mut QemuHandle,
@@ -526,11 +574,15 @@ fn prepare_exec_env(
         setup_features(ssh_syz, exec_config.features)
     })
     .context("failed to setup features")?;
-    retry_exec(|| spawn_syz(&remote_exec_path, qemu, exec))
-        .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))
+    let r = spawn_syz(&remote_exec_path, qemu, exec, config);
+    if r.is_err() {
+        retry_exec(|| exec.respawn())
+            .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))?
+    }
+    Ok(())
 }
 
-fn retry_exec<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
+pub(crate) fn retry_exec<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
     let mut tried = 0;
     let max = 3;
 

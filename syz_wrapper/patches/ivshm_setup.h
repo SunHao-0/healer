@@ -1,5 +1,5 @@
-#ifndef IVSHM_SETUP
-#define IVSHM_SETUP
+#ifndef HEALER_IVSHM_SETUP
+#define HEALER_IVSHM_SETUP
 
 #if GOOS_linux
 #include <dirent.h>
@@ -74,7 +74,7 @@ static void scan_pci_device()
 		failmsg("failed to open", "%s", PCI_SYSFS_PATH);
 	}
 	while ((entry = readdir(pci_dir))) {
-		long vendor, device, ragion_sz;
+		long vendor, device, region_sz;
 		int fd;
 		// skip ".", "..", or other special device.
 		if (entry->d_name[0] == '.')
@@ -87,15 +87,15 @@ static void scan_pci_device()
 
 		if (vendor == IVSHMEM_PCI_VENDOR_ID && device == IVSHMEM_PCI_DEVICE_ID) {
 			snprintf(dir_name, FILENAME_MAX, "%s/%s/resource", PCI_SYSFS_PATH, entry->d_name);
-			ragion_sz = get_resource2_sz(dir_name);
+			region_sz = get_resource2_sz(dir_name);
 			snprintf(dir_name, FILENAME_MAX, "%s/%s/resource2", PCI_SYSFS_PATH, entry->d_name);
 			fd = open(dir_name, O_RDWR);
-			if (ragion_sz == kMaxOutput) {
+			if (region_sz == kMaxOutput) {
 				out_fd_inner = fd;
-			} else if (ragion_sz == kMaxInput) {
+			} else if (region_sz == kMaxInput) {
 				in_fd_inner = fd;
 			} else {
-				failmsg("unexpect ivshm size:", "%ld", ragion_sz);
+				failmsg("unexpect ivshm size:", "%ld", region_sz);
 			}
 		}
 	}
@@ -118,7 +118,7 @@ static void ivshm_setup(int in_fd, int out_fd)
 
 #define IVSHM_SETUP_SNIPPET                                           \
 	do {                                                          \
-		if (argc == 2 && strcmp(argv[1], "use-ivshm") == 0) { \
+		if (argc >= 2 && strcmp(argv[1], "use-ivshm") == 0) { \
 			ivshm_setup(kInFd, kOutFd);                   \
 		}                                                     \
 	} while (0)
@@ -127,4 +127,4 @@ static void ivshm_setup(int in_fd, int out_fd)
 #error Currently, ivshm_setup only supports linux.
 #endif
 
-#endif // IVSHM_SETUP
+#endif // HEALER_IVSHM_SETUP

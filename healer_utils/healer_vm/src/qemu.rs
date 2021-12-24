@@ -5,6 +5,7 @@ use crate::HashMap;
 use healer_io::thread::read_background;
 use healer_io::BackgroundIoHandle;
 use nix::unistd::setsid;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::{
     collections::HashSet,
     os::unix::prelude::CommandExt,
@@ -38,6 +39,8 @@ pub struct QemuConfig {
     pub qemu_mem: u32,
     /// Shared memory device file path, creadted automatically if use qemu ivshm.
     pub shmids: Vec<(String, usize)>,
+    /// Virt serial port, socket based
+    pub serial_ports: Vec<(String, u8)>, // (path, port)
 }
 
 impl Default for QemuConfig {
@@ -51,6 +54,7 @@ impl Default for QemuConfig {
             qemu_smp: 2,
             qemu_mem: 4096,
             shmids: Vec::new(),
+            serial_ports: Vec::new(),
         }
     }
 }
@@ -63,10 +67,14 @@ pub enum QemuConfigError {
     InvalidPath(String),
     #[error("empty ssh username")]
     EmptySshUser,
-    #[error("invalid memeory size '{sz}'M: {reason}")]
+    #[error("invalid memory size '{sz}'M: {reason}")]
     InvalidMemSize { sz: usize, reason: String },
-    #[error("invalid memeory size '{sz}'M: {reason}")]
+    #[error("invalid smp '{sz}': {reason}")]
     InvalidCpuNumber { sz: usize, reason: String },
+    #[error("unix socket address '{0}' already in use")]
+    SockAddrInUse(String),
+    #[error("Bad port '{0}'")]
+    BadPort(u8),
     #[error("qemu check failed: {0}")]
     QemuCheckFailed(String),
 }
@@ -101,6 +109,14 @@ impl QemuConfig {
                 sz: self.qemu_mem as usize,
                 reason: "should be in range [128-1048576]".to_string(),
             });
+        }
+        for (p, port) in &self.serial_ports {
+            if PathBuf::from(p).exists() {
+                return Err(QemuConfigError::SockAddrInUse(p.clone()));
+            }
+            if *port > 30 {
+                return Err(QemuConfigError::BadPort(*port));
+            }
         }
         Self::check_qemu_version(&self.target)
     }
@@ -162,7 +178,10 @@ pub struct QemuHandle {
     qemu: Option<Child>,
     stdout: Option<BackgroundIoHandle>,
     stderr: Option<BackgroundIoHandle>,
+    /// Forwarded port
     ssh_port: Option<u16>,
+    /// Connected unix sockets
+    char_dev_socks: HashMap<String, UnixStream>,
 }
 
 impl QemuHandle {
@@ -178,7 +197,11 @@ impl QemuHandle {
         self.ssh_port.map(|port| (QEMU_SSH_IP.to_string(), port))
     }
 
-    pub fn is_alive(&mut self) -> bool {
+    pub fn char_dev_sock(&mut self, path: &str) -> Option<UnixStream> {
+        self.char_dev_socks.remove(path)
+    }
+
+    pub fn is_alive(&self) -> bool {
         if self.qemu.is_none() {
             return false;
         }
@@ -247,6 +270,7 @@ impl QemuHandle {
             stderr: None,
             ssh_port: None,
             qemu_cfg: config,
+            char_dev_socks: HashMap::default(),
         }
     }
 
@@ -258,6 +282,8 @@ impl QemuHandle {
         self.qemu = None;
         self.stdout = None;
         self.stderr = None;
+        self.char_dev_socks.clear();
+        self.ssh_port = None;
     }
 
     fn boot_inner(&mut self) -> Result<Duration, BootError> {
@@ -274,21 +300,51 @@ impl QemuHandle {
         }
         log::debug!("qemu cmd: {:?}", qemu_cmd);
 
+        let mut listeners = HashMap::new();
+        for (p, _) in &self.qemu_cfg.serial_ports {
+            let l = UnixListener::bind(p).map_err(|e| {
+                BootError::Boot(format!("failed to bind unix sort addr '{}': {}", p, e))
+            })?;
+            listeners.insert(p.clone(), l);
+        }
+        let ret = std::thread::spawn(move || {
+            let mut streams = HashMap::new();
+            for (p, l) in listeners {
+                match l.accept() {
+                    Ok((s, _)) => streams.insert(p, s),
+                    Err(e) => {
+                        let msg = format!(
+                            "failed to accept connection from unix socket '{}': {}",
+                            p, e
+                        );
+                        return Err(BootError::Boot(msg));
+                    }
+                };
+            }
+            Ok(streams)
+        });
         let mut child = qemu_cmd.spawn()?;
         let stdout = read_background(child.stdout.take().unwrap());
         let stderr = read_background(child.stderr.take().unwrap());
+        let listener_ret = ret
+            .join()
+            .map_err(|e| BootError::Boot(format!("failed to wait listener thread: {:?}", e)))?;
+        let streams = listener_ret?;
+        assert_eq!(streams.len(), self.qemu_cfg.serial_ports.len());
+
         *self = QemuHandle {
             qemu: Some(child),
             stdout: Some(stdout),
             stderr: Some(stderr),
             ssh_port: Some(ssh_fwd_port.0),
             qemu_cfg: self.qemu_cfg.clone(),
+            char_dev_socks: streams,
         };
 
         let now = Instant::now();
         let mut wait_duration = Duration::from_millis(500);
         let min_wait_duration = Duration::from_millis(100);
-        let detla = Duration::from_millis(100);
+        let delta = Duration::from_millis(100);
         let total = Duration::from_secs(60 * 10); // wait 10 minutes most;
         let mut waited = Duration::from_millis(0);
         let mut alive = false;
@@ -317,7 +373,7 @@ impl QemuHandle {
             }
             waited += wait_duration;
             if wait_duration > min_wait_duration {
-                wait_duration -= detla;
+                wait_duration -= delta;
             }
             tries += 1;
         }
@@ -326,7 +382,7 @@ impl QemuHandle {
             Ok(now.elapsed())
         } else {
             self.kill_qemu();
-            let mut info = format!("failed to boot in {}s: {:?}", waited.as_secs(), qemu_cmd);
+            let mut info = format!("failed to boot in {}s", waited.as_secs());
             if let Some(msg) = stderr_msg {
                 info += &format!("\nstderr:\n{}", msg);
             }
@@ -427,6 +483,24 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
         inshm.extend(obj);
     }
 
+    // -chardev socket,path=/tmp/foo,id=foo \
+    // -device virtio-serial -device virtserialport,chardev=foo,id=test0,nr=2 \
+    let mut sp_devs = Vec::new();
+    for (id, (p, port)) in conf.serial_ports.iter().enumerate() {
+        let ch = vec![
+            "-chardev".to_string(),
+            format!("socket,path={},id=ch{}", p, id),
+        ];
+        let devs = vec![
+            "-device".to_string(),
+            "virtio-serial".to_string(),
+            "-device".to_string(),
+            format!("virtserialport,chardev=ch{},id=dev{},nr={}", id, id, port),
+        ];
+        sp_devs.extend(ch);
+        sp_devs.extend(devs)
+    }
+
     let mut qemu_cmd = Command::new(static_conf.qemu);
     qemu_cmd
         .args(&common)
@@ -436,7 +510,8 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
         .args(&net)
         .args(&image)
         .args(&append_args)
-        .args(&inshm);
+        .args(&inshm)
+        .args(&sp_devs);
 
     (qemu_cmd, ssh_fwd_port)
 }

@@ -1,6 +1,6 @@
 use crate::{
     config::Config, crash::CrashManager, feedback::Feedback, fuzzer_log::set_fuzzer_id,
-    prepare_exec_env, spawn_syz, stats::Stats, util::stop_soon,
+    prepare_exec_env, retry_exec, stats::Stats, util::stop_soon,
 };
 use anyhow::Context;
 use healer_core::{
@@ -497,9 +497,9 @@ impl Fuzzer {
 
     #[inline]
     fn restart_exec(&mut self) -> anyhow::Result<()> {
-        let syz_exec = self.config.remote_exec.clone().unwrap();
-        if let Err(e) = spawn_syz(&syz_exec, &self.qemu, &mut self.executor) {
-            fuzzer_warn!("failed to spawn executor: {}", e);
+        let ret = retry_exec(|| self.executor.respawn());
+        if let Err(e) = ret {
+            fuzzer_warn!("failed to respawn executor: {}", e);
             fuzzer_warn!("rebooting vm",);
             self.reboot_vm()
                 .context("rebooting due to executor spawn failure")?;

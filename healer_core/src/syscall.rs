@@ -160,25 +160,13 @@ impl SyscallBuilder {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SyscallAttr {
     pub disabled: bool,
     pub timeout: u64,
     pub prog_timeout: u64,
     pub ignore_return: bool,
     pub breaks_returns: bool,
-}
-
-impl Default for SyscallAttr {
-    fn default() -> Self {
-        Self {
-            disabled: false,
-            timeout: 0,
-            prog_timeout: 0,
-            ignore_return: false,
-            breaks_returns: false,
-        }
-    }
 }
 
 impl SyscallAttr {

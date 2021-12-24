@@ -57,7 +57,7 @@ fn main() {
     println!("corpus len: {}", corpus.len());
     set_verbose(settings.verbose);
     for _ in 0..settings.n {
-        let mutated = mutate(&target, &rw, &corpus, &mut &mut rng, &mut p);
+        let mutated = mutate(&target, &rw, &corpus, &mut rng, &mut p);
         if mutated {
             println!("mutated prog:\n{}", p.display(&target));
         }

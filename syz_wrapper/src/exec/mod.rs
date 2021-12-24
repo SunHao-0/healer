@@ -14,11 +14,13 @@ use healer_core::{prog::Prog, target::Target};
 use healer_io::{thread::read_background, BackgroundIoHandle};
 use iota::iota;
 use shared_memory::Shmem;
+use std::io::Read;
+use std::os::unix::net::UnixStream;
 use std::{io::ErrorKind, time::Duration};
 use std::{
     io::Write,
     mem::size_of_val,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
 };
 use thiserror::Error;
 use timeout_readwrite::TimeoutReader;
@@ -183,7 +185,9 @@ pub enum ExecError {
 pub enum SpawnError {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
-    #[error("failed to handshake: {0}")]
+    #[error("spawn: {0}")]
+    Spawn(String),
+    #[error("handshake: {0}")]
     HandShake(std::io::Error),
 }
 
@@ -198,6 +202,8 @@ pub struct ExecConfig {
     pub env: EnvFlags,
     pub features: Features,
     pub shms: Option<(Shmem, Shmem)>,
+    pub unix_socks: Option<(String, String, String)>,
+    // stdin, stdout, stderr
     pub use_forksrv: bool,
 }
 
@@ -209,6 +215,7 @@ impl Clone for ExecConfig {
             features: self.features,
             shms: None,
             use_forksrv: self.use_forksrv,
+            unix_socks: self.unix_socks.clone(),
         }
     }
 }
@@ -219,20 +226,23 @@ pub struct ExecutorHandle {
 
     use_shm: bool,
     use_forksrv: bool,
+    use_extern_chan: bool,
     in_shm: Option<Shmem>,
     out_shm: Option<Shmem>,
     in_mem: Option<Box<[u8]>>,
     out_mem: Option<Box<[u8]>>,
 
+    cmd: Option<Command>,
     exec_child: Option<Child>,
-    exec_stdin: Option<ChildStdin>,
-    exec_stdout: Option<TimeoutReader<ChildStdout>>,
+    exec_stdin: Option<Box<dyn Write + 'static>>,
+    exec_stdout: Option<Box<dyn Read + 'static>>,
     exec_stderr: Option<BackgroundIoHandle>,
 
     debug: bool,
 }
 
 unsafe impl Send for ExecutorHandle {}
+
 unsafe impl Sync for ExecutorHandle {}
 
 impl ExecutorHandle {
@@ -253,11 +263,13 @@ impl ExecutorHandle {
             pid: config.pid,
             use_shm,
             use_forksrv: config.use_forksrv,
+            use_extern_chan: config.unix_socks.is_some(),
             in_shm,
             out_shm,
             in_mem,
             out_mem,
             env: config.env,
+            cmd: None,
             exec_child: None,
             exec_stdin: None,
             exec_stdout: None,
@@ -291,7 +303,81 @@ impl ExecutorHandle {
         self.parse_output(p)
     }
 
+    pub fn respawn(&mut self) -> Result<(), SpawnError> {
+        if self.use_extern_chan {
+            self.do_bg_spawn()?;
+            if self.use_forksrv {
+                if let Err(e) = self.handshake() {
+                    return Err(e);
+                }
+            }
+            Ok(())
+        } else {
+            let cmd = self.cmd.as_ref().unwrap();
+            let mut exec_cmd = Command::new(cmd.get_program());
+            exec_cmd.args(cmd.get_args());
+            for (k, v) in cmd.get_envs().filter(|(_, v)| v.is_some()) {
+                exec_cmd.env(k, v.unwrap());
+            }
+            if let Some(dir) = cmd.get_current_dir() {
+                exec_cmd.current_dir(dir);
+            }
+            self.spawn(exec_cmd)
+        }
+    }
+
+    pub fn spawn_with_channel(
+        &mut self,
+        exec_cmd: Command,
+        (stdin, stdout, stderr): (UnixStream, UnixStream, Option<UnixStream>),
+    ) -> Result<(), SpawnError> {
+        assert!(self.use_extern_chan);
+        self.reset();
+
+        self.cmd = Some(exec_cmd);
+        if let Err(e) = self.do_bg_spawn() {
+            self.cmd = None;
+            return Err(e);
+        }
+
+        stdout
+            .set_read_timeout(Some(Duration::from_secs(30)))
+            .unwrap();
+        self.exec_stdin = Some(Box::new(stdin));
+        self.exec_stdout = Some(Box::new(stdout));
+        if let Some(stderr) = stderr {
+            self.exec_stderr = Some(read_background(stderr));
+        }
+
+        if self.use_forksrv {
+            if let Err(e) = self.handshake() {
+                self.cmd = None;
+                self.reset();
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn do_bg_spawn(&mut self) -> Result<(), SpawnError> {
+        let exec_cmd = self.cmd.as_mut().unwrap();
+
+        exec_cmd.stdin(Stdio::null());
+        exec_cmd.stdout(Stdio::piped());
+        exec_cmd.stderr(Stdio::piped());
+
+        let output = exec_cmd.output()?;
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr).into_owned();
+            Err(SpawnError::Spawn(err))
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn spawn(&mut self, mut exec_cmd: Command) -> Result<(), SpawnError> {
+        assert!(!self.use_extern_chan);
         self.kill();
 
         exec_cmd.stdin(Stdio::piped());
@@ -303,14 +389,10 @@ impl ExecutorHandle {
         }
 
         let mut child = exec_cmd.spawn()?;
-        self.exec_stdin = Some(child.stdin.take().unwrap());
-        self.exec_stdout = Some(TimeoutReader::new(
-            child.stdout.take().unwrap(),
-            Duration::from_secs(30),
-        ));
-        if self.debug {
-            self.exec_stderr = Some(read_background(child.stderr.take().unwrap()));
-        }
+        self.exec_stdin = Some(Box::new(child.stdin.take().unwrap()));
+        let stdout = TimeoutReader::new(child.stdout.take().unwrap(), Duration::from_secs(30));
+        self.exec_stdout = Some(Box::new(stdout));
+        self.exec_stderr = Some(read_background(child.stderr.take().unwrap()));
         self.exec_child = Some(child);
 
         if self.use_forksrv {
@@ -320,6 +402,7 @@ impl ExecutorHandle {
             }
         }
 
+        self.cmd = Some(exec_cmd);
         Ok(())
     }
 
@@ -426,7 +509,7 @@ impl ExecutorHandle {
         }
     }
 
-    fn parse_output<'a>(&'a self, p: &Prog) -> Result<ProgExecInfo<'a, 'a>, ExecError> {
+    fn parse_output(&self, p: &Prog) -> Result<ProgExecInfo, ExecError> {
         const EXTRA_REPLY_INDEX: u32 = 0xffffffff;
 
         let mut out_buf = self
@@ -527,39 +610,22 @@ impl ExecutorHandle {
         } else {
             ExecError::Io(e)
         }
-        // use std::os::unix::process::ExitStatusExt;
-
-        // let status = match self.child().wait() {
-        //     Ok(status) => status,
-        //     Err(_) => return ExecError::Io(e), // ignore wait error
-        // };
-
-        // if let Some(code) = status.signal() {
-        //     if code == nix::sys::signal::SIGTERM as i32 {
-        //         return ExecError::TimeOut;
-        //     }
-        // }
-
-        // ExecError::Io(e)
     }
-
-    // #[inline]
-    // fn child(&mut self) -> &mut Child {
-    //     self.exec_child.as_mut().unwrap()
-    // }
 
     #[inline]
     fn kill(&mut self) {
         if let Some(child) = self.exec_child.as_mut() {
             let _ = child.kill();
             let _ = child.wait();
+            self.exec_child = None;
         }
-        self.reset();
+        if !self.use_extern_chan {
+            self.reset();
+        }
     }
 
     #[inline]
     fn reset(&mut self) {
-        self.exec_child = None;
         self.exec_stdin = None;
         self.exec_stdout = None;
         self.exec_stderr = None;
