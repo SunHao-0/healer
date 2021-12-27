@@ -162,7 +162,7 @@ impl CrashManager {
         let fname = out_dir.join("repro.prog");
         write(&fname, prog.as_bytes()).context("failed to write repro.prog")?;
         let fname = out_dir.join("run_history");
-        write(&fname, repro.log.as_bytes()).context("failed to write run hitory")?;
+        write(&fname, repro.log.as_bytes()).context("failed to write run history")?;
         let fname = out_dir.join("repro.log");
         write(&fname, repro.repro_log.as_bytes()).context("failed to write repro log")?;
 

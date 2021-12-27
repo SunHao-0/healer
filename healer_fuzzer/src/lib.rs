@@ -69,6 +69,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
         shms: None,
         unix_socks: None,
         use_forksrv: target_exec_use_forksrv(sys_target),
+        debug: config.debug,
     });
     let stats = Arc::new(Stats::new());
 
@@ -76,7 +77,7 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     if let Some(r) = config.relations.as_ref() {
         log::info!("loading extra relations...");
         load_extra_relations(r, &mut relation, &target)
-            .context("failed to load extra reltaions")?;
+            .context("failed to load extra relations")?;
         stats.set_re(relation.num() as u64);
     }
 
@@ -484,6 +485,7 @@ fn spawn_syz(
     exec: &mut ExecutorHandle,
     config: &Config,
 ) -> anyhow::Result<()> {
+    kill_syz(qemu);
     if config.use_unix_sock {
         let cmd = ssh_bg_syz_cmd(remote_syz_exec, qemu);
         let exec_config = config.exec_config.as_ref().unwrap();
@@ -535,9 +537,18 @@ fn ssh_bg_syz_cmd(syz: &Path, qemu: &QemuHandle) -> Command {
     let (vm_ip, vm_port) = qemu.addr().unwrap();
     let (ssh_key, ssh_user) = qemu.ssh().unwrap();
     let mut ssh = ssh_basic_cmd(vm_ip, vm_port, ssh_key, ssh_user);
-    let cmd = format!("nohup {} use-ivshm use-unix-socks&", syz.display());
+    let cmd = format!("{} use-ivshm use-unix-socks &", syz.display());
     ssh.arg(cmd);
     ssh
+}
+
+#[inline]
+fn kill_syz(qemu: &QemuHandle) {
+    let (vm_ip, vm_port) = qemu.addr().unwrap();
+    let (ssh_key, ssh_user) = qemu.ssh().unwrap();
+    let mut ssh = ssh_basic_cmd(vm_ip, vm_port, ssh_key, ssh_user);
+    ssh.arg("pkill syz-executor");
+    let _ = ssh.output();
 }
 
 fn setup_unix_sock(fuzzer_id: u64, config: &mut Config) {
@@ -552,6 +563,7 @@ fn setup_unix_sock(fuzzer_id: u64, config: &mut Config) {
     let stderr = format!("/tmp/healer-exec-stderr-{}-{}", pid, fuzzer_id);
     config.exec_config.as_mut().unwrap().unix_socks =
         Some((stdin.clone(), stdout.clone(), stderr.clone()));
+    config.qemu_config.serial_ports.clear();
     config.qemu_config.serial_ports.push((stdin, PORT_STDIN));
     config.qemu_config.serial_ports.push((stdout, PORT_STDOUT));
     config.qemu_config.serial_ports.push((stderr, PORT_STDERR));

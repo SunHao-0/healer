@@ -171,7 +171,7 @@ pub enum ExecError {
     Io(#[from] std::io::Error),
     #[error("prog serialization: {0}")]
     ProgSerialization(#[from] SerializeError),
-    #[error("exec internel")]
+    #[error("exec internal")]
     ExecInternal,
     #[error("killed(maybe cause by timeout)")]
     TimeOut,
@@ -205,6 +205,7 @@ pub struct ExecConfig {
     pub unix_socks: Option<(String, String, String)>,
     // stdin, stdout, stderr
     pub use_forksrv: bool,
+    pub debug: bool,
 }
 
 impl Clone for ExecConfig {
@@ -216,6 +217,7 @@ impl Clone for ExecConfig {
             shms: None,
             use_forksrv: self.use_forksrv,
             unix_socks: self.unix_socks.clone(),
+            debug: self.debug,
         }
     }
 }
@@ -274,7 +276,7 @@ impl ExecutorHandle {
             exec_stdin: None,
             exec_stdout: None,
             exec_stderr: None,
-            debug: false,
+            debug: config.debug,
         }
     }
 
@@ -345,8 +347,16 @@ impl ExecutorHandle {
             .unwrap();
         self.exec_stdin = Some(Box::new(stdin));
         self.exec_stdout = Some(Box::new(stdout));
-        if let Some(stderr) = stderr {
-            self.exec_stderr = Some(read_background(stderr));
+        if let Some(mut stderr) = stderr {
+            if self.debug {
+                self.exec_stderr = Some(read_background(stderr, self.debug));
+            } else {
+                self.exec_stderr = None;
+                std::thread::spawn(move || {
+                    let mut sink = std::io::sink();
+                    let _ = std::io::copy(&mut stderr, &mut sink);
+                });
+            }
         }
 
         if self.use_forksrv {
@@ -372,6 +382,10 @@ impl ExecutorHandle {
             let err = String::from_utf8_lossy(&output.stderr).into_owned();
             Err(SpawnError::Spawn(err))
         } else {
+            if self.debug {
+                let out = String::from_utf8_lossy(&output.stdout);
+                println!("{:?}: {}", exec_cmd, out);
+            }
             Ok(())
         }
     }
@@ -392,7 +406,9 @@ impl ExecutorHandle {
         self.exec_stdin = Some(Box::new(child.stdin.take().unwrap()));
         let stdout = TimeoutReader::new(child.stdout.take().unwrap(), Duration::from_secs(30));
         self.exec_stdout = Some(Box::new(stdout));
-        self.exec_stderr = Some(read_background(child.stderr.take().unwrap()));
+        if let Some(stderr) = child.stderr.take() {
+            self.exec_stderr = Some(read_background(stderr, self.debug));
+        }
         self.exec_child = Some(child);
 
         if self.use_forksrv {
@@ -412,8 +428,10 @@ impl ExecutorHandle {
             env_flags: self.env,
             pid: self.pid,
         };
+        log::debug!("{:?}", req);
         write_all(&mut self.exec_stdin.as_mut().unwrap(), &req).map_err(SpawnError::HandShake)?;
 
+        log::debug!("exec-{}: waiting...", self.pid);
         let reply: HandshakeReply =
             read_exact(&mut self.exec_stdout.as_mut().unwrap()).map_err(SpawnError::HandShake)?;
         if reply.magic != OUT_MAGIC {

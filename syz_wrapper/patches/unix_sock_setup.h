@@ -14,13 +14,13 @@
 #define PORT_STDOUT 29
 #define PORT_STDERR 28
 
-int open_vport_dev(int port)
+int open_vport_dev(int id, int port)
 {
 	char buf[FILENAME_MAX];
 	int fd;
 
-	snprintf(buf, FILENAME_MAX, "/dev/vport0p%d", port);
-	fd = open(buf, O_RDONLY);
+	snprintf(buf, FILENAME_MAX, "/dev/vport%dp%d", id, port);
+	fd = open(buf, O_RDWR);
 	if (fd < 0) {
 		failmsg("failed to open: ", "%s", buf);
 	}
@@ -34,7 +34,7 @@ void setup_unix_sock()
 	int fd;
 
 	for (; i != 3; i++) {
-		fd = open_vport_dev(mappings[i][0]);
+		fd = open_vport_dev(i + 1, mappings[i][0]);
 		if (dup2(fd, mappings[i][1]) < 0) {
 			failmsg("failed to dup:", "%d -> %d", fd, mappings[i][1]);
 		}
@@ -44,7 +44,7 @@ void setup_unix_sock()
 
 #define SETUP_UNIX_SOCKS_SNIPPET                                           \
 	do {                                                               \
-		if (argc == 3 && strcmp(argv[2], "use-unix-socks") == 0) { \
+		if (argc >= 3 && strcmp(argv[2], "use-unix-socks") == 0) { \
 			setup_unix_sock();                                 \
 		}                                                          \
 	} while (0)

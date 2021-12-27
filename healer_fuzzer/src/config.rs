@@ -29,6 +29,7 @@ pub struct Config {
     pub disabled_calls: Option<PathBuf>,
     pub features: Option<Features>,
     pub disable_fault_injection: bool,
+    pub disable_repro: bool,
     pub fault_injection_whitelist_path: Option<PathBuf>,
     pub fault_injection_regex: Option<RegexSet>,
     pub remote_exec: Option<PathBuf>,
@@ -38,6 +39,7 @@ pub struct Config {
     pub report_config: ReportConfig,
     pub exec_config: Option<ExecConfig>,
     pub use_unix_sock: bool,
+    pub debug: bool,
 }
 
 impl Default for Config {
@@ -47,7 +49,7 @@ impl Default for Config {
             relations: None,
             input: None,
             crash_whitelist: None,
-            job: 1,
+            job: 4,
             syz_dir: current_dir().unwrap(),
             output: current_dir().unwrap().join("output"),
             skip_repro: false,
@@ -55,6 +57,7 @@ impl Default for Config {
             disable_relation_detect: false,
             features: None,
             disable_fault_injection: false,
+            disable_repro: false,
             fault_injection_whitelist_path: None,
             fault_injection_regex: None,
             remote_exec: None,
@@ -64,11 +67,14 @@ impl Default for Config {
             repro_config: ReproConfig::default(),
             report_config: ReportConfig::default(),
             use_unix_sock: true,
+            debug: false,
         }
     }
 }
 
-unsafe impl Send for Config {} // do not send config while holding shm.
+unsafe impl Send for Config {}
+
+// do not send config while holding shm.
 unsafe impl Sync for Config {}
 
 impl Config {
@@ -172,6 +178,7 @@ impl Config {
         self.qemu_config.disk_img = path.to_str().unwrap().to_string();
         let path = canonicalize(&self.qemu_config.ssh_key).unwrap();
         self.qemu_config.ssh_key = path.to_str().unwrap().to_string();
+        self.qemu_config.debug = self.debug;
 
         self.repro_config.id = self.exec_config.as_ref().unwrap().pid;
         self.repro_config.target = self.qemu_config.target.clone();
@@ -192,6 +199,10 @@ impl Config {
         if let Some(kernel_src) = self.report_config.kernel_src_dir.as_mut() {
             let path = canonicalize(&kernel_src).unwrap();
             *kernel_src = path.to_str().unwrap().to_string();
+        }
+
+        if let Some(config) = self.exec_config.as_mut() {
+            config.debug = self.debug;
         }
     }
 

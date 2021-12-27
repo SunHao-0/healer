@@ -28,7 +28,7 @@ struct Settings {
     /// Directory of target kernel object.
     #[structopt(long, short = "b")]
     kernel_obj_dir: Option<PathBuf>,
-    /// Srouce file directory of target kernel.
+    /// Source file directory of target kernel.
     #[structopt(long, short = "r")]
     kernel_src_dir: Option<PathBuf>,
     /// Directory to syzkaller dir.
@@ -61,9 +61,15 @@ struct Settings {
     /// Disable call fault injection.
     #[structopt(long)]
     disable_fault_injection: bool,
+    /// Disable crash repro.
+    #[structopt(long)]
+    disable_repro: bool,
     /// Whitelist for fault injection.
     #[structopt(long)]
     fault_injection_whitelist: Option<PathBuf>,
+    /// Debug mode.
+    #[structopt(long)]
+    debug: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -73,6 +79,8 @@ fn main() -> anyhow::Result<()> {
         .filter_or("HEALER_LOG", "info")
         .default_write_style_or("auto");
     env_logger::Builder::from_env(log_env)
+        .format_module_path(false)
+        .format_target(false)
         .format_timestamp(Some(TimestampPrecision::Seconds))
         .init();
 
@@ -87,6 +95,7 @@ fn main() -> anyhow::Result<()> {
         disabled_calls: settings.disable_syscalls,
         disable_fault_injection: settings.disable_fault_injection,
         fault_injection_whitelist_path: settings.fault_injection_whitelist,
+        disable_repro: settings.disable_repro,
         qemu_config: QemuConfig {
             qemu_smp: settings.qemu_smp,
             qemu_mem: settings.qemu_mem,
@@ -109,6 +118,7 @@ fn main() -> anyhow::Result<()> {
                 .map(|s| s.to_str().unwrap().to_string()),
             ..Default::default()
         },
+        debug: settings.debug,
         ..Default::default()
     };
 

@@ -29,7 +29,7 @@ fn init_runtime() {
             .expect("failed to spawn healer background thread");
 
         barrier.wait();
-        log::info!("backgound io initalized");
+        log::info!("background io initialized");
     });
 }
 
@@ -38,10 +38,10 @@ pub fn runtime() -> &'static Runtime {
     unsafe { RUNTIME.as_ref().unwrap() }
 }
 
-pub fn read_background<T: IntoRawFd>(f: T) -> BackgroundIoHandle {
+pub fn read_background<T: IntoRawFd>(f: T, debug: bool) -> BackgroundIoHandle {
     let fd = f.into_raw_fd();
     let f = unsafe { File::from_raw_fd(fd) };
-    let mut f = tokio::fs::File::from_std(f);
+    let f = tokio::fs::File::from_std(f);
     let buf = Arc::new(Mutex::new(Vec::with_capacity(4096)));
     let finished = Arc::new(AtomicBool::new(false));
     let buf1 = Arc::clone(&buf);
@@ -49,15 +49,19 @@ pub fn read_background<T: IntoRawFd>(f: T) -> BackgroundIoHandle {
 
     runtime().spawn(async move {
         use tokio::io::*;
-        let buf = vec![0_u8; 1024 * 128];
-        let mut buf = buf.into_boxed_slice();
+        let mut buf = String::with_capacity(4096);
+        let mut reader = BufReader::new(f);
 
-        while let Ok(sz) = f.read(&mut buf).await {
+        while let Ok(sz) = reader.readline(&mut buf).await {
             if sz == 0 {
                 break;
             }
             let mut shared_buf = buf1.lock().unwrap();
             shared_buf.extend(&buf[..sz]);
+            if debug {
+                print!("{}", &buf[..sz]);
+            }
+            buf.clear();
         }
 
         finished1.store(true, Ordering::Relaxed);

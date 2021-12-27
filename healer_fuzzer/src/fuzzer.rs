@@ -1,5 +1,5 @@
 use crate::{
-    config::Config, crash::CrashManager, feedback::Feedback, fuzzer_log::set_fuzzer_id,
+    config::Config, crash::CrashManager, feedback::Feedback, fuzzer_log::set_fuzzer_id, kill_syz,
     prepare_exec_env, retry_exec, stats::Stats, util::stop_soon,
 };
 use anyhow::Context;
@@ -189,11 +189,14 @@ impl Fuzzer {
                 Ok(new_cov)
             }
             Err(e) => {
-                if let Some(crash) = self.check_vm(&p, e) {
+                if let Some(crash) = self.check_vm(&p, &e) {
                     self.handle_crash(&p, crash)
                         .context("failed to handle crash")?;
                     Ok(true)
                 } else {
+                    if let ExecError::UnexpectedExitStatus(_) | ExecError::OutputParse(_) = e {
+                        fuzzer_warn!("executor: {}", e)
+                    }
                     self.restart_exec()?;
                     Ok(false)
                 }
@@ -300,7 +303,7 @@ impl Fuzzer {
         opt.enable(FLAG_INJECT_FAULT);
         opt.fault_call = idx as i32;
 
-        for i in 0..100 {
+        for i in 1..=100 {
             opt.fault_nth = i;
             self.record_execution(p, &opt);
             self.shared_state.stats.inc_exec_total();
@@ -315,7 +318,7 @@ impl Fuzzer {
                     self.clear_vm_log();
                 }
                 Err(e) => {
-                    if let Some(crash) = self.check_vm(p, e) {
+                    if let Some(crash) = self.check_vm(p, &e) {
                         self.handle_crash(p, crash)
                             .context("failed to handle crash")?;
                     } else {
@@ -376,7 +379,7 @@ impl Fuzzer {
                 ret
             }
             Err(e) => {
-                if let Some(crash) = self.check_vm(p, e) {
+                if let Some(crash) = self.check_vm(p, &e) {
                     self.handle_crash(p, crash)?;
                 } else {
                     self.restart_exec()?;
@@ -386,7 +389,7 @@ impl Fuzzer {
         }
     }
 
-    fn check_vm(&mut self, p: &Prog, e: ExecError) -> Option<Vec<u8>> {
+    fn check_vm(&mut self, p: &Prog, e: &ExecError) -> Option<Vec<u8>> {
         fuzzer_debug!("failed to exec prog: {}", e);
 
         let crash_error = !matches!(
@@ -420,7 +423,6 @@ impl Fuzzer {
                     .stats
                     .set_unique_crash(self.shared_state.crash.unique_crashes());
                 if need_repro {
-                    fuzzer_info!("trying to repro...",);
                     self.try_repro(&title, &crash_log)
                         .context("failed to repro")?;
                 }
@@ -437,10 +439,10 @@ impl Fuzzer {
     }
 
     fn try_repro(&mut self, title: &str, crash_log: &[u8]) -> anyhow::Result<()> {
-        if stop_soon() {
+        if self.config.disable_repro || stop_soon() {
             return Ok(());
         }
-
+        fuzzer_info!("trying to repro...",);
         self.shared_state.stats.inc_repro();
         self.shared_state.stats.dec_fuzzing();
         let history = self.run_history.make_contiguous();
@@ -487,7 +489,7 @@ impl Fuzzer {
             v.set(n + 1);
             n
         });
-        if n >= 4 {
+        if n >= 16 {
             LAST_CLEAR.with(|v| {
                 v.set(0);
             });
@@ -497,7 +499,10 @@ impl Fuzzer {
 
     #[inline]
     fn restart_exec(&mut self) -> anyhow::Result<()> {
-        let ret = retry_exec(|| self.executor.respawn());
+        let ret = retry_exec(|| {
+            kill_syz(&self.qemu);
+            self.executor.respawn()
+        });
         if let Err(e) = ret {
             fuzzer_warn!("failed to respawn executor: {}", e);
             fuzzer_warn!("rebooting vm",);

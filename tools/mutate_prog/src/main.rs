@@ -42,7 +42,7 @@ fn main() {
     let mut rng = SmallRng::from_entropy();
     let mut p = if let Some(prog_file) = settings.prog.as_ref() {
         let p_str = read_to_string(prog_file).unwrap_or_else(|e| {
-            eprintln!("faile to read '{}': {}", prog_file.display(), e);
+            eprintln!("failed to read '{}': {}", prog_file.display(), e);
             exit(1)
         });
         parse_prog(&target, &p_str).unwrap_or_else(|e| {

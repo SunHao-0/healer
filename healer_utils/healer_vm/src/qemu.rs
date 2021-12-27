@@ -37,10 +37,12 @@ pub struct QemuConfig {
     pub qemu_smp: u32,
     /// Mem size in megabyte.
     pub qemu_mem: u32,
-    /// Shared memory device file path, creadted automatically if use qemu ivshm.
+    /// Shared memory device file path, created automatically if use qemu ivshm.
     pub shmids: Vec<(String, usize)>,
     /// Virt serial port, socket based
     pub serial_ports: Vec<(String, u8)>, // (path, port)
+    /// Debug mode
+    pub debug: bool,
 }
 
 impl Default for QemuConfig {
@@ -55,6 +57,7 @@ impl Default for QemuConfig {
             qemu_mem: 4096,
             shmids: Vec::new(),
             serial_ports: Vec::new(),
+            debug: false,
         }
     }
 }
@@ -139,17 +142,17 @@ impl QemuConfig {
             if let Some(version_idx) = output.find("version") {
                 let start = version_idx + "version".len();
                 let output = &output[start..].trim();
-                // the first charactor should be majar version
-                if let Some(majar) = output.chars().next() {
-                    if let Some(majar) = majar.to_digit(10) {
-                        if majar < MIN_QEMU_VERSION {
-                            return Err(QemuConfigError::QemuCheckFailed(format!(
+                // the first character should be major version
+                if let Some(major) = output.chars().next() {
+                    if let Some(major) = major.to_digit(10) {
+                        return if major < MIN_QEMU_VERSION {
+                            Err(QemuConfigError::QemuCheckFailed(format!(
                                 "version not match: your version '{}', required '{}'",
-                                majar, MIN_QEMU_VERSION
-                            )));
+                                major, MIN_QEMU_VERSION
+                            )))
                         } else {
-                            return Ok(());
-                        }
+                            Ok(())
+                        };
                     }
                 }
             }
@@ -182,6 +185,8 @@ pub struct QemuHandle {
     ssh_port: Option<u16>,
     /// Connected unix sockets
     char_dev_socks: HashMap<String, UnixStream>,
+
+    listeners: HashMap<String, UnixListener>,
 }
 
 impl QemuHandle {
@@ -258,6 +263,10 @@ impl QemuHandle {
 
 impl Drop for QemuHandle {
     fn drop(&mut self) {
+        let ls = std::mem::take(&mut self.listeners);
+        for (p, _) in ls {
+            let _ = std::fs::remove_file(p);
+        }
         self.kill_qemu();
     }
 }
@@ -271,6 +280,7 @@ impl QemuHandle {
             ssh_port: None,
             qemu_cfg: config,
             char_dev_socks: HashMap::default(),
+            listeners: HashMap::new(),
         }
     }
 
@@ -300,18 +310,22 @@ impl QemuHandle {
         }
         log::debug!("qemu cmd: {:?}", qemu_cmd);
 
-        let mut listeners = HashMap::new();
-        for (p, _) in &self.qemu_cfg.serial_ports {
-            let l = UnixListener::bind(p).map_err(|e| {
-                BootError::Boot(format!("failed to bind unix sort addr '{}': {}", p, e))
-            })?;
-            listeners.insert(p.clone(), l);
+        if self.listeners.is_empty() {
+            for (p, _) in &self.qemu_cfg.serial_ports {
+                let l = UnixListener::bind(p).map_err(|e| {
+                    BootError::Boot(format!("failed to bind unix sort addr '{}': {}", p, e))
+                })?;
+                self.listeners.insert(p.clone(), l);
+            }
         }
+
+        let listeners: &'static HashMap<String, UnixListener> =
+            unsafe { std::mem::transmute(&self.listeners) };
         let ret = std::thread::spawn(move || {
             let mut streams = HashMap::new();
             for (p, l) in listeners {
                 match l.accept() {
-                    Ok((s, _)) => streams.insert(p, s),
+                    Ok((s, _)) => streams.insert(p.clone(), s),
                     Err(e) => {
                         let msg = format!(
                             "failed to accept connection from unix socket '{}': {}",
@@ -324,8 +338,8 @@ impl QemuHandle {
             Ok(streams)
         });
         let mut child = qemu_cmd.spawn()?;
-        let stdout = read_background(child.stdout.take().unwrap());
-        let stderr = read_background(child.stderr.take().unwrap());
+        let stdout = read_background(child.stdout.take().unwrap(), self.qemu_cfg.debug);
+        let stderr = read_background(child.stderr.take().unwrap(), self.qemu_cfg.debug);
         let listener_ret = ret
             .join()
             .map_err(|e| BootError::Boot(format!("failed to wait listener thread: {:?}", e)))?;
@@ -338,6 +352,7 @@ impl QemuHandle {
             stderr: Some(stderr),
             ssh_port: Some(ssh_fwd_port.0),
             qemu_cfg: self.qemu_cfg.clone(),
+            listeners: std::mem::take(&mut self.listeners),
             char_dev_socks: streams,
         };
 
@@ -475,7 +490,7 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
         let obj = vec![
             "-object".to_string(),
             format!(
-                "memory-backend-file,size={},share,mem-path={},id=hostmem{}",
+                "memory-backend-file,size={},share=on,mem-path={},id=hostmem{}",
                 sz, f, i
             ),
         ];
@@ -493,9 +508,9 @@ fn build_qemu_command(conf: &QemuConfig) -> (Command, PortGuard) {
         ];
         let devs = vec![
             "-device".to_string(),
-            "virtio-serial".to_string(),
+            "virtio-serial-pci".to_string(),
             "-device".to_string(),
-            format!("virtserialport,chardev=ch{},id=dev{},nr={}", id, id, port),
+            format!("virtserialport,chardev=ch{},name=dev{},nr={}", id, id, port),
         ];
         sp_devs.extend(ch);
         sp_devs.extend(devs)
