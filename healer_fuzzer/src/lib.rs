@@ -191,8 +191,17 @@ pub fn boot(mut config: Config) -> anyhow::Result<()> {
     log::info!("ok, fuzzer-0 should be ready");
 
     setup_signal_handler();
+
+    let out_stats = if config.bench {
+        Some(config.output.clone().join("stats.json"))
+    } else {
+        None
+    };
     thread::spawn(move || {
-        stats.report(Duration::from_secs(10));
+        if let Err(e) = stats.report(Duration::from_secs(10), out_stats) {
+            // Handle this more carefully
+            log::error!("failed to write stats: {}", e);
+        }
     });
 
     let mut fuzzers = Vec::with_capacity(config.job as usize);

@@ -14,6 +14,9 @@ healer_core = {path = "../healer_core"}
 healer_alloc = {path = "../healer_utils/healer_alloc"}
 healer_vm = {path = "../healer_utils/healer_vm"}
 syz_wrapper = {path = "../syz_wrapper"}
+serde = {version = "1"}
+serde_derive = "1"
+serde_json = "1"
 ahash = "0.7"
 rand = {version = "0.8", features = ["small_rng"]}
 log = "0.4"

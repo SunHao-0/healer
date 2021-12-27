@@ -1,11 +1,15 @@
 use crate::util::stop_soon;
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::fs::{File, OpenOptions};
+use std::path::Path;
 use std::thread::sleep;
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub(crate) struct Stats {
     fuzzing: AtomicU64,
     repro: AtomicU64,
@@ -73,7 +77,24 @@ impl Stats {
         self.max_cov.store(n, Ordering::Relaxed);
     }
 
-    pub(crate) fn report(&self, duration: Duration) {
+    pub(crate) fn report<P: AsRef<Path>>(
+        &self,
+        duration: Duration,
+        out_dir: Option<P>,
+    ) -> Result<()> {
+        let mut f: Option<File> = if let Some(d) = out_dir {
+            let p = d.as_ref();
+            let f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .write(true)
+                .open(p)
+                .context("report")?;
+            Some(f)
+        } else {
+            None
+        };
+
         while !stop_soon() {
             sleep(duration);
 
@@ -96,6 +117,12 @@ impl Stats {
                 max_cov,
                 corpus_size
             );
+
+            if let Some(f) = f.as_mut() {
+                serde_json::to_writer_pretty(f, self).context("dump stats")?;
+            }
         }
+
+        Ok(())
     }
 }

@@ -67,6 +67,9 @@ struct Settings {
     /// Whitelist for fault injection.
     #[structopt(long)]
     fault_injection_whitelist: Option<PathBuf>,
+    /// Dump stats in json format to output dir.
+    #[structopt(long)]
+    bench: bool,
     /// Debug mode.
     #[structopt(long)]
     debug: bool,
@@ -118,6 +121,7 @@ fn main() -> anyhow::Result<()> {
                 .map(|s| s.to_str().unwrap().to_string()),
             ..Default::default()
         },
+        bench: settings.bench,
         debug: settings.debug,
         ..Default::default()
     };
