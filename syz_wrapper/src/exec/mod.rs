@@ -309,9 +309,7 @@ impl ExecutorHandle {
         if self.use_extern_chan {
             self.do_bg_spawn()?;
             if self.use_forksrv {
-                if let Err(e) = self.handshake() {
-                    return Err(e);
-                }
+                self.handshake()?;
             }
             Ok(())
         } else {

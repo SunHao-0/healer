@@ -1,4 +1,5 @@
 //! Mutate value of `blob`, `string`, `filename` type.
+#![allow(clippy::uninit_vec)]
 use crate::gen::buffer::{gen_buffer_filename, gen_buffer_string, rand_filename, UNIX_PATH_MAX};
 #[cfg(debug_assertions)]
 use crate::mutation::call::display_value_diff;

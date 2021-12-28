@@ -169,6 +169,7 @@ impl Prog {
         ProgDisplay { prog: self, target }
     }
 
+    #[must_use]
     pub fn remove_call(&self, i: usize) -> Prog {
         let mut new_p = self.clone();
         new_p.remove_call_inplace(i);

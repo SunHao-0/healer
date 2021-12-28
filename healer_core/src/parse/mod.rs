@@ -321,17 +321,17 @@ fn consume<'a, 'b>(
     })
 }
 
+#[allow(clippy::while_let_loop)]
 fn decode_readable_data<'a>(span: Span<'a>, data: &[u8]) -> Result<Vec<u8>, ParseError<'a>> {
     let mut data_iter = data.iter();
     let mut ret = Vec::with_capacity(data.len());
 
     loop {
-        let v;
-        if let Some(val) = data_iter.next() {
-            v = *val;
+        let v = if let Some(val) = data_iter.next() {
+            *val
         } else {
             break;
-        }
+        };
 
         if v != b'\\' {
             ret.push(v);
