@@ -1,5 +1,5 @@
 //! Generate value for `blob`, `string`, `filename` type.
-#![allow(clippy::uninit_vec)]
+#![allow(clippy::unit_arg)]
 use rand::prelude::*;
 use std::ops::RangeInclusive;
 

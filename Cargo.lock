@@ -496,6 +496,7 @@ dependencies = [
  "healer_io",
  "log",
  "nix 0.22.1",
+ "rand",
  "thiserror",
 ]
 

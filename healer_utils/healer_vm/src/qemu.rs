@@ -664,18 +664,27 @@ static mut PORTS: Option<Mutex<HashSet<u16>>> = None;
 static PORTS_ONCE: Once = Once::new();
 
 fn get_free_port() -> Option<PortGuard> {
+    use rand::prelude::*;
     use std::net::{Ipv4Addr, TcpListener};
+
     PORTS_ONCE.call_once(|| {
         unsafe { PORTS = Some(Mutex::new(HashSet::default())) };
     });
 
     let mut g = unsafe { PORTS.as_ref().unwrap().lock().unwrap() };
-    for p in 1025..65535 {
+    let mut rng = thread_rng();
+    let mut tries = 0;
+
+    loop {
+        let p = rng.gen_range(1025..65535);
         if TcpListener::bind((Ipv4Addr::LOCALHOST, p)).is_ok() && g.insert(p) {
             return Some(PortGuard(p));
         }
+        tries += 1;
+        if tries > 65535 {
+            return None;
+        }
     }
-    None
 }
 
 struct PortGuard(u16);
