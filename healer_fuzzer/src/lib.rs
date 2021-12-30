@@ -597,8 +597,18 @@ fn prepare_exec_env(
     .context("failed to setup features")?;
     let r = spawn_syz(&remote_exec_path, qemu, exec, config);
     if r.is_err() {
-        retry_exec(|| exec.respawn())
-            .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))?
+        retry_exec(|| {
+            if config.use_unix_sock {
+                // Unix socket already stored in ExecHandle, call bg_spawn directly
+                let cmd = ssh_bg_syz_cmd(&remote_exec_path, qemu);
+                exec.bg_spawn(cmd)
+            } else {
+                let mut cmd = ssh_syz_cmd(&remote_exec_path, qemu);
+                cmd.arg("use-ivshm");
+                exec.spawn(cmd)
+            }
+        })
+        .with_context(|| format!("failed to spawn executor for fuzzer-{}", exec_config.pid))?
     }
     Ok(())
 }

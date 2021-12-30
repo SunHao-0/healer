@@ -326,6 +326,24 @@ impl ExecutorHandle {
         }
     }
 
+    pub fn bg_spawn(&mut self, exec_cmd: Command) -> Result<(), SpawnError> {
+        self.cmd = Some(exec_cmd);
+        if let Err(e) = self.do_bg_spawn() {
+            self.cmd = None;
+            return Err(e);
+        }
+
+        if self.use_forksrv {
+            if let Err(e) = self.handshake() {
+                self.cmd = None;
+                self.reset();
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn spawn_with_channel(
         &mut self,
         exec_cmd: Command,
@@ -333,13 +351,6 @@ impl ExecutorHandle {
     ) -> Result<(), SpawnError> {
         assert!(self.use_extern_chan);
         self.reset();
-
-        self.cmd = Some(exec_cmd);
-        if let Err(e) = self.do_bg_spawn() {
-            self.cmd = None;
-            return Err(e);
-        }
-
         stdout
             .set_read_timeout(Some(Duration::from_secs(30)))
             .unwrap();
@@ -357,15 +368,7 @@ impl ExecutorHandle {
             }
         }
 
-        if self.use_forksrv {
-            if let Err(e) = self.handshake() {
-                self.cmd = None;
-                self.reset();
-                return Err(e);
-            }
-        }
-
-        Ok(())
+        self.bg_spawn(exec_cmd)
     }
 
     fn do_bg_spawn(&mut self) -> Result<(), SpawnError> {
