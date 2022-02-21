@@ -7,6 +7,9 @@ Similar to Syzkaller, Healer uses the syscall information provided by the [Syzla
 
 Unlike Syzkaller, Healer does not use an empirical [choice-table](https://github.com/google/syzkaller/blob/master/prog/prio.go), but detects the influence relationships between syscalls by dynamically removing calls in the minimized call sequences and observing coverage changes, and uses the influence relationships to guide the generation and mutation of call sequences. In addition, Healer also uses a different architectural design than Syzkaller.
 
+
+**_Note_**: This is a just _prototype_. Many important features cannot be published due to many *non-technical limitations*.
+
 ## Build Healer
 
 Healer is written in pure rust, except for some patching code. Therefore, [rust](https://www.rust-lang.org/) toolchain should be installed first.
