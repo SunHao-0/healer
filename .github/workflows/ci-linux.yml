@@ -27,17 +27,17 @@ jobs:
       - name: Cache Dependencies
         uses: Swatinem/rust-cache@v1.0.1
       
-      - name: clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all
+#       - name: clippy
+#         uses: actions-rs/clippy-check@v1
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           args: --all
 
-      - name: format check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+#       - name: format check
+#         uses: actions-rs/cargo@v1
+#         with:
+#           command: fmt
+#           args: --all -- --check
 
       - name: check build
         uses: actions-rs/cargo@v1
